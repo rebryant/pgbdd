@@ -1,0 +1,280 @@
+#!/bin/sh
+debug=no
+static=no
+gcov=no
+gprof=no
+check=undefined
+log=undefined
+stats=undefined
+trace=undefined
+int64=undefined
+static=no
+fopen64=yes
+#*------------------------------------------------------------------------*#
+tmp="/tmp/booleforce-configure-$$"
+trap "rm -rf $tmp" 2 15
+mkdir $tmp || die "could not generate '$tmp'"
+#*------------------------------------------------------------------------*#
+usage() {
+cat <<EOF
+usage: [CC=<compiler>] [CFLAGS=<flags>] configure [ <option> ... ]
+
+  -h   print this command line option summary
+  -g   enable debugging, disable optimization (default)
+
+The following options allow the inclusion of specific code.  Default
+is to exclude all specific code unless debugging is enabled with '-g'.
+
+  --check    include run time checking code
+             (beside basic assertion checking more expensive run time 
+	     checking needs to be enabled explicitly at run time)
+            
+  --log      include logging code
+  --no-log   exclude logging code
+             (logging starts at verbose level 3 and becomes more verbose at
+	     even larger verbose levels)
+            
+  --stats    include code for generating statistics
+             (statistics are dumped at verbose level 2 and larger)
+
+  --no-int64 disable 64 bit integer code for statistics
+             use 32 bit integer instead
+            
+  --trace    include code for generating resolution traces
+  --no-trace exclude code for generating resolution traces
+
+  --static   force static compilation
+
+If debugging is enabled the following two options modify 'CFLAGS' to
+generate profiling data during run time.  This only works if the compiler
+type is 'gcc'.
+
+  --gcov   instrument code for statement profiling with 'gcov'
+  --gprof  instrument code for function profiling with 'gprof'
+EOF
+exit 0
+}
+#*------------------------------------------------------------------------*#
+cleanup () {
+  rm -rf "$tmp"
+}
+#*------------------------------------------------------------------------*#
+die() {
+echo "*** configure: $*" 1>&2
+cleanup
+exit 1
+}
+#*------------------------------------------------------------------------*#
+dienl() {
+  echo
+  die "$*"
+}
+#*------------------------------------------------------------------------*#
+while [ $# -gt 0 ]
+do
+  case $1 in
+    -h) usage;;
+    -g) debug=yes;;
+    --gcov) gcov=yes;;
+    --gprof) gprof=yes;;
+    --log) log=yes;;
+    --no-log) log=no;;
+    --check) check=yes;;
+    --stats) stats=yes;;
+    --trace) trace=yes;;
+    --no-trace) trace=no;;
+    --no-int64) int64=no;;
+    --static) static=yes;;
+    *) die "unknow option '$1' (use '-h')";;
+  esac
+  shift
+done
+#*------------------------------------------------------------------------*#
+case x"`uname -s`" in
+  xLinux) echon="echo -n";;
+  *) echon="printf";;
+esac
+#*------------------------------------------------------------------------*#
+$echon "version ..."
+VERSION="`cat VERSION`"
+echo " $VERSION"
+#*------------------------------------------------------------------------*#
+$echon "debug ..."
+echo " $debug"
+#*------------------------------------------------------------------------*#
+$echon "trace ..."
+[ $trace = undefined ] && trace=$debug
+echo " $trace"
+#*------------------------------------------------------------------------*#
+$echon "stats ..."
+statsreason=""
+[ $stats = undefined ] && stats=$debug
+echo " $stats"
+#*------------------------------------------------------------------------*#
+$echon "log ..."
+[ $log = undefined ] && log=$debug
+echo " $log"
+#*------------------------------------------------------------------------*#
+$echon "check ..."
+[ $check = undefined ] && check=$debug
+echo " $check"
+#*------------------------------------------------------------------------*#
+$echon "static ..."
+echo " $static"
+#*------------------------------------------------------------------------*#
+$echon "CC ..."
+if [ "$CC" = "" ]
+then
+  CC=gcc
+fi
+echo " $CC"
+#*------------------------------------------------------------------------*#
+$echon "CC type ..."
+RAWCC=unknown
+for cc in $CC 
+do
+  case $cc in
+    gcc*) RAWCC=gcc; break;;
+    cc*) RAWCC=$cc; break;;
+    *gcc) RAWCC=gcc; break;;
+    clang*) RAWCC=clang; break;;
+    *clang) RAWCC=clang; break;;
+    *) ;;
+  esac
+done
+[ "$RAWCC" = unknown ] && dienl "invalid compiler"
+echo " $RAWCC"
+#*------------------------------------------------------------------------*#
+$echon "ar ..."
+case $CC in
+  i[456]86-mingw*) AR="`echo $CC|sed -e 's,gcc,ar,'`";;
+  *) AR=ar;;
+esac
+echo " $AR"
+#*------------------------------------------------------------------------*#
+$echon "ranlib ..."
+case $CC in
+  i[456]86-mingw*) RANLIB="`echo $CC|sed -e 's,gcc,ranlib,'`";;
+  *) RANLIB=ranlib;;
+esac
+echo " $RANLIB"
+#*------------------------------------------------------------------------*#
+$echon "int64 ..."
+if [ $int64 = no ]
+then
+  int64=int
+  INT64FMT="d"
+else
+cat > $tmp/sizeoflong.c <<EOF
+#include <stdio.h>
+int main (void) { printf ("%d\n", (int) sizeof (long)); return 0; }
+EOF
+$RAWCC -o $tmp/sizeoflong $tmp/sizeoflong.c || \
+dienl "can not compile 'sizeoflong.c'"
+if [ "`$tmp/sizeoflong`" = 8 ]
+then
+  int64=long
+  INT64FMT="ld"
+else
+cat > $tmp/sizeoflonglong.c <<EOF
+#include <stdio.h>
+int main (void) { printf ("%d\n", (int) sizeof (long long)); return 0; }
+EOF
+$RAWCC -o $tmp/sizeoflonglong $tmp/sizeoflonglong.c || \
+dienl "can not compile 'sizeoflonglong.c'"
+if [ "`$tmp/sizeoflonglong`" = 8 ]
+then
+  int64="long long"
+  INT64FMT="lld"
+else
+  dienl "can not find 64 bit integer type"
+fi
+fi
+fi
+echo " $int64"
+#*------------------------------------------------------------------------*#
+$echon "CC version ..."
+case $RAWCC in
+  gcc) CCVERSION="`$CC -dumpversion | head -1`";;
+  *) CCVERSION="unknown";;
+esac
+echo " $CCVERSION"
+#*------------------------------------------------------------------------*#
+$echon "static ..."
+echo " $static"
+#*------------------------------------------------------------------------*#
+$echon "CFLAGS ..."
+if [ "$CFLAGS" = "" ]
+then
+  case $RAWCC in
+    gcc|clang)
+      CFLAGS="-Wall"
+      [ $static = yes ] && CFLAGS="$CFLAGS --static"
+      if [ $debug = yes ]
+      then
+        CFLAGS="$CFLAGS -g3 -ggdb"
+	if [ $gcov = yes ]
+	then
+	  CFLAGS="$CFLAGS -fprofile-arcs -ftest-coverage"
+	fi
+      else
+	CFLAGS="$CFLAGS -O3"
+      fi
+      if [ $gprof = yes ]
+      then
+	CFLAGS="$CFLAGS -pg"
+      fi
+      if [ $static = yes ]
+      then
+        CFLAGS="$CFLAGS -static"
+      fi
+      ;;
+    *)
+      if [ $debug = yes ]
+      then
+        CFLAGS="-g"
+      else
+        CFLAGS="-O"
+      fi
+      ;;
+  esac
+fi
+
+case `uname` in
+		Darwin) fopen64=fopen
+esac
+
+echo " $CFLAGS"
+#*------------------------------------------------------------------------*#
+$echon "Makefile ..."
+rm -f Makefile
+sed \
+-e "s,@CC@,$CC,g" \
+-e "s,@CFLAGS@,$CFLAGS,g" \
+-e "s,@AR@,$AR,g" \
+-e "s,@RANLIB@,$RANLIB,g" \
+Makefile.in > Makefile
+echo " done"
+#*------------------------------------------------------------------------*#
+$echon "config.h ..."
+rm -f config.h
+echo "#ifndef BOOLEFORCE_bfconfig_h_INCLUDED" >> config.h
+echo "#define BOOLEFORCE_bfconfig_h_INCLUDED" >> config.h
+echo "#define BOOLEFORCE_VERSION \"$VERSION\"" >> config.h
+echo "#define BOOLEFORCE_OS \"`uname -a`\"" >> config.h
+echo "#define BOOLEFORCE_CC \"$CC\"" >> config.h
+echo "#define BOOLEFORCE_CCVERSION \"$CCVERSION\"" >> config.h
+echo "#define BOOLEFORCE_CFLAGS \"$CFLAGS\"" >> config.h
+[ $check = no ] && echo "#define NDEBUG" >> config.h
+[ $log = yes ] && echo "#define BOOLEFORCE_LOG" >> config.h
+[ $stats = yes ] && echo "#define BOOLEFORCE_STATS" >> config.h
+[ $trace = yes ] && echo "#define BOOLEFORCE_TRACE" >> config.h
+echo "typedef $int64 int64;" >> config.h
+echo "#define INT64FMT \"$INT64FMT\"" >> config.h
+[ $fopen64 = fopen ] && echo "#define FOPEN64_FOPEN" >> config.h
+echo "#endif" >> config.h
+echo " done"
+#*------------------------------------------------------------------------*#
+$echon "cleaning up ..."
+cleanup
+echo " done"

@@ -1,0 +1,12 @@
+This is the 'booleforce' SAT solver.
+
+To compile the solver, run './configure' first and then issue 'make'.  This
+should build an optimized version of the solver 'booleforce' and the trace
+checker 'tracecheck'.  Further options to './configure', which for instance
+allow 'proof generation' or debugging, are described in the command line
+option summary of configure which can be obtained by './configure -h'.  
+
+For usage of the solver as a library consider the API described in
+'booleforce.h'.   Only the library 'libbooleforce.a' needs to be linked.
+
+Armin Biere, JKU Linz, October 2010.

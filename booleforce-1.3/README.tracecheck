@@ -1,0 +1,139 @@
+The proof checker 'tracecheck' can be used to check whether a trace
+represents a piecewise regular input resolution proof.  A trace is just a
+compact representation of general resolution proofs.  In [1] a regular
+input resolution proof is called a trivial proof.
+
+The parts of the proof which are regular input resolution proofs are
+called chains in the following discussion.  The whole trace consists of
+original clauses and chains.  
+
+Note that input clauses in chains can still be arbitrary derived clauses
+with respect to the overall proof and do not have to be original clauses.
+We distinguish between original clauses of the CNF, which are usually
+just called input clauses, and input clauses to the chains.  Since a
+chain can be seen as new proof rule, we call its input clauses
+'antecedents' and the final resolvent just 'resolvent'.
+
+The motivation for using this format is as in [1] that learned clauses in
+a DP solver can be derived by regular input resolution.  A unique feature
+of 'tracecheck' is that the chains do not have to be sorted, neither
+between chains (globally) nor their input clauses (locally).  If possible
+the checker will sort them automatically.  This allows a simplified
+implementation of the trace generation.
+
+Chains are simply represented by the list of their antecedents and the
+resolvent.  Intermediate resolvents can be omitted which saves quite some
+space if the proof generator can easily extract chains.
+
+Chains can be used in the context of searched based DPLL to represent the
+deriviation of learned clauses.  It is even more difficult to extract a
+resolution proof directly, if more advanced learned clause optimizations are
+used.  Examples are shrinking or minimization of learned clauses.  The
+difficult part is to order the antecedents correctly.  The solver can leave
+this task to the trace checker.
+
+Furthermore, this format allows a simple encoding of hyper resolution
+proofs. A hyper resolution step can be simulated by a chain.  General
+resolution steps can also be encoded in this format easily by a trivial
+chain consisting of the two antecedents of the general resolution step.
+Finally, extended resolution proofs can directly be encoded, since variables
+introduced in extended resolution can be treated in the same way as the
+original variables.
+
+The syntax of a trace is as follows:
+   
+   <trace>       = { <clause> }
+   <clause>      = <pos> <literals> <antecedents>
+   <literals>    = "*" | { <lit> } "0"
+   <antecedents> = { <pos> } "0"
+   <lit>         = <pos> | <neg>
+   <pos>         =  "1" |  "2" | .... | <max-idx>
+   <neg>         = "-"<pos>
+
+where '|' means choice, '{ ... }' is equivalent to the Kleene star
+operation (that is a finite number of repititions including 0) and
+<max-idx> is 2^28 - 1.
+
+The interpretation is as follows.  Original clauses have an empty list of
+antecedents and derived clauses have at least one antecedent.  A clause
+definition starts with its index and a zero terminated list of its literals.
+This part is similar to the DIMACS format except that each clause is
+preceeded by a unique positive number, the index of the clause.
+Another zero terminated list of positive indices of its antecedents is
+added, denoting the chain that is used to derive this clause as resolvent
+from the antecendents.  The order of the clauses and the order of the
+literals and antecedents of a chain is arbitrary.
+
+The list of antecedents of a clause should permit a regular input
+resolution proof of the clause with exactly the antecedents as input
+clauses.  A proof is regular if variables are resolved at most once.  It
+is an input resolution if each resolution step resolves at most one non
+input clause.  Therefore it is also linear and has a degenerated graph
+structure of a binary tree, where each internal has at least one leaf as
+child.
+
+As example consider the following trace
+
+  1 1 2 0 0
+  2 -1 2 0 0
+  3 1 -2 0 0
+  4 -1 -2 0 0
+
+  5 1 0 3 1 0
+  6 0 4 2 5 0
+
+which consists of all possible 2-ary clauses over the variables 1 and 2.
+The corresponding DIMACS file would look as follows:
+  
+  1 2 0
+  -1 2 0
+  1 -2 0
+  -1 -2 0
+
+The first derived clause with index 5 is the unary clause which consists
+of the literal 1 alone.  It is obtained by resolving the original clause
+3 against the original clause 1.
+
+A chain for the last derived clause, which is the empty clause, can be
+obtained by resolving the antecendents 4, 2 and 5, first
+4 with 2 to obtain the intermediate resolvent consisting of the literal
+-1 alone, which in turn can be resolved with clause 5 to obtain the
+empty clause.
+
+As discussed above, the order of the clauses, that is the order of the
+lines and the order of the antecedents indices is irrelevant.  The checker
+will sort them automatically.  The last two lines of the example can
+for instance be replaced by:
+
+  6 0 4 5 2 0
+  5 1 0 3 1 0
+
+Note that that the resolution of clause 4 with clause 1 results in the
+unary clause with literal -2.  It can be resolved with clause 2 but will
+give the unary clause with literal -1 as result, which is not the empty
+clause as expected.  In this case the checker has to reorder the
+antecedents as in the original example.
+
+It is also possible to skip the literal part for derived clauses by
+specifying a '*' instead of the literal list.  The literals are then
+collected by the checker from the antecedents:
+
+  5 * 3 1 0
+  6 * 4 2 5 0
+
+Furthermore, trivial clauses and clauses with multiple occurrences of the
+same literal can not be resolved.  The list of antecedents is not allowed
+to contain the same idx twice. All antecedents have to be used in the proof
+for the resolvent.
+
+Beside these local restrictions the proof checker generates a global
+linear order on the derived clauses making sure that there are no cyclic
+resolution steps.  The roots of the resulting DAG are the target resolvents.
+
+Armin Biere, JKU Linz, 2006.
+
+References:
+
+[1] P. Beame, H. Kautz, A. Sabharwal.
+Understanding the Power of Clause Learning.
+IJCAI'03.

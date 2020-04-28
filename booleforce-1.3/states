@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# extract states of module
+
+die () {
+  echo "*** usage: states <module>.c" 1>&2
+  exit 1
+}
+
+[ $# = 1 ] || die
+module=`basename "$1" .c`
+[ "$module".c = "$1" ] || die
+
+src=$module.c
+dst=$module.states
+tmp=${module}-states-includes.h
+
+trap "rm -f $tmp" 2
+
+echo "extracting states from $src into $dst"
+
+rm -f $dst || exit 1
+
+grep -v '^include <' $src | 
+grep -v '^include ".*.states"' $src > $tmp
+
+$CC -E $tmp | \
+grep 'static ' |
+grep ';' | \
+grep -v '{' |
+tr \; \\n | \
+sed \
+  -e '/^[	]*$/d' \
+  -e 's,\[.*\],,g' \
+  -e 's,[\*]*,,g' \
+| awk '{print "STATEMACRO(" $NF ");"}' \
+> $dst
+
+rm -f $tmp

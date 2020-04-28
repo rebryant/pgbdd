@@ -1,0 +1,45 @@
+.SUFFIXES: .states
+.c.states:
+	CC=$(CC) ./states $*.c
+.c.o:
+	$(CC) $(CFLAGS) -c $*.c
+
+CC=@CC@
+CFLAGS=@CFLAGS@
+AR=@AR@
+RANLIB=@RANLIB@
+
+OBJ=booleforce.o bfmem.o bftime.o bfio.o bfnum.o
+
+all: booleforce tracecheck
+
+clean:
+	rm -f config.h Makefile
+	rm -f *-states-includes.h *.states
+	rm -f *.o *.a
+	rm -f booleforce tracecheck
+	rm -f *.bbg *.bb *.da *.gcov
+	rm -f gmon.out
+
+booleforce: bfmain.o bfapp.o libbooleforce.a
+	$(CC) $(CFLAGS) -o $@ bfmain.o bfapp.o -L. -lbooleforce
+
+tracecheck: tcmain.o tracecheck.o libbooleforce.a
+	$(CC) $(CFLAGS) -o $@ tcmain.o tracecheck.o -L. -lbooleforce
+
+libbooleforce.a: $(OBJ)
+	$(AR) rc $@ $(OBJ)
+	$(RANLIB) $@
+
+bfapp.o: config.h booleforce.h bftime.h bfio.h bfapp.c
+bfio.o: config.h bfmem.h bfstack.h bfio.h bfio.c
+bfmain.o: bfmain.c Makefile
+bfmem.o: config.h booleforce.h bfmem.h bfmem.c
+bfnum.o: config.h bfnum.h bfnum.c
+bftime.o: config.h bftime.h bftime.c
+booleforce.states: booleforce.c config.h states
+booleforce.o: config.h bfmem.h bfstack.h bfsort.h \
+  booleforce.h bftime.h bfio.h bfnum.h booleforce.states booleforce.c
+tracecheck.states: tracecheck.c config.h states
+tracecheck.o: config.h bftime.h bfio.h bfmem.h \
+  tracecheck.states tracecheck.c
