@@ -140,25 +140,22 @@ class Manager:
         else:
             return self.findOrMake(variable, self.leaf0, self.leaf1)
 
-    def clauseOld(self, literalList):
-        lits = sorted(literalList, key=lambda n: -n.variable.level)
-        root = self.leaf0
-        for lit in lits:
-            var = lit.variable
-            positive = lit.high == self.leaf1
-            (high, low) = (self.leaf1, root) if positive else (root, self.leaf1)
-            root = self.findOrMake(var, high, low)
-        key = [n.id for n in literalList]
-        self.addLog("clause", key, root.id)
-        return root
-
-    def clause(self, literalList):
+    def constructClause(self, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
         root = self.reduceList(lits, self.applyOr, self.leaf0)
         key = [n.id for n in literalList]
         self.addLog("clause", key, root.id)
         return root
     
+    def deconstructClause(self, clause):
+        lits = []
+        while not clause.isLeaf():
+            positive = clause.high == self.leaf1
+            phase = 1 if positive else 0
+            lits.append(self.literal(clause.variable, phase))
+            clause = clause.low if positive else clause.high
+        return lits
+
     # Build dictionary mapping nodes in DAG rooted by node to values
     # nodeFunction should be a function mapping a node to a value
     def buildInformation(self, node, nodeFunction, sofarDict = {}):
