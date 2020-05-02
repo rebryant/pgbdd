@@ -102,6 +102,8 @@ class Manager:
     operationCache = {}
     # Log of operations performed, to enable proof checking
     operationLog = []
+    # May want to disable logging for some operations
+    clauseCount = 0
 
     def __init__(self):
         self.variables = []
@@ -121,6 +123,9 @@ class Manager:
         level = len(self.variables) + 1
         var = Variable(level, name)
         self.variables.append(var)
+        # Generate BDD representations of literals, just to make things more uniform
+        t = self.literal(var, 1)
+        e = self.literal(var, 0)
         return var
         
     def findOrMake(self, variable, high, low):
@@ -143,8 +148,9 @@ class Manager:
     def constructClause(self, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
         root = self.reduceList(lits, self.applyOr, self.leaf0)
-        key = [n.id for n in literalList]
-        self.addLog("clause", key, root.id)
+        litNodes = tuple([node.id for node in self.deconstructClause(root)])
+        self.clauseCount += 1
+        self.addLog("clause", (self.clauseCount, litNodes), root.id)
         return root
     
     def deconstructClause(self, clause):
@@ -219,8 +225,9 @@ class Manager:
 
     def split(self, node, var, phase):
         result = node.branchHigh(var) if phase == 1 else node.branchLow(var)
-        key = (var.level, node.id, phase)
-        self.addLog("split", key, result.id)
+        key = (node.id, var.level, phase)
+        if result != node:
+            self.addLog("split", key, result.id)
         return result
 
     def applyAnd(self, nodeA, nodeB):
@@ -271,7 +278,7 @@ class Manager:
         newLow = self.applyNot(low)
         newNode = self.findOrMake(var, newHigh, newLow)
         self.operationCache[key] = newNode
-        self.addLog("not", key[1:], newNode.id)
+#        self.addLog("not", key[1:], newNode.id)
         return newNode
 
     def applyOr(self, nodeA, nodeB):
@@ -303,7 +310,7 @@ class Manager:
         newLow = self.applyOr(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
         self.operationCache[key] = newNode
-        self.addLog("or", key[1:], newNode.id)
+#        self.addLog("or", key[1:], newNode.id)
         return newNode
 
     def applyXor(self, nodeA, nodeB):
@@ -335,7 +342,7 @@ class Manager:
         newLow = self.applyXor(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
         self.operationCache[key] = newNode
-        self.addLog("xor", key[1:], newNode.id)
+#        self.addLog("xor", key[1:], newNode.id)
         return newNode
     
     def checkImply(self, nodeA, nodeB):
@@ -390,8 +397,8 @@ class Manager:
         newLow = self.equant(node.low, clause)
         quant = node.variable == clause.variable
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
-
         self.operationCache[key] = newNode
+#        self.addLog("equant", key[1:], newNode.id)
         return newNode
             
             
