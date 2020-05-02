@@ -1,12 +1,8 @@
 # Simple, proof-generating SAT solver based on BDDs
 
 import bdd
-import sys
-
-def trim(s):
-    while len(s) > 0 and s[-1] in '\r\n':
-        s = s[:-1]
-    return s
+import cnf
+import prover
 
 # Abstract representation of Boolean function
 class Function:
@@ -37,104 +33,57 @@ class Function:
 class Solver:
     
     manager = None
-    # Terms are lists of functions
-    allTerms = []
+    # How many terms have been generated
+    termCount = 0
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
-    # Track how the functions were combined and quantified
-    derivations = []
+    unsat = False
+    # Save clauses in event that file read from standard input
+    clauseLines = []
 
-    def __init__(self, file = None):
+    def __init__(self, fname = None):
         self.manager = bdd.Manager()
         # Terms numbered from 1 upward
-        self.allTerms = []
         self.activeIds = {}
-        self.derivations = []
         if file is not None:
-            if self.readCnf(file):
-                print("%d clauses read" % len(self.allTerms))
+            if self.readCnf(fname):
+                print("%d clauses read" % self.termCount)
             else:
                 print("Read failed")
+        self.unsat = False
 
-    def newTerm(self, root, derivation):
-        id = len(self.allTerms) + 1
-        term = Function(self.manager, root, id)
-        self.allTerms.append(term)
-        self.activeIds[id] = term
-        self.derivations.append(derivation)
+    def newTerm(self, root):
+        self.termCount += 1
+        term = Function(self.manager, root, self.termCount)
+        self.activeIds[self.termCount] = term
 
+    # Helper functions for reading CNF file
+    def countAction(self, nvar, nclause):
+        for level in range(1, nvar+1):
+            self.manager.newVariable("var-%d" % level)
+    
     # Read non-comment line from DIMACS file
     def readClause(self, line):
-        try:
-            fields = [int(s) for s in line.split()]
-        except Exception:
-            raise bdd.BddException("Could not parse clause line '%s'" % line)
-        if len(fields) == 0:
-            return
-        if fields[-1] != 0:
-            raise bdd.BddException("Clause line '%s' does not end with 0" % line)
+        # Have already checked formatting
+        fields = [int(s) for s in line.split()]
         fields = fields[:-1]
         litList = []
         for v in fields:
             phase = 1 if v > 0 else 0
             if phase == 0:
                 v = -v
-            if v < 1 or v > len(self.manager.variables):
-                raise bdd.BddException("Clause line '%s' contains invalid variable %d" % (line, v))
             lit = self.manager.literal(self.manager.variables[v-1], phase)
             litList.append(lit)
-        return self.manager.constructClause(litList)
+        self.newTerm(self.manager.constructClause(litList))
 
-    def readCnf(self, file = sys.stdin):
-        opened = type(file) == type("abc")
-        if opened:
-            try:
-                f = open(file, 'r')
-            except Exception:
-                print("Could not open file '%s'" % file)
-                return False
-            file = f
-        lineNumber = 0
-        nclause = 0
-        nvar = 0
-        ok = True
-        for line in file:
-            lineNumber += 1
-            line = trim(line)
-            if len(line) == 0:
-                continue
-            if line[0] == 'c':
-                continue
-            if line[0] == 'p':
-                fields = line[1:].split()
-                if fields[0] != 'cnf':
-                    print("Line %d.  Bad header line '%s'" % (lineNumber, line))
-                    ok = False
-                    break
-                try:
-                    nvar = int(fields[1])
-                    nclause = int(fields[2])
-                except Exception:
-                    print("Line %d.  Bad header line '%s'" % (lineNumber, line))
-                    ok = False
-                    break
-                for level in range(1, nvar+1):
-                    self.manager.newVariable("var-%d" % level)
-            else:
-                try:
-                    clause = self.readClause(line)
-                except Exception as ex:
-                    print("Line %d.  %s" % (lineNumber, str(ex)))
-                    ok = False
-                if ok:
-                    term = self.newTerm(clause, ("clause"))
-
-        if ok and len(self.allTerms) != nclause:
-            print("Line %d: Got %d clauses.  Expected %d" % (lineNumber, len(self.allTerms), nclause))
-            ok = False
-        if opened:
-            file.close()
-        return ok
+    def readCnf(self, fname = None):
+        try:
+            c = cnf.CnfReader(self.countAction, self.readClause, None, fname)
+            self.clauseLines = c.clauseLines
+            return True
+        except Exception as ex:
+            print(str(ex))
+            return False
             
     # Simplistic version 
     def choosePair(self):
@@ -145,19 +94,26 @@ class Solver:
         while (len(self.activeIds) > 1):
             i, j = self.choosePair()
             newRoot = self.manager.applyAnd(self.activeIds[i].root, self.activeIds[j].root)
-            self.newTerm(newRoot, ("and", i, j))
+            self.newTerm(newRoot)
             del self.activeIds[i]
             del self.activeIds[j]
-            print("%d & %d --> %d" % (i, j, len(self.allTerms)))
-        result = self.allTerms[-1].root
-        if result == self.manager.leaf0:
+            print("%d & %d --> %d" % (i, j, self.termCount))
+        if newRoot == self.manager.leaf0:
             print("UNSAT")
+            self.unsat = True
         else:
             print("SAT")
             for s in self.manager.satisfyStrings(result):
                 print("  " + s)
         
-            
+    def prove(self, cnfName = None, proofName = None):
+        if not self.unsat:
+            print("Have not determined that formula is unsatisfiable")
+            return False
+        p = prover.Prover(self.manager.operationLog, self.clauseLines, cnfName, proofName)
+        p.run()
+        
+    
             
                     
             
