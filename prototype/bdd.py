@@ -10,15 +10,41 @@ class BddException(Exception):
     def __str__(self):
         return "BDD Exception: " + str(self.value)
 
+# Place holder to allow program to run without proving anything
+class DummyProver:
+
+    clauseCount = 0
+
+    def __init__(self):
+        self.clauseCount = 0
+
+    def comment(self, comment):
+        if comment is not None:
+            print("c " + comment)
+
+    def createClause(self, result, antecedent, comment = None):
+        self.comment(comment)
+        rstring = " ".join([str(v) for v in result])
+        astring = " ".join([str(v) for v in antecedent])
+        self.clauseCount += 1
+        if len(antecedent) == 0:
+            print("%d: Assert %s" % (self.clauseCount, rstring))
+        else:
+            print("%d: Justify %s from %s" % (self.clauseCount, rstring, astring))
+        return self.clauseCount
 
 @total_ordering
 class Variable:
     name = None
     level = 0  # For ordering
     leafLevel = -1 # Special value
+    id = None # Serves as identity of resolution variable
 
-    def __init__(self, level, name):
+    def __init__(self, level, name = None):
         self.level = level
+        self.id = 0 if level == self.leafLevel else level 
+        if name is None:
+            name = "var-%d" % level
         self.name = str(name)
 
     def __eq__(self, other):
@@ -38,22 +64,63 @@ class Variable:
     def __str__(self):
         return self.name
 
-class Node:
-    id = 0
-    variable = None
-    low = None
-    high = None
-    value = None
 
-    def __init__(self, id, variable, high, low, value):
+class Node:
+    id = 0 # Also serves as identity of ER variable
+    variable = None
+
+    def __init__(self, id, variable):
         self.id = id
         self.variable = variable
-        self.high = high
-        self.low = low
+    
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __hash__(self):
+        return self.id
+
+
+class LeafNode(Node):
+    value = None # 0 or 1
+    inferValue = None # Number of unit clause asserting its value
+
+    def __init__(self, id, value, prover):
+        Node.__init__(self, id, Variable(Variable.leafLevel, "Leaf"))
         self.value = value
+        antecedent = []
+        unit = -self.id if self.value == 0 else self.id
+        self.inferValue = self.prover.createClause([unit], [], "Unit clause for constant %d" % value)
 
     def isLeaf(self):
-        return self.variable.level == Variable.leafLevel
+        return True
+
+    def __str__(self):
+        return "leaf-%d" % self.value
+
+
+class VariableNode(Node):
+    high = None
+    low = None
+    # Identity of clauses generated from node
+    inferTrueUp = None
+    inferTrueDown = None
+    inferFalseUp = None
+    inferTrueDown = None
+    
+    def __init__(self, id, variable, high, low, prover):
+        Node.__init__(self, id, variable)
+        self.high = high
+        self.low = low
+        vid = self.variable.id
+        hid = self.high.id
+        lid = self.low.id
+        self.inferTrueUp = self.prover.createClause([-vid, -hid, id], [], "ITE assertions for node %d" % id)
+        self.inferTrueDown = self.prover.createClause([-vid, -id, hid], [])
+        self.inferFalseUp = self.prover.createClause([vid, -lid, id], [])
+        self.inferFalseDown = self.prover.createClause([vid, -id, lid], [])
+
+    def isLeaf(self):
+        return False
 
     def branchHigh(self, variable):
         if self.variable < variable:
@@ -77,55 +144,36 @@ class Node:
         else:
             return self
         
-    def __eq__(self, other):
-        return self.id == other.id
-
-    def __hash__(self):
-        return self.id
-
     def __str__(self):
-        if self.isLeaf():
-            return "leaf-%d" % self.value
-        else:
-            return "%d:%s->%d,%d" % (self.id, str(self.variable), self.high.id, self.low.id)
+        return "%d:%s->%d,%d" % (self.id, str(self.variable), self.high.id, self.low.id)
 
 class Manager:
+    prover = None
     # List of variables, ordered by level
     variables = []
     nextNodeId = 0
+    # Leaf nodes
     leaf0 = None
     leaf1 = None
     # Mapping from (variable, high, low) to node
     nodeTable = {}
     # Operation cache
-    # Key = (opName, operand1 ...) to node
+    # Key = (opName, operand1 ...) to (node, justification)
     operationCache = {}
-    # Log of operations performed, to enable proof checking
-    operationLog = []
-    # May want to disable logging for some operations
-    clauseCount = 0
 
-    def __init__(self):
+    def __init__(self, prover = None, nextNodeId = 0):
+        self.prover = DummyProver() if prover is None else prover
         self.variables = []
-        leafPseudovariable = Variable(Variable.leafLevel, "Leaf")
-        self.nextUniqueId = 1
-        self.leaf0 = Node(0, leafPseudovariable, None, None, 0)
-        self.leaf1 = Node(1, leafPseudovariable, None, None, 1)
-        self.nextNodeId = 2
+        self.leaf0 = LeafNode(nextNodeId, 0, prover)
+        self.leaf1 = LeafNode(nextNodeId+1, 1, prover)
+        self.nextNodeId = nextNodeId + 2
         self.nodeTable = {}
         self.operationCache = {}
-        self.operationLog = []
-
-    def addLog(self, operation, key, result):
-        self.operationLog.append((operation, key, result))
 
     def newVariable(self, name):
         level = len(self.variables) + 1
         var = Variable(level, name)
         self.variables.append(var)
-        # Generate BDD representations of literals, just to make things more uniform
-        t = self.literal(var, 1)
-        e = self.literal(var, 0)
         return var
         
     def findOrMake(self, variable, high, low):
@@ -133,10 +181,9 @@ class Manager:
         if key in self.nodeTable:
             return self.nodeTable[key]
         else:
-            node = Node(self.nextNodeId, variable, high, low, None)
+            node = VariableNode(self.nextNodeId, variable, high, low)
             self.nextNodeId += 1
             self.nodeTable[key] = node
-            self.addLog("node", key, node.id)
             return node
   
     def literal(self, variable, phase):
@@ -145,13 +192,15 @@ class Manager:
         else:
             return self.findOrMake(variable, self.leaf0, self.leaf1)
 
-    def constructClause(self, literalList):
+    def constructClause(self, clauseId, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
         root = self.reduceList(lits, self.applyOr, self.leaf0)
-        litNodes = tuple([node.id for node in self.deconstructClause(root)])
-        self.clauseCount += 1
-        self.addLog("clause", (self.clauseCount, litNodes), root.id)
-        return root
+        litNodes = [node.id for node in self.deconstructClause(root)]
+        antecedents = [clauseId, self.leaf0.inferValue, self.leaf1.inferValue]
+        antecedents += [nid.inferTrueUp for nid in litNodes]
+        antecedents += [nid.inferFalseUp for nid in litNodes]
+        validation = self.prover.createClause([root.id], antecedents)
+        return root, validation
     
     def deconstructClause(self, clause):
         lits = []
@@ -223,43 +272,59 @@ class Manager:
             stringList.append(''.join(slist))
         return stringList
 
-    def split(self, node, var, phase):
-        result = node.branchHigh(var) if phase == 1 else node.branchLow(var)
-        key = (node.id, var.level, phase)
-        if result != node:
-            self.addLog("split", key, result.id)
-        return result
-
-    def applyAnd(self, nodeA, nodeB):
+    # Return node + id of clause justifying that nodeA & NodeB ==> result
+    # Justification is None if it would be tautology
+    def applyAndJustify(self, nodeA, nodeB):
         # Constant cases
-        if nodeA == self.leaf0:
-            return self.leaf0
-        if nodeB == self.leaf0:
-            return self.leaf0
+        if nodeA == self.leaf0 or nodeB == self.leaf0:
+            return (self.leaf0, None)
         if nodeA == self.leaf1:
-            return nodeB
+            return (nodeB, None)
         if nodeB == self.leaf1:
-            return nodeA
+            return (nodeA, None)
         if nodeA == nodeB:
-            return nodeA
+            return (nodeA, None)
         if nodeA.id > nodeB.id:
             nodeA, nodeB = nodeB, nodeA
+
+        antecedents = []
 
         key = ("and", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
 
         splitVar = min(nodeA.variable, nodeB.variable)  
-        highA = self.split(nodeA, splitVar, 1)
-        lowA = self.split(nodeA, splitVar, 0)
-        highB = self.split(nodeB, splitVar, 1)
-        lowB = self.split(nodeB, splitVar, 0)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        if highA != lowA:
+            antecedents += [highA.inferTrueDown, lowA.inferFalseDown]
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+        if highB != lowB:
+            antecedents += [highB.inferTrueDown, lowB.inferFalseDown]
 
-        newHigh = self.applyAnd(highA, highB)
-        newLow = self.applyAnd(lowA, lowB)
-        newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = newNode
-        self.addLog("and", key[1:], newNode.id)
+
+        (newHigh, justHigh) = self.applyAndJustify(highA, highB)
+        if justHigh is not None:
+            antecedents += [justHigh]
+        (newLow, justLow) = self.applyAndJustify(lowA, lowB)
+        if justLow is not None:
+            antecedents += [justLow]
+
+        if newHigh == newLow:
+            newNode = newHigh
+        else:
+            newNode self.findOrMake(splitVar, newHigh, newLow)
+            antecedents += [newNode.inferTrueUp, newNode.inferFalseUp]
+        result = [-nodeA.id, -nodeB.id, newNode.id]
+        justification = self.prover.createClause(result, antecedents,
+                                                 "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id))
+        self.operationCache[key] = (newNode, justification)
+        return (newNode, justification)
+
+    # Version that runs without generating justification
+    def applyAnd(self, nodeA, nodeB):
+        newNode, justification = self.applyAndJustify(nodeA, nodeB)
         return newNode
 
     def applyNot(self, node):
@@ -270,15 +335,14 @@ class Manager:
             return self.leaf1
         key = ("not", node.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][0]
         var = node.variable
         high = node.high
         low = node.low
         newHigh = self.applyNot(high)
         newLow = self.applyNot(low)
         newNode = self.findOrMake(var, newHigh, newLow)
-        self.operationCache[key] = newNode
-#        self.addLog("not", key[1:], newNode.id)
+        self.operationCache[key] = (newNode, None)
         return newNode
 
     def applyOr(self, nodeA, nodeB):
@@ -298,19 +362,18 @@ class Manager:
 
         key = ("or", nodeA.id, nodeB.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][0]
 
         splitVar = min(nodeA.variable, nodeB.variable)  
-        highA = self.split(nodeA, splitVar, 1)
-        lowA = self.split(nodeA, splitVar, 0)
-        highB = self.split(nodeB, splitVar, 1)
-        lowB = self.split(nodeB, splitVar, 0)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
 
         newHigh = self.applyOr(highA, highB)
         newLow = self.applyOr(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = newNode
-#        self.addLog("or", key[1:], newNode.id)
+        self.operationCache[key] = (newNode, None)
         return newNode
 
     def applyXor(self, nodeA, nodeB):
@@ -330,50 +393,69 @@ class Manager:
 
         key = ("xor", nodeA.id, nodeB.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][0]
 
         splitVar = min(nodeA.variable, nodeB.variable)  
-        highA = self.split(nodeA, splitVar, 1)
-        lowA = self.split(nodeA, splitVar, 0)
-        highB = self.split(nodeB, splitVar, 1)
-        lowB = self.split(nodeB, splitVar, 0)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
 
         newHigh = self.applyXor(highA, highB)
         newLow = self.applyXor(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = newNode
-#        self.addLog("xor", key[1:], newNode.id)
+        self.operationCache[key] = (newNode, None)
         return newNode
     
-    def checkImply(self, nodeA, nodeB):
+    def justifyImply(self, nodeA, nodeB):
         # Constant cases.  Must be tested in particular order
+        # What we're trying to justify
+        result = [-self.nodeA.id, self.nodeB.id]
+        comment = "Justification that %d ==> %d" % (nodeA.id, nodeB.id)
         if nodeA == self.leaf0:
-            return True
+            justification = self.prover.createClause(result, [self.leaf0.inferValue], comment)
+            return (True, justification)
         if nodeB == self.leaf1:
-            return True
+            justification = self.prover.createClause(result, [self.leaf1.inferValue], comment)
+            return (True, justification)
         if nodeA == self.leaf1:
-            return False
+            return (False, None)
         if nodeB == self.leaf0:
-            return False
+            return (False, None)
         
         key = ("imply", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
 
-        splitVar = min(nodeA.variable, nodeB.variable)  
-        highA = self.split(nodeA, splitVar, 1)
-        lowA = self.split(nodeA, splitVar, 0)
-        highB = self.split(nodeB, splitVar, 1)
-        lowB = self.split(nodeB, splitVar, 0)
+        antecedents = []
 
-        checkHigh = self.checkImply(highA, highB)
-        checkLow = self.checkImply(lowA, lowB)
+        splitVar = min(nodeA.variable, nodeB.variable)  
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        if highA != lowA:
+            antecedents += [highA.inferTrueDown, lowA.inferFalseDown]
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+        if highB != lowB:
+            antecedents += [highB.inferTrueDown, lowB.inferFalseDown]
+
+        (checkHigh, justHigh) = self.applyAndJustify(highA, highB)
+        if justHigh is not None:
+            antecedents += [justHigh]
+        (checkLow, justLow) = self.applyAndJustify(lowA, lowB)
+        if justLow is not None:
+            antecedents += [justLow]
+
         check = checkHigh and checkLow
-        self.operationCache[key] = check
-        self.addLog("imply", key[1:], 1 if check else 0)
+        justification = self.prover.createClause(result, antecedents, comment)
+        self.operationCache[key] = (check, justification)
+        return (check, justification)
+
+    def checkImply(self, nodeA, nodeB):
+        check, justification = justifyImply(nodeA, nodeB)
         return check
         
-    # Given list of nodes, perform reduction operator (e.g., and, or, xor)
+    # Given list of nodes, perform reduction operator (and, or, xor)
     def reduceList(self, nodeList, operator, emptyValue):
         fun = emptyValue
         for n in nodeList:
@@ -391,14 +473,13 @@ class Manager:
         key = ("equant", node, clause)
         
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][0]
 
         newHigh = self.equant(node.high, clause)
         newLow = self.equant(node.low, clause)
         quant = node.variable == clause.variable
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
-        self.operationCache[key] = newNode
-#        self.addLog("equant", key[1:], newNode.id)
+        self.operationCache[key] = (newNode, None)
         return newNode
             
             
