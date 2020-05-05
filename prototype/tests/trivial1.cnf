@@ -1,0 +1,4 @@
+c Simple example over one variable
+p cnf 1 2
+1 0
+-1 0
