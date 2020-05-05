@@ -15,23 +15,19 @@ class DummyProver:
 
     clauseCount = 0
 
-    def __init__(self):
+    def __init__(self, fname = None):
         self.clauseCount = 0
 
     def comment(self, comment):
-        if comment is not None:
-            print("c " + comment)
+        pass
 
     def createClause(self, result, antecedent, comment = None):
-        self.comment(comment)
-        rstring = " ".join([str(v) for v in result])
-        astring = " ".join([str(v) for v in antecedent])
         self.clauseCount += 1
-        if len(antecedent) == 0:
-            print("%d: Assert %s" % (self.clauseCount, rstring))
-        else:
-            print("%d: Justify %s from %s" % (self.clauseCount, rstring, astring))
         return self.clauseCount
+
+    def fileOutput(self):
+        return False
+
 
 @total_ordering
 class Variable:
@@ -40,9 +36,14 @@ class Variable:
     leafLevel = -1 # Special value
     id = None # Serves as identity of resolution variable
 
-    def __init__(self, level, name = None):
+    def __init__(self, level, name = None, id = None):
         self.level = level
-        self.id = 0 if level == self.leafLevel else level 
+        if id is None:
+            self.id = level
+        elif level == self.leafLevel:
+            self.id = 0
+        else:
+            self.id = self.level
         if name is None:
             name = "var-%d" % level
         self.name = str(name)
@@ -89,7 +90,7 @@ class LeafNode(Node):
         self.value = value
         antecedent = []
         unit = -self.id if self.value == 0 else self.id
-        self.inferValue = self.prover.createClause([unit], [], "Unit clause for constant %d" % value)
+        self.inferValue = prover.createClause([unit], [], "Unit clause for constant %d" % value)
 
     def isLeaf(self):
         return True
@@ -103,8 +104,8 @@ class VariableNode(Node):
     low = None
     # Identity of clauses generated from node
     inferTrueUp = None
-    inferTrueDown = None
     inferFalseUp = None
+    inferTrueDown = None
     inferTrueDown = None
     
     def __init__(self, id, variable, high, low, prover):
@@ -114,10 +115,10 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        self.inferTrueUp = self.prover.createClause([-vid, -hid, id], [], "ITE assertions for node %d" % id)
-        self.inferTrueDown = self.prover.createClause([-vid, -id, hid], [])
-        self.inferFalseUp = self.prover.createClause([vid, -lid, id], [])
-        self.inferFalseDown = self.prover.createClause([vid, -id, lid], [])
+        self.inferTrueUp = prover.createClause([-vid, -hid, id], [], "ITE assertions for node %d" % id)
+        self.inferFalseUp = prover.createClause([vid, -lid, id], [])
+        self.inferTrueDown = prover.createClause([-vid, -id, hid], [])
+        self.inferFalseDown = prover.createClause([vid, -id, lid], [])
 
     def isLeaf(self):
         return False
@@ -170,9 +171,9 @@ class Manager:
         self.nodeTable = {}
         self.operationCache = {}
 
-    def newVariable(self, name):
+    def newVariable(self, name, id = None):
         level = len(self.variables) + 1
-        var = Variable(level, name)
+        var = Variable(level, name, id)
         self.variables.append(var)
         return var
         
@@ -181,7 +182,7 @@ class Manager:
         if key in self.nodeTable:
             return self.nodeTable[key]
         else:
-            node = VariableNode(self.nextNodeId, variable, high, low)
+            node = VariableNode(self.nextNodeId, variable, high, low, self.prover)
             self.nextNodeId += 1
             self.nodeTable[key] = node
             return node
@@ -195,19 +196,18 @@ class Manager:
     def constructClause(self, clauseId, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
         root = self.reduceList(lits, self.applyOr, self.leaf0)
-        litNodes = [node.id for node in self.deconstructClause(root)]
-        antecedents = [clauseId, self.leaf0.inferValue, self.leaf1.inferValue]
-        antecedents += [nid.inferTrueUp for nid in litNodes]
-        antecedents += [nid.inferFalseUp for nid in litNodes]
-        validation = self.prover.createClause([root.id], antecedents)
+        litNodes = self.deconstructClause(root)
+        antecedents = [clauseId, self.leaf1.inferValue]
+        antecedents += [node.inferTrueUp for node in litNodes if node.high != self.leaf0]
+        antecedents += [node.inferFalseUp for node in litNodes if node.low != self.leaf0]
+        validation = self.prover.createClause([root.id], antecedents, "Validate BDD representation of clause %d" % clauseId)
         return root, validation
     
     def deconstructClause(self, clause):
         lits = []
         while not clause.isLeaf():
             positive = clause.high == self.leaf1
-            phase = 1 if positive else 0
-            lits.append(self.literal(clause.variable, phase))
+            lits.append(clause)
             clause = clause.low if positive else clause.high
         return lits
 
@@ -275,7 +275,8 @@ class Manager:
     # Return node + id of clause justifying that nodeA & NodeB ==> result
     # Justification is None if it would be tautology
     def applyAndJustify(self, nodeA, nodeB):
-        # Constant cases
+        # Constant cases.
+        # No justifications required, since all return one of the arguments
         if nodeA == self.leaf0 or nodeB == self.leaf0:
             return (self.leaf0, None)
         if nodeA == self.leaf1:
@@ -287,8 +288,6 @@ class Manager:
         if nodeA.id > nodeB.id:
             nodeA, nodeB = nodeB, nodeA
 
-        antecedents = []
-
         key = ("and", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
@@ -296,29 +295,49 @@ class Manager:
         splitVar = min(nodeA.variable, nodeB.variable)  
         highA = nodeA.branchHigh(splitVar)
         lowA =  nodeA.branchLow(splitVar)
-        if highA != lowA:
-            antecedents += [highA.inferTrueDown, lowA.inferFalseDown]
         highB = nodeB.branchHigh(splitVar) 
         lowB =  nodeB.branchLow(splitVar)
-        if highB != lowB:
-            antecedents += [highB.inferTrueDown, lowB.inferFalseDown]
 
-
-        (newHigh, justHigh) = self.applyAndJustify(highA, highB)
-        if justHigh is not None:
-            antecedents += [justHigh]
-        (newLow, justLow) = self.applyAndJustify(lowA, lowB)
-        if justLow is not None:
-            antecedents += [justLow]
-
+        (newHigh, implyHigh) = self.applyAndJustify(highA, highB)
+        (newLow, implyLow) = self.applyAndJustify(lowA, lowB)
         if newHigh == newLow:
             newNode = newHigh
         else:
-            newNode self.findOrMake(splitVar, newHigh, newLow)
-            antecedents += [newNode.inferTrueUp, newNode.inferFalseUp]
+            newNode = self.findOrMake(splitVar, newHigh, newLow)
+
+        comment = "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id)
+
+        antecedents = []
+
+        highAntecedents = [] if implyHigh is None else [implyHigh]
+        if newHigh != newLow:
+            highAntecedents += [newNode.inferTrueUp]
+        if highA != nodeA and newHigh != highB:
+            highAntecedents += [nodeA.inferTrueDown]
+        if highB != nodeB and newHigh != highA:
+            highAntecedents += [nodeB.inferTrueDown]
+        if len(highAntecedents) == 1:
+            antecedents += highAntecedents
+        elif len(highAntecedents) > 1:
+            antecedents += [self.prover.createClause([-splitVar.id, -nodeA.id, -nodeB.id, newNode.id], highAntecedents, comment)]
+            comment = None
+
+        lowAntecedents = [] if implyLow is None else [implyLow]
+        if newHigh != newLow:
+            lowAntecedents += [newNode.inferFalseUp]
+        if lowA != nodeA and newLow != lowB:
+            lowAntecedents += [nodeA.inferFalseDown]
+        if lowB != nodeB and newLow != lowA:
+            lowAntecedents += [nodeB.inferFalseDown]
+        if len(lowAntecedents) == 1:
+            antecedents += lowAntecedents
+        elif len(lowAntecedents) > 1:
+            antecedents += [self.prover.createClause([splitVar.id, -nodeA.id, -nodeB.id, newNode.id], lowAntecedents, comment)]
+            comment = None
+
         result = [-nodeA.id, -nodeB.id, newNode.id]
-        justification = self.prover.createClause(result, antecedents,
-                                                 "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id))
+        justification = self.prover.createClause(result, antecedents, comment)
+
         self.operationCache[key] = (newNode, justification)
         return (newNode, justification)
 
@@ -433,11 +452,11 @@ class Manager:
         highA = nodeA.branchHigh(splitVar)
         lowA =  nodeA.branchLow(splitVar)
         if highA != lowA:
-            antecedents += [highA.inferTrueDown, lowA.inferFalseDown]
+            antecedents += [nodeA.inferTrueDown, nodeA.inferFalseDown]
         highB = nodeB.branchHigh(splitVar) 
         lowB =  nodeB.branchLow(splitVar)
         if highB != lowB:
-            antecedents += [highB.inferTrueDown, lowB.inferFalseDown]
+            antecedents += [nodeB.inferTrueDown, nodeB.inferFalseDown]
 
         (checkHigh, justHigh) = self.applyAndJustify(highA, highB)
         if justHigh is not None:
