@@ -343,27 +343,31 @@ class ProofManager:
     # Clause rule is mapping from rule name to list of symbolic literals
     # Each symbolic literal either vname or !vname
     clauseRules = {}
+    # Target clause
+    target = None
     
-    def __init__(self, variableNames, maxRules, verbLevel = 1):
+    def __init__(self, variableNames, maxRules, target, verbLevel = 1):
         self.variableNames = variableNames
         self.verbLevel = verbLevel
         self.forest = Forest(maxRules, verbLevel)
         self.clauseRules = {}
-        self.target = None
+        self.target = target
+
+    def clearRules(self):
+        self.clauseRules = {}
 
     # Resolution target is special rule with name "target"
     def addRule(self, ruleName, ruleLiterals):
-        if ruleName == "target":
-            self.target = ruleLiterals
-        else:
-            self.clauseRules[ruleName] = ruleLiterals
+        self.clauseRules[ruleName] = ruleLiterals
 
-    def proofKey(self, variableList):
-        return "+".join([str(v) for v in variableList])
+    def proofKey(self, variableList, ruleNames):
+        rstring = "+".join(ruleNames)
+        vstring = "+".join([str(v) for v in variableList])
+        return rstring + ":" + vstring
 
     # Add special proof rules
-    def addProof(self, variableList, proof):
-        key = self.proofKey(variableList)
+    def addProof(self, variableList, ruleNames, proof):
+        key = self.proofKey(variableList, ruleNames)
         self.proofCache[key] = proof
         self.proofCounts[key] = 1
 
@@ -371,21 +375,23 @@ class ProofManager:
         accessCount = 0
         keyList = sorted(self.proofCache.keys())
         for key in keyList:
-            vstring = ", ".join(key.split("+"))
+            rstring, vstring = key.split(":")
+            rstring = " ".join(rstring.split("+"))
+            vstring = ", ".join(vstring.split("+"))
             pstring = str(self.proofCache[key])
-            print("[%s] --> %s (%d uses)" % (vstring, pstring, self.proofCounts[key]))
+            print("[%s : %s] --> %s (%d uses)" % (rstring, vstring, pstring, self.proofCounts[key]))
             accessCount += self.proofCounts[key]
         print("%d keys.  %d total uses" % (len(keyList), accessCount))
 
-    def lookupProof(self, variableList):
-        key = self.proofKey(variableList)
+    def lookupProof(self, variableList, ruleNames):
+        key = self.proofKey(variableList, ruleNames)
         if key in self.proofCache:
             self.proofCounts[key] += 1
             return self.proofCache[key]
         return None
 
     # valueMap is dictionary giving variable identifiers associated with named literals
-    def findProof(self, valueMap):
+    def findProof(self, valueMap, ruleNames):
         # Build map from external variables to canonical variable values
         forwardMap = {}
         # Build map from canonical variables to external variables
@@ -403,11 +409,11 @@ class ProofManager:
                 forwardMap[externalVariable] = canonicalVariable
                 inverseMap[canonicalVariable] = externalVariable
         if self.verbLevel >= 1:
-            mapStrings = ["%s:%d" % (vname, canonicalMap[vname]) for vname in self.variableNames]
+            mapStrings = ["%s:%d->%d" % (vname, valueMap[vname], canonicalMap[vname]) for vname in self.variableNames]
             print("Constructed canonical variables: " + " ".join(mapStrings))
         # See if already have proof in cache
         variableList = [canonicalMap[vname] for vname in self.variableNames]
-        proof = self.lookupProof(variableList)
+        proof = self.lookupProof(variableList, ruleNames)
         if proof is not None:
             nproof = proof.remapLiterals(inverseMap)
             if self.verbLevel >= 1:
@@ -444,7 +450,7 @@ class ProofManager:
             print("Couldn't find proof of target")
             return None
         proof =  t.getProof(ruleDict)
-        self.addProof(variableList, proof)
+        self.addProof(variableList, ruleNames, proof)
         nproof = proof.remapLiterals(inverseMap)
         if self.verbLevel >= 1:
             pstring = nproof.postfix(showLiterals = True)
@@ -475,20 +481,23 @@ class AndResolver:
               "WTU" : ["!x",  "!w1", "w"],
               "WFU" : ["x",   "!w0", "w"],
               "IMT" : ["!u1", "!v1", "w1"],
-              "IMF" : ["!u0", "!v0", "w0"], 
-              "target" : ["!u", "!v", "w"] }
+              "IMF" : ["!u0", "!v0", "w0"] }
+    target = ["!u", "!v", "w"] 
 
     def __init__(self, verbLevel = 1):
         self.verbLevel = verbLevel
-        self.manager = ProofManager(self.variableNames, 8, self.verbLevel)
-        for cname in self.rules.keys():
-            self.manager.addRule(cname, self.rules[cname])
+        self.manager = ProofManager(self.variableNames, 8, self.target, self.verbLevel)
 
     def summarize(self):
         self.manager.showCache()
 
-    def run(self, valueMap):
-        proof = self.manager.findProof(valueMap)
+    def run(self, valueMap, ruleNames = None):
+        if ruleNames is None:
+            ruleNames = sorted(self.rules.keys())
+        self.manager.clearRules()
+        for cname in ruleNames:
+            self.manager.addRule(cname, self.rules[cname])
+        proof = self.manager.findProof(valueMap, ruleNames)
         return proof
 
     def standardMap(self):

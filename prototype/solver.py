@@ -219,8 +219,16 @@ class Prover:
         self.file.write(istring + '\n')
         return self.clauseCount
 
-    def emitProof(self, result, proof, ruleIndex, comment):
-        pass
+    def emitProof(self, proof, ruleIndex, comment):
+        if proof.isLeaf:
+            self.comment(comment)
+            return ruleIndex[proof.name]
+        else:
+            antecedent = []
+            for c in proof.children:
+                antecedent.append(self.emitProof(c, ruleIndex, comment))
+                comment = None
+            return self.createClause(proof.literalList, antecedent)
 
     def __del__(self):
         if self.opened:

@@ -27,6 +27,10 @@ class DummyProver:
         self.clauseCount += 1
         return self.clauseCount
 
+    def emitProof(self, proof, ruleIndex, comment = None):
+        self.clauseCount += 1
+        return self.clauseCount
+
     def fileOutput(self):
         return False
 
@@ -175,7 +179,7 @@ class Manager:
         self.nextNodeId = nextNodeId + 2
         self.nodeTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.andResolver(verbLevel = self.verbLevel)
+        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel)
 
     def newVariable(self, name, id = None):
         level = len(self.variables) + 1
@@ -320,8 +324,7 @@ class Manager:
             
         (newLow, implyLow) = self.applyAndJustify(lowA, lowB)
         if implyLow is not None:
-            ruleIndex["IMF"] = implyHigh
-
+            ruleIndex["IMF"] = implyLow
 
         if newHigh == newLow:
             newNode = newHigh
@@ -330,19 +333,17 @@ class Manager:
             ruleIndex["WTU"] = newNode.inferTrueUp
             ruleIndex["WFU"] = newNode.inferFalseUp
 
-        variableIndex = { "zero": self.leaf0.id, "one": self.leaf1.id, "x":splitVar.id,
+        variableIndex = { "zero": self.leaf0.id, "one":self.leaf1.id, "x":splitVar.id,
                           "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
                           "v":nodeB.id, "v1":highB.id, "v0":lowB.id,
                           "w":newNode.id, "w1":newHigh.id, "w0":newLow.id }
 
-
-        proof = self.andResolver.run(variableIndex)
+        proof = self.andResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
         if proof is None:
-            vstring = " ".join(["%s:%d" % (vname, variableIndex[vname]) for vname in self.andResolver.variableNames])
-            raise BddException("Could not generate proof with map: " + vstring)
-
-        comment = "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id)
-        justification = self.prover.emitProof(proof, ruleIndex, comment)
+            justification = None
+        else:
+            comment = "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id)
+            justification = self.prover.emitProof(proof, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification)
         return (newNode, justification)
 
