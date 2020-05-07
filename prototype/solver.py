@@ -184,7 +184,6 @@ class ProverException(Exception):
         return "Prover Exception: " + str(self.value)
 
 
-# Place holder to allow program to run without proving anything
 class Prover:
 
     clauseCount = 0
@@ -219,6 +218,9 @@ class Prover:
         istring = " ".join(slist)
         self.file.write(istring + '\n')
         return self.clauseCount
+
+    def emitProof(self, result, proof, ruleIndex, comment):
+        pass
 
     def __del__(self):
         if self.opened:

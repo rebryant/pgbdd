@@ -2,6 +2,8 @@
 
 from functools import total_ordering
 
+import resolver
+
 class BddException(Exception):
 
     def __init__(self, value):
@@ -161,8 +163,11 @@ class Manager:
     # Operation cache
     # Key = (opName, operand1 ...) to (node, justification)
     operationCache = {}
+    verbLevel = 1
+    andResolver = None
 
     def __init__(self, prover = None, nextNodeId = 0):
+
         self.prover = DummyProver() if prover is None else prover
         self.variables = []
         self.leaf0 = LeafNode(nextNodeId, 0, prover)
@@ -170,6 +175,7 @@ class Manager:
         self.nextNodeId = nextNodeId + 2
         self.nodeTable = {}
         self.operationCache = {}
+        self.andResolver = resolver.andResolver(verbLevel = self.verbLevel)
 
     def newVariable(self, name, id = None):
         level = len(self.variables) + 1
@@ -292,52 +298,51 @@ class Manager:
         if key in self.operationCache:
             return self.operationCache[key]
 
-        splitVar = min(nodeA.variable, nodeB.variable)  
+        # Mapping from rule names to clause numbers
+        ruleIndex = {}
+        # Mapping from variable names to variable numbers
+        splitVar = min(nodeA.variable, nodeB.variable)
         highA = nodeA.branchHigh(splitVar)
         lowA =  nodeA.branchLow(splitVar)
         highB = nodeB.branchHigh(splitVar) 
         lowB =  nodeB.branchLow(splitVar)
 
+        if highA != lowA:
+            ruleIndex["UTD"] = nodeA.inferTrueDown
+            ruleIndex["UFD"] = nodeA.inferFalseDown
+        if highB != lowB:
+            ruleIndex["VTD"] = nodeB.inferTrueDown
+            ruleIndex["VFD"] = nodeB.inferFalseDown
+
         (newHigh, implyHigh) = self.applyAndJustify(highA, highB)
+        if implyHigh is not None:
+            ruleIndex["IMT"] = implyHigh
+            
         (newLow, implyLow) = self.applyAndJustify(lowA, lowB)
+        if implyLow is not None:
+            ruleIndex["IMF"] = implyHigh
+
+
         if newHigh == newLow:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
+            ruleIndex["WTU"] = newNode.inferTrueUp
+            ruleIndex["WFU"] = newNode.inferFalseUp
+
+        variableIndex = { "zero": self.leaf0.id, "one": self.leaf1.id, "x":splitVar.id,
+                          "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
+                          "v":nodeB.id, "v1":highB.id, "v0":lowB.id,
+                          "w":newNode.id, "w1":newHigh.id, "w0":newLow.id }
+
+
+        proof = self.andResolver.run(variableIndex)
+        if proof is None:
+            vstring = " ".join(["%s:%d" % (vname, variableIndex[vname]) for vname in self.andResolver.variableNames])
+            raise BddException("Could not generate proof with map: " + vstring)
 
         comment = "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id)
-
-        antecedents = []
-
-        highAntecedents = [] if implyHigh is None else [implyHigh]
-        if newHigh != newLow:
-            highAntecedents += [newNode.inferTrueUp]
-        if highA != nodeA and newHigh != highB:
-            highAntecedents += [nodeA.inferTrueDown]
-        if highB != nodeB and newHigh != highA:
-            highAntecedents += [nodeB.inferTrueDown]
-        if len(highAntecedents) == 1:
-            antecedents += highAntecedents
-        elif len(highAntecedents) > 1:
-            antecedents += [self.prover.createClause([-splitVar.id, -nodeA.id, -nodeB.id, newNode.id], highAntecedents, comment)]
-            comment = None
-
-        lowAntecedents = [] if implyLow is None else [implyLow]
-        if newHigh != newLow:
-            lowAntecedents += [newNode.inferFalseUp]
-        if lowA != nodeA and newLow != lowB:
-            lowAntecedents += [nodeA.inferFalseDown]
-        if lowB != nodeB and newLow != lowA:
-            lowAntecedents += [nodeB.inferFalseDown]
-        if len(lowAntecedents) == 1:
-            antecedents += lowAntecedents
-        elif len(lowAntecedents) > 1:
-            antecedents += [self.prover.createClause([splitVar.id, -nodeA.id, -nodeB.id, newNode.id], lowAntecedents, comment)]
-            comment = None
-
-        result = [-nodeA.id, -nodeB.id, newNode.id]
-        justification = self.prover.createClause(result, antecedents, comment)
-
+        justification = self.prover.emitProof(proof, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification)
         return (newNode, justification)
 
