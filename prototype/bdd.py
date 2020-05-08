@@ -167,8 +167,14 @@ class Manager:
     # Operation cache
     # Key = (opName, operand1 ...) to (node, justification)
     operationCache = {}
-    verbLevel = 1
+    verbLevel = 2
     andResolver = None
+    implyResolver = None
+    # Statistics
+    cacheAdded = 0
+    applyCount = 0
+    nodeCount = 0
+    variableCount = 0
 
     def __init__(self, prover = None, nextNodeId = 0):
 
@@ -179,12 +185,17 @@ class Manager:
         self.nextNodeId = nextNodeId + 2
         self.nodeTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel)
-
+        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel-1)
+        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel-1)
+        self.cacheAdded = 0
+        self.applyCount = 0
+        self.nodeCount = 0
+        self.variableCount = 0
     def newVariable(self, name, id = None):
         level = len(self.variables) + 1
         var = Variable(level, name, id)
         self.variables.append(var)
+        self.variableCount += 1
         return var
         
     def findOrMake(self, variable, high, low):
@@ -195,6 +206,7 @@ class Manager:
             node = VariableNode(self.nextNodeId, variable, high, low, self.prover)
             self.nextNodeId += 1
             self.nodeTable[key] = node
+            self.nodeCount += 1
             return node
   
     def literal(self, variable, phase):
@@ -203,9 +215,12 @@ class Manager:
         else:
             return self.findOrMake(variable, self.leaf0, self.leaf1)
 
-    def constructClause(self, clauseId, literalList):
+    def buildClause(self, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
-        root = self.reduceList(lits, self.applyOr, self.leaf0)
+        return self.reduceList(lits, self.applyOr, self.leaf0)
+
+    def constructClause(self, clauseId, literalList):
+        root = self.buildClause(literalList)
         litNodes = self.deconstructClause(root)
         antecedents = [clauseId, self.leaf1.inferValue]
         antecedents += [node.inferTrueUp for node in litNodes if node.high != self.leaf0]
@@ -285,6 +300,7 @@ class Manager:
     # Return node + id of clause justifying that nodeA & NodeB ==> result
     # Justification is None if it would be tautology
     def applyAndJustify(self, nodeA, nodeB):
+        self.applyCount += 1
         # Constant cases.
         # No justifications required, since all return one of the arguments
         if nodeA == self.leaf0 or nodeB == self.leaf0:
@@ -301,6 +317,7 @@ class Manager:
         key = ("and", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
+
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
@@ -345,6 +362,7 @@ class Manager:
             comment = "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id)
             justification = self.prover.emitProof(proof, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification)
+        self.cacheAdded += 1
         return (newNode, justification)
 
     # Version that runs without generating justification
@@ -368,6 +386,7 @@ class Manager:
         newLow = self.applyNot(low)
         newNode = self.findOrMake(var, newHigh, newLow)
         self.operationCache[key] = (newNode, None)
+        self.cacheAdded += 1
         return newNode
 
     def applyOr(self, nodeA, nodeB):
@@ -399,6 +418,7 @@ class Manager:
         newLow = self.applyOr(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
         self.operationCache[key] = (newNode, None)
+        self.cacheAdded += 1
         return newNode
 
     def applyXor(self, nodeA, nodeB):
@@ -430,50 +450,67 @@ class Manager:
         newLow = self.applyXor(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
         self.operationCache[key] = (newNode, None)
+        self.cacheAdded += 1
         return newNode
     
     def justifyImply(self, nodeA, nodeB):
-        # Constant cases.  Must be tested in particular order
-        # What we're trying to justify
-        result = [-self.nodeA.id, self.nodeB.id]
-        comment = "Justification that %d ==> %d" % (nodeA.id, nodeB.id)
-        if nodeA == self.leaf0:
-            justification = self.prover.createClause(result, [self.leaf0.inferValue], comment)
-            return (True, justification)
-        if nodeB == self.leaf1:
-            justification = self.prover.createClause(result, [self.leaf1.inferValue], comment)
-            return (True, justification)
-        if nodeA == self.leaf1:
-            return (False, None)
-        if nodeB == self.leaf0:
-            return (False, None)
-        
+        self.applyCount += 1
+
         key = ("imply", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
 
-        antecedents = []
+        ruleIndex = { "ZLO" : self.leaf0.inferValue, "OHI" : self.leaf1.inferValue }
+        variableIndex = { "zero" : self.leaf0.id, "one" : self.leaf1.id, "u" : nodeA.id, "v" : nodeB.id }
+        # Constant cases.
+        if nodeA == self.leaf0 or nodeB == self.leaf1:
+            proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
+            if proof is None:
+                justification is None
+            else:
+                comment = "Justification that %d ==> %d" % (nodeA.id, nodeB.id)
+                justification = self.prover.emitProof(proof, ruleIndex, comment)
+            return (True, justification)
 
         splitVar = min(nodeA.variable, nodeB.variable)  
         highA = nodeA.branchHigh(splitVar)
         lowA =  nodeA.branchLow(splitVar)
-        if highA != lowA:
-            antecedents += [nodeA.inferTrueDown, nodeA.inferFalseDown]
         highB = nodeB.branchHigh(splitVar) 
         lowB =  nodeB.branchLow(splitVar)
-        if highB != lowB:
-            antecedents += [nodeB.inferTrueDown, nodeB.inferFalseDown]
 
-        (checkHigh, justHigh) = self.applyAndJustify(highA, highB)
-        if justHigh is not None:
-            antecedents += [justHigh]
-        (checkLow, justLow) = self.applyAndJustify(lowA, lowB)
-        if justLow is not None:
-            antecedents += [justLow]
+        if highA != lowA:
+            ruleIndex["UTD"] = nodeA.inferTrueDown
+            ruleIndex["UFD"] = nodeA.inferFalseDown
+        if highB != lowB:
+            ruleIndex["VTU"] = nodeB.inferTrueUp
+            ruleIndex["VFU"] = nodeB.inferFalseUp
+
+        (checkHigh, implyHigh) = self.justifyImply(highA, highB)
+        if implyHigh is not None:
+            ruleIndex["IMT"] = implyHigh
+        (checkLow, implyLow) = self.justifyImply(lowA, lowB)
+        if implyLow is not None:
+            ruleIndex["IMF"] = implyLow
+
+        variableIndex["x"] = splitVar.id
+        variableIndex["u1"] = highA.id
+        variableIndex["u0"] = lowA.id
+        variableIndex["v1"] = highB.id
+        variableIndex["v0"] = lowB.id
 
         check = checkHigh and checkLow
-        justification = self.prover.createClause(result, antecedents, comment)
+        if check:
+            proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
+            if proof is None:
+                justification = None
+            else:
+                comment = "Justification that %d ==> %d" % (nodeA.id, nodeB.id)
+                justification = self.prover.emitProof(proof, ruleIndex, comment)
+        else:
+            justification = None
+
         self.operationCache[key] = (check, justification)
+        self.cacheAdded += 1
         return (check, justification)
 
     def checkImply(self, nodeA, nodeB):
@@ -505,8 +542,20 @@ class Manager:
         quant = node.variable == clause.variable
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, None)
+        self.cacheAdded += 1
         return newNode
             
-            
+    # Summarize activity
+    def summarize(self):
+        if self.verbLevel >= 1:
+            print("Total variables: %d" % self.variableCount)
+            print("Total nodes: %d" % self.nodeCount)
+            print("Total apply operations: %d" % self.applyCount)            
+            print("Total cached results: %d" % self.cacheAdded)
+        if self.verbLevel >= 2:
+            print("Results from And Operations:")
+            self.andResolver.summarize()
+            print("Results from Implication Testing Operations:")
+            self.implyResolver.summarize()
             
         

@@ -423,10 +423,12 @@ class ProofManager:
         # Construct target clause
         targetClause = self.makeClause(self.target, canonicalMap)
         if targetClause.isTautology():
-            print("Target is tautology")
+            if self.verbLevel >= 1:
+                print("Target is tautology")
             return None
         if targetClause.isEmpty():
-            print("Target is empty")
+            if self.verbLevel >= 1:
+                print("Target is empty")
             return None
         # Build list of non-degenerate clauses
         clauseList = []
@@ -470,23 +472,23 @@ class ProofManager:
         return Clause(literalList)
 
 
-class AndResolver:
+
+class Resolver:
+    variableNames = []
+    rules = {}
+    target = []
     verbLevel = 1
     manager = None
-    variableNames = ["zero", "one", "x", "u", "u1", "u0", "v", "v1", "v0", "w", "w1", "w0"]
-    rules = { "UTD" : ["!x",  "!u",  "u1"],
-              "UFD" : ["x",   "!u",  "u0"],
-              "VTD" : ["!x",  "!v",  "v1"],
-              "VFD" : ["x",   "!v",  "v0"],
-              "WTU" : ["!x",  "!w1", "w"],
-              "WFU" : ["x",   "!w0", "w"],
-              "IMT" : ["!u1", "!v1", "w1"],
-              "IMF" : ["!u0", "!v0", "w0"] }
-    target = ["!u", "!v", "w"] 
 
-    def __init__(self, verbLevel = 1):
+    def __init__(self, variableNames, rules, target, verbLevel = 1):
+        self.variableNames = variableNames
+        self.rules = rules
+        self.target = target
         self.verbLevel = verbLevel
-        self.manager = ProofManager(self.variableNames, 8, self.target, self.verbLevel)
+        self.manager = ProofManager(self.variableNames, len(rules), self.target, self.verbLevel)
+#        for cname in self.rules.keys():
+#            self.manager.addRule(cname, self.rules[cname])
+
 
     def summarize(self):
         self.manager.showCache()
@@ -503,6 +505,22 @@ class AndResolver:
     def standardMap(self):
         return { self.variableNames[i] : i+1 for i in range(len(self.variableNames)) }
 
+
+class AndResolver(Resolver):
+    
+    def __init__(self, verbLevel = 1):
+        variableNames = ["zero", "one", "x", "u", "u1", "u0", "v", "v1", "v0", "w", "w1", "w0"]
+        rules = { "UTD" : ["!x",  "!u",  "u1"],
+                  "UFD" : ["x",   "!u",  "u0"],
+                  "VTD" : ["!x",  "!v",  "v1"],
+                  "VFD" : ["x",   "!v",  "v0"],
+                  "WTU" : ["!x",  "!w1", "w"],
+                  "WFU" : ["x",   "!w0", "w"],
+                  "IMT" : ["!u1", "!v1", "w1"],
+                  "IMF" : ["!u0", "!v0", "w0"] }
+        target = ["!u", "!v", "w"]
+        Resolver.__init__(self, variableNames, rules, target, verbLevel)
+        
     def nobranchU(self, valueMap):
         valueMap["u1"] = valueMap["u"]
         valueMap["u0"] = valueMap["u"]        
@@ -535,3 +553,20 @@ class AndResolver:
         valueMap["v1"] = valueMap["u1"]
         valueMap["w1"] = valueMap["u1"]
         return valueMap
+
+class ImplyResolver(Resolver):
+    
+    def __init__(self, verbLevel = 1):
+        variableNames = ["zero", "one", "x", "u", "u1", "u0", "v", "v1", "v0"]
+        rules = { 
+           "ZLO" : ["!zero"],
+           "OHI" : ["one"],
+            "UTD" : ["!x",  "!u",  "u1"],
+            "UFD" : ["x",   "!u",  "u0"],
+            "VTU" : ["!x",  "!v1", "v"],
+            "VFU" : ["x",  "!v0", "v"],
+            "IMT" : ["!u1", "v1"],
+            "IMF" : ["!u0", "v0"] }
+        target = ["!u", "v"]
+        Resolver.__init__(self, variableNames, rules, target, verbLevel)
+    
