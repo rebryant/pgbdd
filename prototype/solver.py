@@ -5,6 +5,7 @@ import sys
 import getopt
 
 import bdd
+import resolver
 
 def usage(name):
     print("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]")
@@ -14,6 +15,15 @@ def usage(name):
     print("  -o PROOF    Name of proof output file")
     print("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level")
     print("  -s SCHEDULE Name of action schedule file")
+
+# Verbosity levels
+# 0: Totally silent
+# 1: Key statistics only
+# 2: Summary information
+# 3: Proof information
+# 4: ?
+# 5: Tree generation information
+
 
 class CnfException(Exception):
 
@@ -31,8 +41,10 @@ class CnfReader():
     commentLines = []
     clauses = []
     nvar = 0
+    verbLevel = 1
     
-    def __init__(self, fname = None):
+    def __init__(self, fname = None, verbLevel = 1):
+        self.verbLevel = verbLevel
         if fname is None:
             opened = False
             self.file = sys.stdin
@@ -123,20 +135,24 @@ class Term:
     def combine(self, other):
         antecedents = [self.validation, other.validation]
         newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
-        if implication is not None:
+        if implication != resolver.tautologyId:
             antecedents += [implication]
-        validation = self.manager.prover.createClause([newRoot.id], antecedents, "Validation of %d" % newRoot.id)
+        if newRoot == self.manager.leaf0:
+            comment = "Validation of Empty clause"
+        else:
+            comment = "Validation of %s" % newRoot.label()
+        validation = self.manager.prover.createClause([newRoot.id], antecedents, comment)
         return Term(self.manager, newRoot, validation)
 
     def quantify(self, literals, prover):
-        antecedents = [self.validation, self.manager.leaf0.inferValue, self.manager.leaf1.inferValue]
+        antecedents = [self.validation]
         newRoot = self.manager.equant(self.root, literals)
         check, implication = self.manager.justifyImply(self.root, newRoot)
         if not check:
-            raise bdd.BddException("Implication failed %d -/-> %d" % (self.root.id, newRoot.id))
-        if implication is not None:
+            raise bdd.BddException("Implication failed %s -/-> %s" % (self.root.label(), newRoot.label()))
+        if implication != resolver.tautologyId:
             antecedents += [implication]
-        validation = self.manager.prover.createClause([newRoot.id], antecedents, "Validation of %d" % newRoot.id)
+        validation = self.manager.prover.createClause([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
         return Term(self.manager, newRoot, validation)
 
 class PermutationException(Exception):
@@ -199,12 +215,15 @@ class ProverException(Exception):
 
 class Prover:
 
+    inputClauseCount = 0
     clauseCount = 0
+    proofCount = 0
     file = None
     opened = False
+    verbLevel = 1
 
-    def __init__(self, fname = None):
-
+    def __init__(self, fname = None, verbLevel = 1):
+        self.verbLevel = verbLevel
         if fname is None:
             self.opened = False
             self.file = sys.stdout
@@ -215,6 +234,10 @@ class Prover:
             except Exception:
                 raise ProverException("Could not open file '%s'" % fname)
         self.clauseCount = 0
+        self.proofCount = 0
+
+    def inputDone(self):
+        self.inputClauseCount = self.clauseCount
 
     def fileOutput(self):
         return self.opened
@@ -225,6 +248,11 @@ class Prover:
 
     def createClause(self, result, antecedent, comment = None):
         self.comment(comment)
+        result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            return result
+        if result == -resolver.tautologyId:
+            result = []
         self.clauseCount += 1
         ilist = [self.clauseCount] + result + [0] + sorted(antecedent) + [0]
         slist = [str(i) for i in ilist]
@@ -241,11 +269,19 @@ class Prover:
             for c in proof.children:
                 antecedent.append(self.emitProof(c, ruleIndex, comment))
                 comment = None
+            self.proofCount += 1
             return self.createClause(proof.literalList, antecedent)
+
+    def summarize(self):
+        if self.verbLevel >= 1:
+            print("Input clauses: %d" % self.inputClauseCount)
+            print("Generated clauses: %d" % (self.clauseCount - self.inputClauseCount))
+            print("Clauses requiring proofs: %d" % (self.proofCount))
 
     def __del__(self):
         if self.opened:
             self.file.close()
+
 
 
 class SolverException(Exception):
@@ -259,6 +295,7 @@ class SolverException(Exception):
 
 class Solver:
     
+    verbLevel = 1
     manager = None
     # How many terms have been generated
     termCount = 0
@@ -272,13 +309,14 @@ class Solver:
     prover = None
     scheduler = None
 
-    def __init__(self, fname = None, prover = None, permuter = None, scheduler = None):
+    def __init__(self, fname = None, prover = None, permuter = None, scheduler = None, verbLevel = 1):
+        self.verbLevel = verbLevel
         self.scheduler = scheduler
         if prover is None:
-            prover = Prover()
+            prover = Prover(verbLevel = verbLevel)
         self.prover = prover
         try:
-            reader = CnfReader(fname)
+            reader = CnfReader(fname, verbLevel = verbLevel)
         except Exception as ex:
             print("Aborted: %s" % str(ex))
             raise ex
@@ -289,7 +327,10 @@ class Solver:
         for clause in reader.clauses:
             clauseCount += 1
             self.prover.createClause(clause, [], "Input clause %d" % clauseCount)
-        self.manager = bdd.Manager(self.prover, clauseCount+1)
+
+        self.prover.inputDone()
+
+        self.manager = bdd.Manager(self.prover, clauseCount+1, verbLevel = verbLevel)
         # Generate BDD representations of literals
         if permuter is None:
             # Default is identity permutation
@@ -298,7 +339,7 @@ class Solver:
         # Construct literal map
         self.litMap = {}
         for level in range(1, reader.nvar+1):
-            inputId = self.permuter.reverse(level)
+            inputId = self.permuter.forward(level)
             var = self.manager.newVariable(name = "input-%d" % inputId, id = inputId)
             t = self.manager.literal(var, 1)
             self.litMap[ inputId] = t
@@ -325,17 +366,16 @@ class Solver:
         termB = self.activeIds[id2]
         newTerm = termA.combine(termB)
         self.termCount += 1
-        comment = "T%d (Node %d) & T%d (Node %d)--> T%d (Node %d)" % (id1, termA.root.id, id2, termB.root.id, self.termCount, newTerm.root.id)
+        comment = "T%d (Node %s) & T%d (Node %s)--> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
+                                                                      self.termCount, newTerm.root.label())
         self.prover.comment(comment)
         del self.activeIds[id1]
         del self.activeIds[id2]
-        if self.prover.fileOutput():
+        if self.prover.fileOutput() and self.verbLevel >= 3:
             print(comment)
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
-            antecedents = [newTerm.validation, self.manager.leaf0.inferValue]
-            self.prover.createClause([], antecedents, "Empty clause")
-            if self.prover.fileOutput():
+            if self.prover.fileOutput() and self.verbLevel >= 1:
                 print("UNSAT")
             self.unsat = True
             self.manager.summarize()
@@ -349,7 +389,7 @@ class Solver:
         newTerm = term.quantify(clause, self.prover)
         self.termCount += 1
         vstring = " ".join(sorted([str(v) for v in varList]))
-        comment = "T%d (Node %d) EQuant(%s) --> T%d (Node %d)" % (id, term.root.id, vstring, self.termCount, newTerm.root.id)
+        comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
         del self.activeIds[id]
         self.activeIds[self.termCount] = newTerm
@@ -361,9 +401,11 @@ class Solver:
             nid = self.combineTerms(i, j)
             if nid < 0:
                 return
-        print("SAT")
-        for s in self.manager.satisfyStrings(self.activeIds[nid].root):
-            print("  " + s)
+        if self.verbLevel >= 0:
+            print("SAT")
+        if self.verbLevel >= 4:
+            for s in self.manager.satisfyStrings(self.activeIds[nid].root):
+                print("  " + s)
         
     def runSchedule(self):
         idStack = []
@@ -380,14 +422,14 @@ class Solver:
                 raise SolverException("Line #%d.  Invalid field '%s'" % (lineCount, line))
             if cmd == '#':
                 continue
-            elif cmd == 'c':
+            elif cmd == 'c':  # Put listed clauses onto stack
                 idStack += values
-            elif cmd == 'a':
+            elif cmd == 'a':  # Pop n+1 clauses from stack.  Form their conjunction.  Push result back on stack
                 count = values[0]
-                if count > len(idStack):
+                if count+1 > len(idStack):
                     raise SolverException("Line #%d.  Invalid conjunction count %d.  Only have %d on stack" %
                                           (lineCount, count, len(idStack)))
-                for i in range(count-1):
+                for i in range(count):
                     id1 = idStack[-1]
                     id2 = idStack[-2]
                     idStack = idStack[:-2]
@@ -497,12 +539,12 @@ def run(name, args):
             return
 
     try:
-        prover = Prover(proofName)
+        prover = Prover(proofName, verbLevel = verbLevel)
     except Exception as ex:
         print("Couldn't create prover (%s)" % str(ex))
         return
 
-    solver = Solver(cnfName, prover = prover, permuter = permuter, scheduler = scheduler)
+    solver = Solver(cnfName, prover = prover, permuter = permuter, scheduler = scheduler, verbLevel = verbLevel)
     solver.run()
     
 if __name__ == "__main__":

@@ -4,6 +4,37 @@ import datetime
 
 # Search for resolution tree that will yield target clause
 
+# Special value to represent true/tautology
+# It's negation represents false/invalid
+tautologyId = 1111111
+
+# Clean up clause.
+# Remove duplicates + false
+# Detect when tautology
+def cleanClause(literalList):
+    slist = sorted(literalList, key = abs)
+    while len(slist) > 0:
+        last = slist[-1]
+        if abs(last) != tautologyId:
+            break
+        elif last == tautologyId:
+            return tautologyId
+        else:
+            slist = slist[:-1]
+    if len(slist) == 0:
+        return -tautologyId
+    elif len(slist) == 1:
+        return slist
+    else:
+        nlist = [slist[0]]
+        for i in range(1, len(slist)):
+            if slist[i-1] == slist[i]:
+                continue
+            if slist[i-1] == -slist[i]:
+                return tautologyId
+            nlist.append(slist[i])
+        return nlist
+
 class ResolveException(Exception):
 
     def __init__(self, value):
@@ -20,46 +51,73 @@ def unitRange(n):
 # Bit vector representation of clauses.
 # Supports fast application of resolution
 class Clause:
-    valid = False # In event that resolution fails
-    # Bit vector representation.  
+    # Possible special conditions
+    normal, invalid, empty, tautology = range(4)
+    # Clause category.  Default is normal
+    category = 0 
+    # Bit vector representation.
     pos = 0  
     neg = 0
 
-    def __init__(self, literalList = [], valid = True):
-        self.valid = valid
+    # By default, clauses are normal
+    def __init__(self, literalList = [], category = 0):
         self.pos = 0
         self.neg = 0
-        for lit in literalList:
+        self.category = category
+        if category != self.normal:
+            return
+        fixList = cleanClause(literalList)
+        if fixList == tautologyId:
+            self.category = self.tautology
+            return
+        elif fixList == -tautologyId:
+            self.category = self.empty
+            return
+        for lit in fixList:
             if lit > 0:
                 self.pos = self.pos | (1<<lit)
             if lit < 0:
                 self.neg = self.neg | (1<<-lit)
+
+    def isValid(self):
+        return self.category != self.invalid
         
     def isTautology(self):
-        return self.valid and (self.pos & self.neg) != 0
+        return self.category == self.tautology
 
     def isEmpty(self):
-        return self.valid and self.pos == 0 and self.neg == 0
+        return self.category == self.empty
 
     def resolveVariables(self, other):
-        return (self.pos & other.neg) | (self.neg & other.pos)
+        if self.category == self.normal and other.category == self.normal:
+            return (self.pos & other.neg) | (self.neg & other.pos)
+        return -1
 
     def resolvable(self, other):
         r = self.resolveVariables(other)
         # Bit hacking trick to check for single one bit
-        return r != 0 and (r & (r-1)) == 0
+        return r > 0 and r != 0 and (r & (r-1)) == 0
         
     def resolve(self, other):
         r = self.resolveVariables(other)
+        if not (r > 0 and r != 0 and (r & (r-1)) == 0):
+            return Clause(category = self.invalid)
         npos = (self.pos | other.pos) & ~r
         nneg = (self.neg | other.neg) & ~r
+        if (npos & nneg) != 0:
+            return Clause(category = self.tautology)
+        if npos == 0 and nneg == 0:
+            return Clause(category = self.empty)
         nclause = Clause()
+        nclause.category = self.normal
         nclause.pos = npos
         nclause.neg = nneg
         return nclause
 
     def literalList(self):
-        if not self.valid:
+        if self.category == self.tautology:
+            return [-1, 1]
+        if self.category != self.normal:
             return []
         posBits = self.pos >> 1
         negBits = self.neg >> 1
@@ -78,23 +136,26 @@ class Clause:
         return ls
 
     def invalidate(self):
-        self.valid = False
+        self.category = self.invalid
         self.pos = 0
-        self.neg
+        self.neg = 0
 
     def copyFrom(self, other):
-        self.valid = other.valid
+        self.category = other.category
         self.pos = other.pos
         self.neg = other.neg
 
     def __str__(self):
-        if self.valid:
+        if self.isTautology():
+            return "Tautology"
+        if not self.isValid():
+            return "Invalid"
+        else:
             slist = [str(l) for l in self.literalList()]
             return "[" + " ".join(slist) + "]"
-        return "Invalid"
 
     def __eq__(self, other):
-        return self.valid == other.valid and self.pos == other.pos and self.neg == other.neg
+        return self.category == other.category and self.pos == other.pos and self.neg == other.neg
 
 # Representation of proof
 class ProofStep:
@@ -169,20 +230,20 @@ class Tree:
     # Unique ID for tree
     id = 0
     # Bit vector of clause ids
-    clauses = 0
+    atoms = 0
     representation = ""
     clause = None
     isLeaf = False
     
     def __init__(self, id):
         self.id = id
-        self.clause = Clause()
+        self.clause = Clause(category = Clause.invalid)
 
     def __str__(self):
         return self.representation
 
     def compatible(self, other):
-        return (self.clauses & other.clauses) == 0
+        return (self.atoms & other.atoms) == 0
 
     def newTree(self, id, other):
         return Node(id, self, other)
@@ -196,7 +257,7 @@ class Leaf(Tree):
     
     def __init__(self, id):
         Tree.__init__(self, id)
-        self.clauses = 1 << id
+        self.atoms = 1 << id
         self.representation = str(id)
         self.isLeaf = True
 
@@ -213,7 +274,7 @@ class Node(Tree):
         self.isLeaf = False
         self.left = left
         self.right = right
-        self.clauses = left.clauses | right.clauses
+        self.atoms = left.atoms | right.atoms
         self.representation = "[" + left.representation + " " + right.representation + "]"
 
     def getProof(self, ruleDict):
@@ -226,14 +287,14 @@ class Node(Tree):
 class Forest:
     leafCount = 1
     treeList = []
-    allClauses = 0
+    allAtoms = 0
     verbLevel = 1
 
     def __init__(self, leafCount, verbLevel = 1):
         self.leafCount = leafCount
         self.verbLevel = verbLevel
         self.treeList = []
-        self.allClauses = 0       
+        self.allAtoms = 0       
 
         start = datetime.datetime.now()
         self.generate2()
@@ -241,15 +302,16 @@ class Forest:
         delta = datetime.datetime.now() - start
         if verbLevel > 0:
             seconds = delta.seconds + 1e-6 * delta.microseconds
-            print("Generated %d trees, of which %d are full in %.2f seconds" % (len(self.treeList), len(fullTreeList), seconds))
+            if self.verbLevel >= 1:
+                print("Forest: Generated %d trees, of which %d are full in %.2f seconds" % (len(self.treeList), len(fullTreeList), seconds))
 
     def generate(self):
         for id in unitRange(self.leafCount):
             leaf = Leaf(id)
-            if self.verbLevel >= 2:
+            if self.verbLevel >= 5:
                 print("Generated tree #%d: %s" % (leaf.id, str(leaf)))
             self.treeList.append(leaf)
-            self.allClauses = self.allClauses | leaf.clauses
+            self.allAtoms = self.allAtoms | leaf.atoms
         nextId = self.leafCount+1
         nextRight = 1
         while nextRight < len(self.treeList):
@@ -258,7 +320,7 @@ class Forest:
                 left = self.treeList[nextLeft]
                 if left.compatible(right):
                     newTree = left.newTree(nextId, right)
-                    if self.verbLevel >= 2:
+                    if self.verbLevel >= 5:
                         print("Generated tree #%d: %s" % (newTree.id, str(newTree)))
                     self.treeList.append(newTree)
                     nextId += 1
@@ -270,11 +332,11 @@ class Forest:
         treeDict = { count : {} for count in unitRange(self.leafCount) }
         for id in unitRange(self.leafCount):
             leaf = Leaf(id)
-            if self.verbLevel >= 2:
+            if self.verbLevel >= 5:
                 print("Generated tree #%d: %s" % (leaf.id, str(leaf)))
             self.treeList.append(leaf)
-            self.allClauses = self.allClauses | leaf.clauses
-            treeDict[1][leaf.clauses] = [leaf]
+            self.allAtoms = self.allAtoms | leaf.atoms
+            treeDict[1][leaf.atoms] = [leaf]
 
         nextId = self.leafCount+1
         # Strategy: Check compatibility for entire categories of trees before merging them
@@ -282,19 +344,19 @@ class Forest:
             lbound = tcount // 2
             for lcount in unitRange(lbound):
                 rcount = tcount - lcount
-                for lclauses in treeDict[lcount].keys():
-                    for rclauses in treeDict[rcount].keys():
-                        if (lclauses & rclauses) == 0:
-                            nclauses = lclauses | rclauses
-                            if nclauses not in treeDict[tcount]:
-                                treeDict[tcount][nclauses] = []
-                            for ltree in treeDict[lcount][lclauses]:
-                                for rtree in treeDict[rcount][rclauses]:
+                for latoms in treeDict[lcount].keys():
+                    for ratoms in treeDict[rcount].keys():
+                        if (latoms & ratoms) == 0:
+                            natoms = latoms | ratoms
+                            if natoms not in treeDict[tcount]:
+                                treeDict[tcount][natoms] = []
+                            for ltree in treeDict[lcount][latoms]:
+                                for rtree in treeDict[rcount][ratoms]:
                                     if lcount < rcount or ltree.id < rtree.id:
                                         newTree = ltree.newTree(nextId, rtree)
                                         self.treeList.append(newTree)
-                                        treeDict[tcount][nclauses].append(newTree)
-                                        if self.verbLevel >= 2:
+                                        treeDict[tcount][natoms].append(newTree)
+                                        if self.verbLevel >= 5:
                                             print("Generated tree #%d: %s" % (newTree.id, str(newTree)))
                                         nextId += 1
                 
@@ -313,28 +375,30 @@ class Forest:
             if not t.isLeaf:
                 cleft = t.left.clause
                 cright = t.right.clause
-                if cleft.valid and cright.valid and cleft.resolvable(cright):
-                    t.clause.copyFrom(cleft.resolve(cright))
-            if self.verbLevel >= 2:
+                cres = cleft.resolve(cright)
+                if cres.isValid():
+                    t.clause.copyFrom(cres)
+            if self.verbLevel >= 4:
                 print("Tree %d.  Resolvent = %s" % (id, str(t.clause)))
             if t.clause == target:
                 return t
             if t.clause.isTautology():
                 t.clause.invalidate()
             if t.clause.isEmpty():
-                print("Warning.  Tree leads to empty clause: %s" % str(t))
+                if self.verbLevel >= 1:
+                    print("Warning.  Tree leads to empty clause: %s" % str(t))
                 t.clause.invalidate()
         # Only get here if failed
         print("Couldn't generate resolution proof")
         return None
 
     def isFull(self, tree):
-        return tree.clauses == self.allClauses
+        return tree.atoms == self.allAtoms
             
 class ProofManager:        
     verbLevel = 1
     forest = None
-    # Proof cache is mapping from list of canonical variables to proof rule tree
+    # Proof cache is mapping from list of canonical literals to proof rule tree
     proofCache = {}
     # Statistics about each entry in proof cache.  Number of times requested
     proofCounts = {}
@@ -347,16 +411,19 @@ class ProofManager:
     target = None
     
     def __init__(self, variableNames, maxRules, target, verbLevel = 1):
+        self.verbLevel = verbLevel
         self.variableNames = variableNames
         self.verbLevel = verbLevel
         self.forest = Forest(maxRules, verbLevel)
+        self.proofCache = {}
+        self.proofCounts = {}
         self.clauseRules = {}
         self.target = target
+
 
     def clearRules(self):
         self.clauseRules = {}
 
-    # Resolution target is special rule with name "target"
     def addRule(self, ruleName, ruleLiterals):
         self.clauseRules[ruleName] = ruleLiterals
 
@@ -377,11 +444,16 @@ class ProofManager:
         for key in keyList:
             rstring, vstring = key.split(":")
             rstring = " ".join(rstring.split("+"))
-            vstring = ", ".join(vstring.split("+"))
+            vlist = [int(s) for s in vstring.split("+")]
+            vslist = ["TAUT" if v == tautologyId else "NIL" if v == -tautologyId else str(v) for v in vlist]
+            vstring = ", ".join(vslist)
+
             pstring = str(self.proofCache[key])
-            print("[%s : %s] --> %s (%d uses)" % (rstring, vstring, pstring, self.proofCounts[key]))
+            if self.verbLevel >= 2:
+                print("[%s : %s] --> %s (%d uses)" % (rstring, vstring, pstring, self.proofCounts[key]))
             accessCount += self.proofCounts[key]
-        print("%d keys.  %d total uses" % (len(keyList), accessCount))
+        if self.verbLevel >= 1:
+            print("%d keys.  %d total uses" % (len(keyList), accessCount))
 
     def lookupProof(self, variableList, ruleNames):
         key = self.proofKey(variableList, ruleNames)
@@ -392,44 +464,49 @@ class ProofManager:
 
     # valueMap is dictionary giving variable identifiers associated with named literals
     def findProof(self, valueMap, ruleNames):
-        # Build map from external variables to canonical variable values
+        # Build map from external variables to canonical literal values
         forwardMap = {}
-        # Build map from canonical variables to external variables
+        # Build map from canonical literals to external variables
         inverseMap = {}
-        # Build map from variable names to canonical variable values
+        # Build map from variable names to canonical literal values
         canonicalMap = {}
         canonicalVariable = 0
         for vname in self.variableNames:
             canonicalVariable += 1
             externalVariable = valueMap[vname]
-            if externalVariable in forwardMap:
+            if abs(externalVariable) == tautologyId:
+                # Preserve true/false
+                canonicalMap[vname] = externalVariable
+                forwardMap[externalVariable] = externalVariable
+                inverseMap[externalVariable] = externalVariable
+            elif externalVariable in forwardMap:
                 canonicalMap[vname] = forwardMap[externalVariable]
             else:
                 canonicalMap[vname] = canonicalVariable
                 forwardMap[externalVariable] = canonicalVariable
                 inverseMap[canonicalVariable] = externalVariable
-        if self.verbLevel >= 1:
+        if self.verbLevel >= 3:
             mapStrings = ["%s:%d->%d" % (vname, valueMap[vname], canonicalMap[vname]) for vname in self.variableNames]
-            print("Constructed canonical variables: " + " ".join(mapStrings))
+            print("Constructed canonical literals: " + " ".join(mapStrings))
         # See if already have proof in cache
         variableList = [canonicalMap[vname] for vname in self.variableNames]
         proof = self.lookupProof(variableList, ruleNames)
         if proof is not None:
             nproof = proof.remapLiterals(inverseMap)
-            if self.verbLevel >= 1:
+            if self.verbLevel >= 3:
                 pstring = nproof.postfix(showLiterals = True)
                 print("Found cached proof: " + pstring)
             return nproof
         # Construct target clause
         targetClause = self.makeClause(self.target, canonicalMap)
         if targetClause.isTautology():
-            if self.verbLevel >= 1:
+            if self.verbLevel >= 3:
                 print("Target is tautology")
-            return None
+            return tautologyId
         if targetClause.isEmpty():
-            if self.verbLevel >= 1:
+            if self.verbLevel >= 3:
                 print("Target is empty")
-            return None
+            return -tautologyId
         # Build list of non-degenerate clauses
         clauseList = []
         # Mapping from leaf ID used in forest to rule name
@@ -443,18 +520,18 @@ class ProofManager:
                 clauseList.append(c)
                 ruleCount += 1
                 ruleDict[ruleCount] = ruleName
-        if self.verbLevel >= 1:
+        if self.verbLevel >= 3:
             nameList = [ruleDict[id] for id in unitRange(ruleCount)]
             print("Found %d clauses for proof generation: %s" % (len(nameList), " ".join(nameList)))
         self.forest.loadClauses(clauseList)
         t = self.forest.search(targetClause)
         if t is None:
             print("Couldn't find proof of target")
-            return None
+            return -tautologyId
         proof =  t.getProof(ruleDict)
         self.addProof(variableList, ruleNames, proof)
         nproof = proof.remapLiterals(inverseMap)
-        if self.verbLevel >= 1:
+        if self.verbLevel >= 3:
             pstring = nproof.postfix(showLiterals = True)
             print("Generated proof: " + pstring)
         return nproof
@@ -481,14 +558,14 @@ class Resolver:
     manager = None
 
     def __init__(self, variableNames, rules, target, verbLevel = 1):
+        self.verbLevel = verbLevel
         self.variableNames = variableNames
         self.rules = rules
         self.target = target
         self.verbLevel = verbLevel
-        self.manager = ProofManager(self.variableNames, len(rules), self.target, self.verbLevel)
+        self.manager = ProofManager(self.variableNames, len(rules), self.target, verbLevel = self.verbLevel)
 #        for cname in self.rules.keys():
 #            self.manager.addRule(cname, self.rules[cname])
-
 
     def summarize(self):
         self.manager.showCache()
@@ -502,6 +579,10 @@ class Resolver:
         proof = self.manager.findProof(valueMap, ruleNames)
         return proof
 
+    # Creat a dictionary mapping rule names to tautology
+    def freshIndex(self):
+        return { name : tautologyId for name in self.rules.keys() }
+
     def standardMap(self):
         return { self.variableNames[i] : i+1 for i in range(len(self.variableNames)) }
 
@@ -509,7 +590,7 @@ class Resolver:
 class AndResolver(Resolver):
     
     def __init__(self, verbLevel = 1):
-        variableNames = ["zero", "one", "x", "u", "u1", "u0", "v", "v1", "v0", "w", "w1", "w0"]
+        variableNames = ["x", "u", "u1", "u0", "v", "v1", "v0", "w", "w1", "w0"]
         rules = { "UTD" : ["!x",  "!u",  "u1"],
                   "UFD" : ["x",   "!u",  "u0"],
                   "VTD" : ["!x",  "!v",  "v1"],
@@ -537,16 +618,21 @@ class AndResolver(Resolver):
         return valueMap        
 
     def zeroU1(self, valueMap):
-        valueMap["u1"] = valueMap["zero"]
-        valueMap["w1"] = valueMap["zero"]
+        valueMap["u1"] = -tautology
+        valueMap["w1"] = -tautology
+        return valueMap        
+
+    def oneU1(self, valueMap):
+        valueMap["u1"] = tautology
+        valueMap["w1"] = valueMap["v1"]
         return valueMap        
 
     def zeroU1V0(self, valueMap):
-        valueMap["u1"] = valueMap["zero"]
-        valueMap["w1"] = valueMap["zero"]
-        valueMap["v0"] = valueMap["zero"]
-        valueMap["w0"] = valueMap["zero"]
-        valueMap["w"] = valueMap["zero"]
+        valueMap["u1"] = -tautology
+        valueMap["w1"] = -tautology
+        valueMap["v0"] = -tautology
+        valueMap["w0"] = -tautology
+        valueMap["w"] = -tautology
         return valueMap                
 
     def equalU1V1(self, valueMap):
@@ -557,10 +643,8 @@ class AndResolver(Resolver):
 class ImplyResolver(Resolver):
     
     def __init__(self, verbLevel = 1):
-        variableNames = ["zero", "one", "x", "u", "u1", "u0", "v", "v1", "v0"]
+        variableNames = ["x", "u", "u1", "u0", "v", "v1", "v0"]
         rules = { 
-           "ZLO" : ["!zero"],
-           "OHI" : ["one"],
             "UTD" : ["!x",  "!u",  "u1"],
             "UFD" : ["x",   "!u",  "u0"],
             "VTU" : ["!x",  "!v1", "v"],

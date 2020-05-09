@@ -24,6 +24,9 @@ class DummyProver:
         pass
 
     def createClause(self, result, antecedent, comment = None):
+        result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            return result
         self.clauseCount += 1
         return self.clauseCount
 
@@ -49,7 +52,7 @@ class Variable:
         elif level == self.leafLevel:
             self.id = 0
         else:
-            self.id = self.level
+            self.id = id
         if name is None:
             name = "var-%d" % level
         self.name = str(name)
@@ -86,21 +89,38 @@ class Node:
     def __hash__(self):
         return self.id
 
+    def label(self):
+        return "N%d" % self.id
+
+    def isZero(self):
+        return False
+
+    def isOne(self):
+        return False
+
 
 class LeafNode(Node):
     value = None # 0 or 1
     inferValue = None # Number of unit clause asserting its value
 
-    def __init__(self, id, value, prover):
+    def __init__(self, value):
+        id = resolver.tautologyId if value == 1 else -resolver.tautologyId        
         Node.__init__(self, id, Variable(Variable.leafLevel, "Leaf"))
         self.value = value
-        antecedent = []
-        unit = -self.id if self.value == 0 else self.id
-        self.inferValue = prover.createClause([unit], [], "Unit clause for constant %d" % value)
+        self.inferValue = self.id
 
     def isLeaf(self):
         return True
 
+    def label(self):
+        return "C%d" % self.value
+
+    def isZero(self):
+        return self.value == 0
+
+    def isOne(self):
+        return self.value == 1
+    
     def __str__(self):
         return "leaf-%d" % self.value
 
@@ -121,7 +141,7 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        self.inferTrueUp = prover.createClause([-vid, -hid, id], [], "ITE assertions for node %d" % id)
+        self.inferTrueUp = prover.createClause([-vid, -hid, id], [], "ITE assertions for node %s" % self.label())
         self.inferFalseUp = prover.createClause([vid, -lid, id], [])
         self.inferTrueDown = prover.createClause([-vid, -id, hid], [])
         self.inferFalseDown = prover.createClause([vid, -id, lid], [])
@@ -152,7 +172,7 @@ class VariableNode(Node):
             return self
         
     def __str__(self):
-        return "%d:%s->%d,%d" % (self.id, str(self.variable), self.high.id, self.low.id)
+        return "%d:%s->%s,%s" % (self.id, str(self.variable), self.high.label(), self.low.label())
 
 class Manager:
     prover = None
@@ -167,7 +187,7 @@ class Manager:
     # Operation cache
     # Key = (opName, operand1 ...) to (node, justification)
     operationCache = {}
-    verbLevel = 2
+    verbLevel = 1
     andResolver = None
     implyResolver = None
     # Statistics
@@ -176,21 +196,23 @@ class Manager:
     nodeCount = 0
     variableCount = 0
 
-    def __init__(self, prover = None, nextNodeId = 0):
+    def __init__(self, prover = None, nextNodeId = 0, verbLevel = 1):
 
+        self.verbLevel = verbLevel
         self.prover = DummyProver() if prover is None else prover
         self.variables = []
-        self.leaf0 = LeafNode(nextNodeId, 0, prover)
-        self.leaf1 = LeafNode(nextNodeId+1, 1, prover)
-        self.nextNodeId = nextNodeId + 2
+        self.leaf0 = LeafNode(0)
+        self.leaf1 = LeafNode(1)
+        self.nextNodeId = nextNodeId
         self.nodeTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel-1)
-        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel-1)
+        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel)
+        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel)
         self.cacheAdded = 0
         self.applyCount = 0
         self.nodeCount = 0
         self.variableCount = 0
+
     def newVariable(self, name, id = None):
         level = len(self.variables) + 1
         var = Variable(level, name, id)
@@ -222,9 +244,11 @@ class Manager:
     def constructClause(self, clauseId, literalList):
         root = self.buildClause(literalList)
         litNodes = self.deconstructClause(root)
-        antecedents = [clauseId, self.leaf1.inferValue]
-        antecedents += [node.inferTrueUp for node in litNodes if node.high != self.leaf0]
-        antecedents += [node.inferFalseUp for node in litNodes if node.low != self.leaf0]
+        antecedents = [clauseId]
+        antecedents += [node.inferTrueUp for node in litNodes 
+                        if node.inferTrueUp != resolver.tautologyId]
+        antecedents += [node.inferFalseUp for node in litNodes
+                        if node.inferFalseUp != resolver.tautologyId]
         validation = self.prover.createClause([root.id], antecedents, "Validate BDD representation of clause %d" % clauseId)
         return root, validation
     
@@ -304,20 +328,19 @@ class Manager:
         # Constant cases.
         # No justifications required, since all return one of the arguments
         if nodeA == self.leaf0 or nodeB == self.leaf0:
-            return (self.leaf0, None)
+            return (self.leaf0, resolver.tautologyId)
         if nodeA == self.leaf1:
-            return (nodeB, None)
+            return (nodeB, resolver.tautologyId)
         if nodeB == self.leaf1:
-            return (nodeA, None)
+            return (nodeA, resolver.tautologyId)
         if nodeA == nodeB:
-            return (nodeA, None)
+            return (nodeA, resolver.tautologyId)
+
         if nodeA.id > nodeB.id:
             nodeA, nodeB = nodeB, nodeA
-
         key = ("and", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
-
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
@@ -336,11 +359,11 @@ class Manager:
             ruleIndex["VFD"] = nodeB.inferFalseDown
 
         (newHigh, implyHigh) = self.applyAndJustify(highA, highB)
-        if implyHigh is not None:
+        if implyHigh != resolver.tautologyId:
             ruleIndex["IMT"] = implyHigh
             
         (newLow, implyLow) = self.applyAndJustify(lowA, lowB)
-        if implyLow is not None:
+        if implyLow != resolver.tautologyId:
             ruleIndex["IMF"] = implyLow
 
         if newHigh == newLow:
@@ -350,16 +373,16 @@ class Manager:
             ruleIndex["WTU"] = newNode.inferTrueUp
             ruleIndex["WFU"] = newNode.inferFalseUp
 
-        variableIndex = { "zero": self.leaf0.id, "one":self.leaf1.id, "x":splitVar.id,
+        variableIndex = { "x":splitVar.id,
                           "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
                           "v":nodeB.id, "v1":highB.id, "v0":lowB.id,
                           "w":newNode.id, "w1":newHigh.id, "w0":newLow.id }
 
         proof = self.andResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
-        if proof is None:
-            justification = None
+        if proof == resolver.tautologyId:
+            justification = resolver.tautologyId
         else:
-            comment = "Justification that %d & %d ==> %d" % (nodeA.id, nodeB.id, newNode.id)
+            comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
             justification = self.prover.emitProof(proof, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification)
         self.cacheAdded += 1
@@ -456,22 +479,24 @@ class Manager:
     def justifyImply(self, nodeA, nodeB):
         self.applyCount += 1
 
+        # Special cases
+        if nodeA == nodeB:
+            return (True, resolver.tautologyId)
+        if nodeA == self.leaf0:
+            return (True, resolver.tautologyId)
+        if nodeB == self.leaf1:
+            return (True, resolver.tautologyId)
+        # It would be an error if implication fails
+        if nodeA == self.leaf1:
+            return (False, resolver.tautologyId)
+        if nodeB == self.leaf0:
+            return (False, resolver.tautologyId)
+
         key = ("imply", nodeA.id, nodeB.id)
         if key in self.operationCache:
             return self.operationCache[key]
 
-        ruleIndex = { "ZLO" : self.leaf0.inferValue, "OHI" : self.leaf1.inferValue }
-        variableIndex = { "zero" : self.leaf0.id, "one" : self.leaf1.id, "u" : nodeA.id, "v" : nodeB.id }
-        # Constant cases.
-        if nodeA == self.leaf0 or nodeB == self.leaf1:
-            proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
-            if proof is None:
-                justification is None
-            else:
-                comment = "Justification that %d ==> %d" % (nodeA.id, nodeB.id)
-                justification = self.prover.emitProof(proof, ruleIndex, comment)
-            return (True, justification)
-
+        ruleIndex = { }
         splitVar = min(nodeA.variable, nodeB.variable)  
         highA = nodeA.branchHigh(splitVar)
         lowA =  nodeA.branchLow(splitVar)
@@ -486,28 +511,26 @@ class Manager:
             ruleIndex["VFU"] = nodeB.inferFalseUp
 
         (checkHigh, implyHigh) = self.justifyImply(highA, highB)
-        if implyHigh is not None:
+        if implyHigh != resolver.tautologyId:
             ruleIndex["IMT"] = implyHigh
         (checkLow, implyLow) = self.justifyImply(lowA, lowB)
-        if implyLow is not None:
+        if implyLow != resolver.tautologyId:
             ruleIndex["IMF"] = implyLow
 
-        variableIndex["x"] = splitVar.id
-        variableIndex["u1"] = highA.id
-        variableIndex["u0"] = lowA.id
-        variableIndex["v1"] = highB.id
-        variableIndex["v0"] = lowB.id
+        variableIndex = { "x":splitVar.id,
+                          "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
+                          "v":nodeB.id, "v1":highB.id, "v0":lowB.id }
 
         check = checkHigh and checkLow
         if check:
             proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
-            if proof is None:
-                justification = None
+            if proof == resolver.tautologyId:
+                justification = resolver.tautologyId
             else:
-                comment = "Justification that %d ==> %d" % (nodeA.id, nodeB.id)
+                comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
                 justification = self.prover.emitProof(proof, ruleIndex, comment)
         else:
-            justification = None
+            justification = resolver.tautologyId
 
         self.operationCache[key] = (check, justification)
         self.cacheAdded += 1
@@ -552,10 +575,12 @@ class Manager:
             print("Total nodes: %d" % self.nodeCount)
             print("Total apply operations: %d" % self.applyCount)            
             print("Total cached results: %d" % self.cacheAdded)
-        if self.verbLevel >= 2:
+        if self.verbLevel >= 1:
             print("Results from And Operations:")
             self.andResolver.summarize()
             print("Results from Implication Testing Operations:")
             self.implyResolver.summarize()
-            
+        if self.verbLevel >= 1:
+            print("Results from proof generation")
+            self.prover.summarize()
         
