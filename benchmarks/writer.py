@@ -108,7 +108,8 @@ class ScheduleWriter(Writer):
 
     def doQuantify(self, vlist):
         if self.stackDepth == 0:
-            raise WriterException("Cannot quantify.  Stack empty")
+            print ("Warning: Cannot quantify.  Stack empty")
+#            raise WriterException("Cannot quantify.  Stack empty")
         self.show("q %s" % " ".join([str(c) for c in vlist]))
 
     def finish(self):

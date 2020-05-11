@@ -5,8 +5,6 @@ import  getopt
 import random
 import writer
 
-verbose = True
-
 # Generate CNF, order, and schedule files to compare two trees of xor's over a common set of inputs
 
 def usage(name):
