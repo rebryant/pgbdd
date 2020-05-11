@@ -1,9 +1,10 @@
+INTERP = python3
 MODES = LP
 N = 10
 VLEVEL = 1
 
-GENERATOR = ../xortree.py
-SOLVER = ../../prototype/solver.py
+GENERATOR = $(INTERP) ../xortree.py
+SOLVER = $(INTERP) ../../prototype/solver.py
 CHECKER = ../../booleforce-1.3/tracecheck
 
 xor-$(N)-$(MODES).proof:

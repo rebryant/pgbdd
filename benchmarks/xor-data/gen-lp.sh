@@ -25,3 +25,5 @@ make N=220
 make N=230
 make N=240
 make N=250
+make N=260
+make N=270
