@@ -15,7 +15,8 @@ def usage(name):
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -n N     Specify number of tree inputs")
-    print("  -m M1M2  Specify modes for the two trees: B=balanced, L=left linear, R=right linear, X=random")
+    print("  -m M1M2  Specify modes for the two trees: ")
+    print("             B=balanced, L=left linear, R=right linear, X=random, P=permuted")
 
 
 # General/leaf tree node
@@ -100,13 +101,13 @@ class TreeNode(Node):
         self.right.show(maxHeight, spacing)
 
 class TreeBuilder:
-    (modeLeft, modeRight, modeBalanced, modeRandom) = range(4)
+    (modeLeft, modeRight, modeBalanced, modeRandom, modePermute) = range(5)
     # Number of inputs
     inputCount = 1
     variableCount = 0
     roots = []
     rootClauses = []
-    modeNames = []
+    modes = []
     leafTrees = []
     cnfWriter = None
     scheduleWriter = None
@@ -121,7 +122,7 @@ class TreeBuilder:
         self.leafTrees = [Node(v) for v in range(1, count+1)]
         self.variableCount = count
         self.roots = []
-        self.modeNames = []
+        self.modes = []
         self.cnfWriter = writer.CnfWriter(fullCount, rootName, self.verbose)
         self.scheduleWriter = writer.ScheduleWriter(fullCount, rootName, self.verbose)
         self.orderWriter = writer.OrderWriter(fullCount, rootName, self.verbose)
@@ -130,26 +131,33 @@ class TreeBuilder:
         names = {"L": self.modeLeft,
                  "R": self.modeRight,
                  "B": self.modeBalanced,
-                 "X": self.modeRandom}
+                 "X": self.modeRandom,
+                 "P": self.modePermute}
         if shortName in names:
             return names[shortName]
         print("Unknown mode '%s'.  Aborting" % shortName)
         sys.exit(1)
 
     def getModeName(self, mode):
-        return ["Left", "Right", "Balanced", "Random"][mode]
+        return ["Left", "Right", "Balanced", "Random", "Permuted"][mode]
 
     def addRoot(self, mode):
         subtrees = self.leafTrees
         if mode == self.modeLeft:
-            root = self.buildSplit(subtrees, self.chooseLeast)
-        elif mode == self.modeRight:
             root = self.buildSplit(subtrees, self.chooseMost)
+        elif mode == self.modeRight:
+            root = self.buildSplit(subtrees, self.chooseLeast)
         elif mode == self.modeBalanced:
             root = self.buildSplit(subtrees, self.chooseHalf)
-        else:
+        elif mode == self.modeRandom:
             root = self.buildRandom(subtrees)
+        else:
+            # Permuted mode: Left tree with permuted leaves
+            random.shuffle(subtrees)
+            root = self.buildSplit(subtrees, self.chooseMost)
         self.roots.append(root)
+        self.modes.append(mode)
+
 
     def buildSplit(self, subtrees, leftChooser):
         if len(subtrees) == 1:
@@ -223,7 +231,10 @@ class TreeBuilder:
         h2list = sorted(varDict2.keys(), key = lambda h : -h)
         for k in h2list:
             self.orderWriter.doOrder(varDict2[k])
-        self.orderWriter.doOrder(list(range(1, self.inputCount+1)))
+        leaves = list(range(1, self.inputCount+1))
+        if self.modeLeft in self.modes or self.modePermute in self.modes:
+            leaves.reverse()
+        self.orderWriter.doOrder(leaves)
         self.orderWriter.finish()
 
 def run(name, args):
