@@ -7,11 +7,12 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h]  [-c] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-c] [-Q] [-v] [-r ROOT] -n N" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -c       Include corners")
+    print("  -Q       Defer quantification until have completed entire column")
     print("  -n N     Specify size of board")
 
 
@@ -115,14 +116,16 @@ class Board:
     verbose = False
     includeCorners = False
     n = None
+    deferQuantify = False
 
-    def __init__(self, n, rootName, verbose = False, includeCorners = False):
+    def __init__(self, n, rootName, verbose = False, includeCorners = False, deferQuantify = False):
         self.n = n
         variableCount = 2 * n * (n-1)
         if not includeCorners:
             variableCount -= 4
         self.verbose = verbose
         self.includeCorners = includeCorners
+        self.deferQuantify = deferQuantify
         self.cnfWriter = writer.CnfWriter(variableCount, rootName, self.verbose)
         self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose)
         self.orderWriter = writer.OrderWriter(variableCount, rootName, self.verbose)
@@ -169,6 +172,7 @@ class Board:
 
         # Now go through them in column-major order, working from bottom to top
         for c in range(n):
+            allQuants = []
             for ir in range(n):
                 r = n-ir-1
                 sq = self.squares[(r,c)]
@@ -182,7 +186,12 @@ class Board:
                     if sq.left is not None:
                         quants.append(sq.left)
                     if len(quants) > 0:
-                        self.scheduleWriter.doQuantify(quants)
+                        if self.deferQuantify:
+                            allQuants += quants
+                        else:
+                            self.scheduleWriter.doQuantify(quants)
+            if c < n-1 and len(allQuants) > 0:
+                self.scheduleWriter.doQuantify(allQuants)                
 
     def finish(self):
         self.cnfWriter.finish()
@@ -194,8 +203,9 @@ def run(name, args):
     n = 0
     rootName = None
     includeCorners = False
+    deferQuantify = False
     
-    optlist, args = getopt.getopt(args, "hvcr:n:")
+    optlist, args = getopt.getopt(args, "hvcQar:n:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -204,6 +214,8 @@ def run(name, args):
             verbose = True
         elif opt == '-c':
             includeCorners = True
+        elif opt == '-Q':
+            deferQuantify = True
         elif opt == '-r':
             rootName = val
         elif opt == '-n':
@@ -217,7 +229,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, includeCorners)
+    b = Board(n, rootName, verbose, includeCorners, deferQuantify)
     b.build()
     b.finish()
 
