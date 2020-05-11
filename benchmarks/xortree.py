@@ -3,82 +3,22 @@
 import sys
 import  getopt
 import random
+import writer
+
+verbose = True
 
 # Generate CNF, order, and schedule files to compare two trees of xor's over a common set of inputs
 
 def usage(name):
-    print("Usage: %s [-h] [-r ROOT] [-n N] [-m M1M2]" % name)
+    print("Usage: %s [-h] [-v] [-r ROOT] -n N -m M1M2" % name)
     print("  -h       Print this message")
+    print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -n N     Specify number of tree inputs")
     print("  -m M1M2  Specify modes for the two trees: B=balanced, L=left linear, R=right linear, X=random")
 
-# Creating CNF
-class CnfWriter:
-    variableCount = 0
-    clauseCount = 0
-    outputList = []
 
-    def __init__(self):
-        self.variableCount = 0
-        self.clauseCount = 0
-        self.ouputList = []
-
-    def newVariable(self):
-        self.variableCount += 1
-        return self.variableCount
-
-    def comment(self, line):
-        outputList.append("c " + line)
-
-    def clause(self, literals):
-        ilist = literals + [0]
-        outputList.append(" ".join([str(i) for i in ilist]))
-        self.ClauseCount += 1
-
-    def write(self, fname = None):
-        if fname is None:
-            outfile = sys.stdout
-        else:
-            try:
-                outfile = open(fname, 'w')
-            except Exception as ex:
-                print("Couldn't open output file '%s'.  Aborting" % fname)
-                sys.exit(1)
-        outfile.write("p cnf %d %d" % (self.variableCount, self.clauseCount))
-        for line in self.outputList:
-            outfile.write(line + '\n')
-        outfile.close()
-    
-class ScheduleWriter:
-    outfile = None
-    
-    def __init__(self, fname):
-        try:
-            self.outfile = open(fname, 'w')
-        except:
-            print("Couldn't open schedule file '%s'. Aborting" % fname)
-            sys.exit(1)
-    
-    def getClauses(self, clist):
-        self.outfile.write("c %s\n" % " ".join([str(c) for c in clist]))
-
-    def doAnd(self, count):
-        self.outfile.write("a %d\n" % count)
-
-    def doQuantify(self, vlist):
-        self.outfile.write("q %s\n", " ".join([str(c) for c in vlist]))
-
-    def finish(self):
-        if self.outfile is None:
-            return
-        self.outfile.close()
-        self.outfile = None
-
-    def __del__(self):
-        self.finish()
-
-# General tree node
+# General/leaf tree node
 class Node:
     isLeaf = True
     output =  0 # Identity of Output variable
@@ -123,33 +63,33 @@ class TreeNode(Node):
         A = self.left.output
         B = self.right.output
         C = self.output
-        writer.coment("Xor(%d, %d) --> %d" % (A, B, C))
-        self.clauseIds.append(writer.clause([-A, -B, -C]))
-        self.clauseIds.append(writer.clause([-A,  B,  C]))
-        self.clauseIds.append(writer.clause([ A, -B,  C]))
-        self.clauseIds.append(writer.clause([ A,  B, -C]))
+        writer.doComment("Xor(%d, %d) --> %d" % (A, B, C))
+        self.clauseIds.append(writer.doClause([-A, -B, -C]))
+        self.clauseIds.append(writer.doClause([-A,  B,  C]))
+        self.clauseIds.append(writer.doClause([ A, -B,  C]))
+        self.clauseIds.append(writer.doClause([ A,  B, -C]))
 
     def emitSchedule(self, writer):
         self.left.emitSchedule(writer)
         self.right.emitSchedule(writer)
-        self.writer.getClauses(self.clauseIds)
-        self.writer.doAnd(len(self.clauseIds))
+        writer.getClauses(self.clauseIds)
+        writer.doAnd(len(self.clauseIds))
         quants = []
         if not self.left.isLeaf:
             quants.append(self.left.output)
         if not self.right.isLeaf:
             quants.append(self.right.output)
         if len(quants) > 0:
-            self.writer.doQuantify(quants)
+            writer.doQuantify(quants)
                               
     # Gather all non-input variables into dictionary, indexed by height
     def getVariables(self, heightDict):
         if self.height not in heightDict:
-            self.heightDict[self.height] = [self.output]
+            heightDict[self.height] = [self.output]
         else:
-            self.heightDict[self.height].append(self.output)
-        self.getVariables(self.left)
-        self.getVariables(self.right)
+            heightDict[self.height].append(self.output)
+        self.left.getVariables(heightDict)
+        self.right.getVariables(heightDict)
     
     def show(self, maxHeight = None, spacing = 4):
         if maxHeight is None:
@@ -163,21 +103,53 @@ class TreeBuilder:
     (modeLeft, modeRight, modeBalanced, modeRandom) = range(4)
     # Number of inputs
     inputCount = 1
-    treeCount = 0
-    root = None
+    variableCount = 0
+    roots = []
+    rootClauses = []
+    modeNames = []
+    leafTrees = []
+    cnfWriter = None
+    scheduleWriter = None
+    orderWriter = None
+    verbose = False
 
-    def __init__(self, count, mode):
+    def __init__(self, count, rootName, verbose = False):
+        self.verbose = verbose
         self.inputCount = count
-        subtrees = [Node(v) for v in range(1, count+1)]
-        self.treeCount = count
+        # Leaves + 2 binary trees
+        fullCount = 3 * count - 2
+        self.leafTrees = [Node(v) for v in range(1, count+1)]
+        self.variableCount = count
+        self.roots = []
+        self.modeNames = []
+        self.cnfWriter = writer.CnfWriter(fullCount, rootName, self.verbose)
+        self.scheduleWriter = writer.ScheduleWriter(fullCount, rootName, self.verbose)
+        self.orderWriter = writer.OrderWriter(fullCount, rootName, self.verbose)
+
+    def findMode(self, shortName):
+        names = {"L": self.modeLeft,
+                 "R": self.modeRight,
+                 "B": self.modeBalanced,
+                 "X": self.modeRandom}
+        if shortName in names:
+            return names[shortName]
+        print("Unknown mode '%s'.  Aborting" % shortName)
+        sys.exit(1)
+
+    def getModeName(self, mode):
+        return ["Left", "Right", "Balanced", "Random"][mode]
+
+    def addRoot(self, mode):
+        subtrees = self.leafTrees
         if mode == self.modeLeft:
-            self.root = self.buildSplit(subtrees, self.chooseLeast)
+            root = self.buildSplit(subtrees, self.chooseLeast)
         elif mode == self.modeRight:
-            self.root = self.buildSplit(subtrees, self.chooseMost)
+            root = self.buildSplit(subtrees, self.chooseMost)
         elif mode == self.modeBalanced:
-            self.root = self.buildSplit(subtrees, self.chooseHalf)
+            root = self.buildSplit(subtrees, self.chooseHalf)
         else:
-            self.root = self.buildRandom(subtrees)
+            root = self.buildRandom(subtrees)
+        self.roots.append(root)
 
     def buildSplit(self, subtrees, leftChooser):
         if len(subtrees) == 1:
@@ -187,8 +159,8 @@ class TreeBuilder:
         rightTrees = subtrees[leftCount:]
         leftRoot = self.buildSplit(leftTrees, leftChooser)
         rightRoot = self.buildSplit(rightTrees, leftChooser)
-        self.treeCount += 1
-        root = TreeNode(self.treeCount, leftRoot, rightRoot)
+        self.variableCount += 1
+        root = TreeNode(self.variableCount, leftRoot, rightRoot)
         return root
 
     def chooseLeast(self, count):
@@ -207,10 +179,89 @@ class TreeBuilder:
             subtrees = subtrees[:id1] + subtrees[id1+1:]
             id2 = random.choice(list(range(len(subtrees))))
             t2 = subtrees[id2]
-            subtrees = subtrees[:id2] + subtrees[id2+2:]
-            self.treeCount += 1
-            tn = TreeNode(self.treeCount, t1, t2)
+            subtrees = subtrees[:id2] + subtrees[id2+1:]
+            self.variableCount += 1
+            tn = TreeNode(self.variableCount, t1, t2)
             subtrees.append(tn)
         return subtrees[0]
 
+    def emitCnf(self):
+        if len(self.roots) != 2:
+            print("Fatal: Must have two roots.")
+            sys.exit(1)
+        for root in self.roots:
+            root.emitClauses(self.cnfWriter)
+        # Emit comparator
+        id1 = self.roots[0].output
+        id2 = self.roots[1].output
+        self.rootClauses = []
+        self.cnfWriter.doComment("Comparison of two tree roots")
+        self.rootClauses.append(self.cnfWriter.doClause([id1, id2]))
+        self.rootClauses.append(self.cnfWriter.doClause([-id1, -id2]))
+        self.cnfWriter.finish()
         
+    def emitSchedule(self):
+        if len(self.roots) != 2:
+            print("Fatal: Must have two roots.")
+            sys.exit(1)
+        for root in self.roots:
+            self.scheduleWriter.newTree()
+            root.emitSchedule(self.scheduleWriter)
+        # Final steps.  Have two roots on stack
+        self.scheduleWriter.getClauses(self.rootClauses)
+        self.scheduleWriter.doAnd(3)
+        self.scheduleWriter.finish()
+
+    def emitOrder(self):
+        varDict1 = {}
+        self.roots[0].getVariables(varDict1)
+        h1list = sorted(varDict1.keys(), key = lambda h : -h)
+        for k in h1list:
+            self.orderWriter.doOrder(varDict1[k])
+        varDict2 = {}
+        self.roots[1].getVariables(varDict2)
+        h2list = sorted(varDict2.keys(), key = lambda h : -h)
+        for k in h2list:
+            self.orderWriter.doOrder(varDict2[k])
+        self.orderWriter.doOrder(list(range(1, self.inputCount+1)))
+        self.orderWriter.finish()
+
+def run(name, args):
+    verbose = False
+    count = 0
+    rootName = None
+    mstring = ""
+    
+    optlist, args = getopt.getopt(args, "hvr:n:m:")
+    for (opt, val) in optlist:
+        if opt == '-h':
+            usage(name)
+            return
+        elif opt == '-v':
+            verbose = True
+        elif opt == '-r':
+            rootName = val
+        elif opt == '-n':
+            count = int(val)
+        elif opt == '-m':
+            if len(val) != 2:
+                print("Must specify two tree building modes")
+                usage(name)
+                return
+            mstring = val
+    if count == 0:
+        print("Count required")
+        return
+    if rootName is None:
+        print("Root name required")
+        return
+    t = TreeBuilder(count, rootName, verbose)
+    for m in mstring:
+        mode = t.findMode(m)
+        t.addRoot(mode)
+    t.emitCnf()
+    t.emitOrder()
+    t.emitSchedule()
+
+if __name__ == "__main__":
+    run(sys.argv[0], sys.argv[1:])
