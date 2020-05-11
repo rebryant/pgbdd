@@ -8,7 +8,7 @@ import bdd
 import resolver
 
 def usage(name):
-    print("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]")
+    print("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]" % name)
     print("  -h          Print this message")
     print("  -v LEVEL    Set verbosity level")
     print("  -i CNF      Name of CNF input file")
@@ -79,7 +79,8 @@ class CnfReader():
             if len(line) == 0:
                 continue
             elif line[0] == 'c':
-                self.commentLines.append(line)
+                if self.verbLevel > 1:
+                    self.commentLines.append(line)
             elif line[0] == 'p':
                 fields = line[1:].split()
                 if fields[0] != 'cnf':
@@ -243,7 +244,7 @@ class Prover:
         return self.opened
 
     def comment(self, comment):
-        if comment is not None:
+        if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
     def createClause(self, result, antecedent, comment = None):
