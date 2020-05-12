@@ -11,16 +11,18 @@ tautologyId = 1111111
 # Clean up clause.
 # Remove duplicates + false
 # Detect when tautology
+# Make sure that literal with highest-numbered variable stays at front
 def cleanClause(literalList):
-    slist = sorted(literalList, key = abs)
+    slist = sorted(literalList, key = lambda v: -abs(v))
     while len(slist) > 0:
-        last = slist[-1]
-        if abs(last) != tautologyId:
+        # Tautology and Null will be in front
+        first = slist[0]
+        if abs(first) != tautologyId:
             break
-        elif last == tautologyId:
+        elif first == tautologyId:
             return tautologyId
         else:
-            slist = slist[:-1]
+            slist = slist[1:]
     if len(slist) == 0:
         return -tautologyId
     elif len(slist) == 1:
@@ -303,7 +305,7 @@ class Forest:
         if verbLevel > 0:
             seconds = delta.seconds + 1e-6 * delta.microseconds
             if self.verbLevel >= 1:
-                print("Forest: Generated %d trees, of which %d are full in %.2f seconds" % (len(self.treeList), len(fullTreeList), seconds))
+                print("Resolution forest(%d): Generated %d trees, of which %d are full in %.2f seconds" % (leafCount, len(self.treeList), len(fullTreeList), seconds))
 
     def generate(self):
         for id in unitRange(self.leafCount):

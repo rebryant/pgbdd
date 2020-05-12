@@ -3,9 +3,9 @@
 
 import sys
 import getopt
-
 import bdd
 import resolver
+import datetime
 
 def usage(name):
     print("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]" % name)
@@ -276,8 +276,9 @@ class Prover:
     def summarize(self):
         if self.verbLevel >= 1:
             print("Input clauses: %d" % self.inputClauseCount)
-            print("Generated clauses: %d" % (self.clauseCount - self.inputClauseCount))
-            print("Clauses requiring proofs: %d" % (self.proofCount))
+            acount = self.clauseCount - self.inputClauseCount - self.proofCount
+            print("Added clauses without antecedents: %d" % acount)
+            print("Added clauses requiring proofs: %d" % (self.proofCount))
 
     def __del__(self):
         if self.opened:
@@ -545,8 +546,14 @@ def run(name, args):
         print("Couldn't create prover (%s)" % str(ex))
         return
 
+    start = datetime.datetime.now()
     solver = Solver(cnfName, prover = prover, permuter = permuter, scheduler = scheduler, verbLevel = verbLevel)
     solver.run()
+    delta = datetime.datetime.now() - start
+    seconds = delta.seconds + 1e-6 * delta.microseconds
+    if verbLevel > 0:
+        print("Elapsed time for SAT: %.2f seconds" % seconds)
+
     
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

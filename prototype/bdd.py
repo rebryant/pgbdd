@@ -141,10 +141,11 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        self.inferTrueUp = prover.createClause([-vid, -hid, id], [], "ITE assertions for node %s" % self.label())
-        self.inferFalseUp = prover.createClause([vid, -lid, id], [])
-        self.inferTrueDown = prover.createClause([-vid, -id, hid], [])
-        self.inferFalseDown = prover.createClause([vid, -id, lid], [])
+        # id should be first literal in clause for some proof checkers
+        self.inferTrueUp = prover.createClause([id, -vid, -hid], [], "ITE assertions for node %s" % self.label())
+        self.inferFalseUp = prover.createClause([id, vid, -lid], [])
+        self.inferTrueDown = prover.createClause([-id, -vid, hid], [])
+        self.inferFalseDown = prover.createClause([-id, vid, lid], [])
 
     def isLeaf(self):
         return False
@@ -191,7 +192,8 @@ class Manager:
     andResolver = None
     implyResolver = None
     # Statistics
-    cacheAdded = 0
+    cacheJustifyAdded = 0
+    cacheNoJustifyAdded = 0
     applyCount = 0
     nodeCount = 0
     variableCount = 0
@@ -208,7 +210,8 @@ class Manager:
         self.operationCache = {}
         self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel)
         self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel)
-        self.cacheAdded = 0
+        self.cacheJustifyAdded = 0
+        self.cacheNoJustifyAdded = 0
         self.applyCount = 0
         self.nodeCount = 0
         self.variableCount = 0
@@ -385,7 +388,10 @@ class Manager:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
             justification = self.prover.emitProof(proof, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification)
-        self.cacheAdded += 1
+        if justification != resolver.tautologyId:
+            self.cacheJustifyAdded += 1
+        else:
+            self.cacheNoJustifyAdded += 1
         return (newNode, justification)
 
     # Version that runs without generating justification
@@ -408,8 +414,8 @@ class Manager:
         newHigh = self.applyNot(high)
         newLow = self.applyNot(low)
         newNode = self.findOrMake(var, newHigh, newLow)
-        self.operationCache[key] = (newNode, None)
-        self.cacheAdded += 1
+        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.cacheNoJustifyAdded += 1
         return newNode
 
     def applyOr(self, nodeA, nodeB):
@@ -440,8 +446,8 @@ class Manager:
         newHigh = self.applyOr(highA, highB)
         newLow = self.applyOr(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = (newNode, None)
-        self.cacheAdded += 1
+        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.cacheNoJustifyAdded += 1
         return newNode
 
     def applyXor(self, nodeA, nodeB):
@@ -472,8 +478,8 @@ class Manager:
         newHigh = self.applyXor(highA, highB)
         newLow = self.applyXor(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = (newNode, None)
-        self.cacheAdded += 1
+        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.cacheNoJustifyAdded += 1
         return newNode
     
     def justifyImply(self, nodeA, nodeB):
@@ -533,7 +539,10 @@ class Manager:
             justification = resolver.tautologyId
 
         self.operationCache[key] = (check, justification)
-        self.cacheAdded += 1
+        if justification != resolver.tautologyId:
+            self.cacheJustifyAdded += 1
+        else:
+            self.cacheNoJustifyAdded += 1
         return (check, justification)
 
     def checkImply(self, nodeA, nodeB):
@@ -564,17 +573,18 @@ class Manager:
         newLow = self.equant(node.low, clause)
         quant = node.variable == clause.variable
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
-        self.operationCache[key] = (newNode, None)
-        self.cacheAdded += 1
+        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.cacheNoJustifyAdded += 1
         return newNode
             
     # Summarize activity
     def summarize(self):
         if self.verbLevel >= 1:
-            print("Total variables: %d" % self.variableCount)
+            print("Input variables: %d" % self.variableCount)
             print("Total nodes: %d" % self.nodeCount)
             print("Total apply operations: %d" % self.applyCount)            
-            print("Total cached results: %d" % self.cacheAdded)
+            print("Total cached results not requiring proofs: %d" % self.cacheNoJustifyAdded)
+            print("Total cached results requiring proofs: %d" % self.cacheJustifyAdded)
         if self.verbLevel >= 1:
             print("Results from And Operations:")
             self.andResolver.summarize()
