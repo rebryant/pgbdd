@@ -24,6 +24,10 @@ def usage(name):
 # 4: ?
 # 5: Tree generation information
 
+def trim(s):
+    while len(s) > 0 and s[-1] in '\r\n':
+        s = s[:-1]
+    return s
 
 class CnfException(Exception):
 
@@ -63,11 +67,6 @@ class CnfReader():
                 self.file.close()
             raise ex
         
-    def trim(self, s):
-        while len(s) > 0 and s[-1] in '\r\n':
-            s = s[:-1]
-        return s
-
     def readCnf(self):
         lineNumber = 0
         nclause = 0
@@ -75,7 +74,7 @@ class CnfReader():
         clauseCount = 0
         for line in self.file:
             lineNumber += 1
-            line = self.trim(line)
+            line = trim(line)
             if len(line) == 0:
                 continue
             elif line[0] == 'c':
@@ -418,6 +417,16 @@ class Solver:
             if len(fields) == 0:
                 continue
             cmd = fields[0]
+            if cmd == 'i':  # Information request
+                if len(idStack) == 0:
+                    raise SolverException("Line #%d.  Nothing on stack" % lineCount)
+                # Use rest of string as documentation
+                line = trim(line)
+                cstring = line[1:] if  len(line) >= 1 else ""
+                root =  self.activeIds[idStack[-1]].root
+                size = self.manager.getSize(root)
+                print("Node %d.  Size = %d.%s" % (root.id, size, cstring))
+                continue
             try:
                 values = [int(v) for v in fields[1:]]
             except:
