@@ -191,7 +191,8 @@ class Board:
                         else:
                             self.scheduleWriter.doQuantify(quants)
             if c < n-1 and len(allQuants) > 0:
-                self.scheduleWriter.doQuantify(allQuants)                
+                self.scheduleWriter.doQuantify(allQuants)
+            self.scheduleWriter.doInformation("Completed column %d" % c)
 
     def finish(self):
         self.cnfWriter.finish()
