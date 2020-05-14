@@ -6,7 +6,7 @@ import datetime
 
 # Special value to represent true/tautology
 # It's negation represents false/invalid
-tautologyId = 1111111
+tautologyId = 1000 * 1000 * 1000
 
 # Clean up clause.
 # Remove duplicates + false

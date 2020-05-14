@@ -71,6 +71,9 @@ class Variable:
             return True
         return self.level < other.level
 
+    def __hash__(self):
+        return hash(self.level)
+
     def __str__(self):
         return self.name
 
@@ -184,37 +187,57 @@ class Manager:
     leaf0 = None
     leaf1 = None
     # Mapping from (variable, high, low) to node
-    nodeTable = {}
+    uniqueTable = {}
     # Operation cache
     # Key = (opName, operand1 ...) to (node, justification)
     operationCache = {}
     verbLevel = 1
     andResolver = None
     implyResolver = None
+    # GC support
+    # Callback function from driver that will collect accessible roots for GC
+    rootGenerator = None
+    # How many quantifications had been performed by last GC?
+    lastGC = 0
+    # How many variables should be quantified to trigger GC?
+    gcThreshold = 30
+    # Dictionary mapping variables to their IDs
+    quantifiedVariableSet = None
     # Statistics
     cacheJustifyAdded = 0
     cacheNoJustifyAdded = 0
     applyCount = 0
     nodeCount = 0
+    maxLiveCount = 0
     variableCount = 0
+    cacheRemoved = 0
+    nodesRemoved = 0
+    gcCount = 0
 
-    def __init__(self, prover = None, nextNodeId = 0, verbLevel = 1):
+    def __init__(self, prover = None, rootGenerator = None, nextNodeId = 0, verbLevel = 1):
 
         self.verbLevel = verbLevel
         self.prover = DummyProver() if prover is None else prover
+        self.rootGenerator = rootGenerator
         self.variables = []
         self.leaf0 = LeafNode(0)
         self.leaf1 = LeafNode(1)
         self.nextNodeId = nextNodeId
-        self.nodeTable = {}
+        self.uniqueTable = {}
         self.operationCache = {}
         self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel)
         self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel)
+        self.quantifiedVariableSet = set([])
+        self.lastGC = 0
         self.cacheJustifyAdded = 0
         self.cacheNoJustifyAdded = 0
         self.applyCount = 0
         self.nodeCount = 0
+        self.maxLiveCount = 0
         self.variableCount = 0
+        self.cacheRemoved = 0
+        self.nodesRemoved = 0
+        self.gcCount = 0
 
     def newVariable(self, name, id = None):
         level = len(self.variables) + 1
@@ -225,13 +248,14 @@ class Manager:
         
     def findOrMake(self, variable, high, low):
         key = (variable.level, high.id, low.id)
-        if key in self.nodeTable:
-            return self.nodeTable[key]
+        if key in self.uniqueTable:
+            return self.uniqueTable[key]
         else:
             node = VariableNode(self.nextNodeId, variable, high, low, self.prover)
             self.nextNodeId += 1
-            self.nodeTable[key] = node
+            self.uniqueTable[key] = node
             self.nodeCount += 1
+            self.maxLiveCount = max(self.maxLiveCount, len(self.uniqueTable))
             return node
   
     def literal(self, variable, phase):
@@ -557,34 +581,99 @@ class Manager:
         return fun
 
     # Use clause to provide canonical list of nodes.  Should all be positive
-    def equant(self, node, clause):
+    def equant(self, node, clause, topLevel = True):
+        if topLevel:
+            nextc = clause
+            while not nextc.isLeaf():
+                self.quantifiedVariableSet.add(nextc.variable)
+                nextc = nextc.low
         if node.isLeaf():
             return node
         while not clause.isLeaf() and node.variable > clause.variable:
             clause = clause.low
         if clause.isLeaf():
             return node
-        key = ("equant", node, clause)
+        key = ("equant", node.id, clause.id)
         
         if key in self.operationCache:
             return self.operationCache[key][0]
 
-        newHigh = self.equant(node.high, clause)
-        newLow = self.equant(node.low, clause)
+        newHigh = self.equant(node.high, clause, topLevel = False)
+        newLow = self.equant(node.low, clause, topLevel = False)
         quant = node.variable == clause.variable
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId)
         self.cacheNoJustifyAdded += 1
+        newQuants = len(self.quantifiedVariableSet) - self.lastGC
+        if topLevel and newQuants > self.gcThreshold:
+            self.collectGarbage([newNode])
         return newNode
             
+    # Create set nodes that should not be collected
+    # Maintain frontier of marked nonleaf nodes
+    def doMarking(self, frontier):
+        markedSet = set([])
+        while len(frontier) > 0:
+            node = frontier[0]
+            frontier = frontier[1:]
+            if node in markedSet:
+                continue
+            markedSet.add(node)
+            if not node.high.isLeaf():
+                frontier.append(node.high)
+            if not node.low.isLeaf():
+                frontier.append(node.low)
+        return markedSet
+
+    def cleanCache(self, markedSet):
+        markedIds = set([node.id for node in markedSet])
+        klist = list(self.operationCache.keys())
+        for k in klist:
+            kill = self.operationCache[k][0] not in markedSet
+            # Skip over operation name
+            for id in k[1:]:
+                kill = kill or id not in markedIds
+            if kill:
+                self.cacheRemoved += 1
+                del self.operationCache[k]
+        
+    def cleanNodes(self, markedSet):
+        klist = list(self.uniqueTable.keys())
+        for k in klist:
+            node = self.uniqueTable[k]
+            # If node is marked, then its children will be, too
+            if node not in markedSet:
+                self.nodesRemoved += 1
+                del self.uniqueTable[k]
+
+    # Start garbage collection.
+    # Provided with partial list of accessible roots
+    def collectGarbage(self, rootList):
+        frontier = rootList
+        if self.rootGenerator is not None:
+            frontier += self.rootGenerator()
+        frontier = [r for r in frontier if not r.isLeaf()]
+        # Marking phase
+        markedSet = self.doMarking(frontier)
+        self.cleanCache(markedSet)
+        self.cleanNodes(markedSet)
+        # Turn off trigger for garbage collection
+        self.lastGC = len(self.quantifiedVariableSet)
+        self.gcCount += 1
+
     # Summarize activity
     def summarize(self):
         if self.verbLevel >= 1:
             print("Input variables: %d" % self.variableCount)
+            print("Variables quantified out: %d" % len(self.quantifiedVariableSet))
             print("Total nodes: %d" % self.nodeCount)
+            print("Total nodes removed by gc: %d" % self.nodesRemoved)
+            print("Maximum live nodes: %d" % self.maxLiveCount)
             print("Total apply operations: %d" % self.applyCount)            
             print("Total cached results not requiring proofs: %d" % self.cacheNoJustifyAdded)
             print("Total cached results requiring proofs: %d" % self.cacheJustifyAdded)
+            print("Total cache entries removed: %d" % self.cacheRemoved)
+            print("Total GCs performed: %d" % self.gcCount)
         if self.verbLevel >= 1:
             print("Results from And Operations:")
             self.andResolver.summarize()

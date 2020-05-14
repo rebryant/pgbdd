@@ -331,7 +331,7 @@ class Solver:
 
         self.prover.inputDone()
 
-        self.manager = bdd.Manager(self.prover, clauseCount+1, verbLevel = verbLevel)
+        self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator, nextNodeId = clauseCount+1, verbLevel = verbLevel)
         # Generate BDD representations of literals
         if permuter is None:
             # Default is identity permutation
@@ -460,6 +460,11 @@ class Solver:
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
         
+    # Provide roots of active nodes to garbage collector
+    def rootGenerator(self):
+        rootList = [t.root for t in self.activeIds.values()] 
+        return rootList
+
     def run(self):
         if self.scheduler is None:
             self.runNoSchedule()
