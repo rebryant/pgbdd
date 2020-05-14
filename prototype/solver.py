@@ -394,6 +394,8 @@ class Solver:
         self.prover.comment(comment)
         del self.activeIds[id]
         self.activeIds[self.termCount] = newTerm
+        # This could be a good time for garbage collection
+        self.manager.checkGC()
         return self.termCount
 
     def runNoSchedule(self):

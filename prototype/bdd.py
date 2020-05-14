@@ -604,11 +604,15 @@ class Manager:
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId)
         self.cacheNoJustifyAdded += 1
-        newQuants = len(self.quantifiedVariableSet) - self.lastGC
-        if topLevel and newQuants > self.gcThreshold:
-            self.collectGarbage([newNode])
         return newNode
             
+    # Should a GC be triggered?
+    def checkGC(self):
+        newQuants = len(self.quantifiedVariableSet) - self.lastGC
+        if newQuants > self.gcThreshold:
+            self.collectGarbage([])
+
+
     # Create set nodes that should not be collected
     # Maintain frontier of marked nonleaf nodes
     def doMarking(self, frontier):
