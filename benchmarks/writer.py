@@ -112,6 +112,9 @@ class ScheduleWriter(Writer):
 #            raise WriterException("Cannot quantify.  Stack empty")
         self.show("q %s" % " ".join([str(c) for c in vlist]))
 
+    def doComment(self, cstring):
+        self.show("# " + cstring)
+
     def doInformation(self, cstring):
         self.show("i " + cstring)
 
