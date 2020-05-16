@@ -7,12 +7,11 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-Q] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -c       Include corners")
-    print("  -Q       Defer quantification until have completed entire column")
     print("  -n N     Specify size of board")
 
 
@@ -116,27 +115,54 @@ class Board:
     verbose = False
     includeCorners = False
     n = None
-    deferQuantify = False
 
-    def __init__(self, n, rootName, verbose = False, includeCorners = False, deferQuantify = False):
+    def __init__(self, n, rootName, verbose = False, includeCorners = False):
         self.n = n
         variableCount = 2 * n * (n-1)
         if not includeCorners:
             variableCount -= 4
         self.verbose = verbose
         self.includeCorners = includeCorners
-        self.deferQuantify = deferQuantify
         self.cnfWriter = writer.CnfWriter(variableCount, rootName, self.verbose)
         self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose)
         self.orderWriter = writer.OrderWriter(variableCount, rootName, self.verbose)
         self.idDict = {}
         self.squares = {}
         self.variableCount = 0
-        self.scheduleWriter.newTree()
 
     def nextVariable(self):
         self.variableCount += 1
         return self.variableCount
+
+    # Construct Column i.  Return lists of variables on left and right
+    def doColumn(self, c):
+        left = []
+        right = []
+        quants = []
+        self.scheduleWriter.doComment("Adding column %d" % c)
+        # Has something been put onto the stack?
+        gotValue = False
+        for ir in range(self.n):
+            r = self.n-ir-1
+            sq = self.squares[(r,c)]
+            clist = sq.doClauses(self.cnfWriter)
+            if len(clist) > 0:
+                self.scheduleWriter.getClauses(clist)
+                count = len(clist) if gotValue else len(clist)-1
+                if count > 0:
+                    self.scheduleWriter.doAnd(count)
+                    gotValue = True
+            if sq.bottom is not None:
+                quants.append(sq.bottom)
+            if sq.left is not None:
+                left.append(sq.left)
+            if sq.right is not None:
+                right.append(sq.right)
+        if len(quants) > 0:
+            self.scheduleWriter.doQuantify(quants)
+        self.scheduleWriter.doComment("Completed column %d.  Quantified %d variables" % (c, len(quants)))
+        return (left, right)
+
 
     def build(self):
         n = self.n
@@ -172,27 +198,12 @@ class Board:
 
         # Now go through them in column-major order, working from bottom to top
         for c in range(n):
-            allQuants = []
-            for ir in range(n):
-                r = n-ir-1
-                sq = self.squares[(r,c)]
-                clist = sq.doClauses(self.cnfWriter)
-                if len(clist) > 0:
-                    self.scheduleWriter.getClauses(clist)
-                    self.scheduleWriter.doAnd(len(clist))
-                    quants = []
-                    if sq.bottom is not None:
-                        quants.append(sq.bottom)
-                    if sq.left is not None:
-                        quants.append(sq.left)
-                    if len(quants) > 0:
-                        if self.deferQuantify:
-                            allQuants += quants
-                        else:
-                            self.scheduleWriter.doQuantify(quants)
-            if c < n-1 and len(allQuants) > 0:
-                self.scheduleWriter.doQuantify(allQuants)
-            self.scheduleWriter.doInformation("Completed column %d" % c)
+            (left, right) = self.doColumn(c)
+            if c > 0:
+                self.scheduleWriter.doComment("Combine column %d with predecessors" % c)
+                self.scheduleWriter.doAnd(1)
+                if len(left) > 0:
+                    self.scheduleWriter.doQuantify(left)
 
     def finish(self):
         self.cnfWriter.finish()
@@ -204,9 +215,8 @@ def run(name, args):
     n = 0
     rootName = None
     includeCorners = False
-    deferQuantify = False
     
-    optlist, args = getopt.getopt(args, "hvcQar:n:")
+    optlist, args = getopt.getopt(args, "hvcar:n:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -215,8 +225,6 @@ def run(name, args):
             verbose = True
         elif opt == '-c':
             includeCorners = True
-        elif opt == '-Q':
-            deferQuantify = True
         elif opt == '-r':
             rootName = val
         elif opt == '-n':
@@ -230,7 +238,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, includeCorners, deferQuantify)
+    b = Board(n, rootName, verbose, includeCorners)
     b.build()
     b.finish()
 
