@@ -207,13 +207,29 @@ class ProofLeaf(ProofStep):
 class ProofNode(ProofStep):
     children = []
 
-    def __init__(self, clause, children):
+    def __init__(self, clause, children, merge=True):
         ProofStep.__init__(self, clause)
         self.isLeaf = False
-        self.children = children
+        if merge:
+            # Attempt to merge into linear chain
+            leafList = []
+            otherList = []
+            for c in children:
+                if c.isLeaf:
+                    leafList.append(c)
+                else:
+                    otherList.append(c)
+            if len(otherList) == 0:
+                self.children = children
+            else:
+                mergeNode = otherList[0]
+                rest = otherList[1:]
+                self.children = leafList + mergeNode.children + rest
+        else:
+            self.children = children
 
     def postfix(self, showLiterals = False):
-        suffix = "R"
+        suffix = "R%d" % len(self.children)
         if showLiterals:
             llist = [str(lit) for lit in self.literalList]
             suffix = "R(%s)" % (" ".join(llist))
@@ -223,7 +239,7 @@ class ProofNode(ProofStep):
     def remapLiterals(self, map):
         nliterals = self.mapLiterals(map)
         nchildren = [c.remapLiterals(map) for c in self.children]
-        return ProofNode(nliterals, nchildren)
+        return ProofNode(nliterals, nchildren, merge=False)
 
 # Generate all possible resolution trees with N leaves.
 # Resolution operation is commutative, but not associative
