@@ -332,7 +332,7 @@ class Solver:
 
         self.prover.inputDone()
 
-        self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator, nextNodeId = clauseCount+1, verbLevel = verbLevel)
+        self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator, nextNodeId = reader.nvar+1, verbLevel = verbLevel)
         # Generate BDD representations of literals
         if permuter is None:
             # Default is identity permutation
