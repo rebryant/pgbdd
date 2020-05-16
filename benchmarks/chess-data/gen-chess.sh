@@ -8,3 +8,9 @@ make q N=20
 make q N=24
 make q N=28
 make q N=32
+make q N=36
+make q N=40
+make q N=44
+make q N=48
+make q N=52
+
