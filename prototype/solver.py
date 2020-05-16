@@ -274,6 +274,7 @@ class Prover:
 
     def summarize(self):
         if self.verbLevel >= 1:
+            print("Total Clauses: %d" % self.clauseCount)
             print("Input clauses: %d" % self.inputClauseCount)
             acount = self.clauseCount - self.inputClauseCount - self.proofCount
             print("Added clauses without antecedents: %d" % acount)
