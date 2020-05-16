@@ -164,6 +164,46 @@ class Board:
         return (left, right)
 
 
+    def constructBoardLinear(self):
+        # Combine columns from left to right
+        for c in range(self.n):
+            (left, right) = self.doColumn(c)
+            if c > 0:
+                self.scheduleWriter.doComment("Combine column %d with predecessors" % c)
+                self.scheduleWriter.doAnd(1)
+                if len(left) > 0:
+                    self.scheduleWriter.doQuantify(left)
+            if c < self.n-1:
+                self.scheduleWriter.doInformation("Completed column %d" % c)
+
+    # Construct constraints for specified number of columns.  
+    # Return lists of variables on left and right
+    def treeBuild(self, leftIndex, columnCount):
+        if columnCount == 1:
+            (left, right) = self.doColumn(leftIndex)
+            self.scheduleWriter.doInformation("Generated column %d" % (leftIndex))
+            return (left, right)
+        rightIndex = leftIndex + columnCount - 1
+        self.scheduleWriter.doComment("Generating columns %d .. %d" % (leftIndex, rightIndex))
+        lcount = columnCount // 2
+        rcount = columnCount - lcount
+        left, rightMid = self.treeBuild(leftIndex, lcount)
+        leftMid, right = self.treeBuild(leftIndex+lcount, rcount)
+        midLeftIndex = leftIndex + lcount - 1
+        midRightIndex = midLeftIndex + 1
+        self.scheduleWriter.doComment("Merge columns %d .. %d with %d .. %d" % (leftIndex, midLeftIndex, midRightIndex, rightIndex))
+        self.scheduleWriter.doAnd(1)
+        if len(rightMid) > 0:
+            self.scheduleWriter.doQuantify(rightMid)
+        self.scheduleWriter.doInformation("Merged columns %d .. %d with %d .. %d" % (leftIndex, midLeftIndex, midRightIndex, rightIndex))
+        return (left, right)
+
+    def constructBoard(self):
+        if False:
+            self.constructBoardLinear()
+        else:
+            self.treeBuild(0, self.n)
+
     def build(self):
         n = self.n
         # Generate variables
@@ -196,14 +236,7 @@ class Board:
             for c in range(n):
                 self.squares[(r,c)] = Square(r, c, self.idDict)
 
-        # Now go through them in column-major order, working from bottom to top
-        for c in range(n):
-            (left, right) = self.doColumn(c)
-            if c > 0:
-                self.scheduleWriter.doComment("Combine column %d with predecessors" % c)
-                self.scheduleWriter.doAnd(1)
-                if len(left) > 0:
-                    self.scheduleWriter.doQuantify(left)
+        self.constructBoard()
 
     def finish(self):
         self.cnfWriter.finish()
