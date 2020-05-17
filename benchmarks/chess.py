@@ -182,6 +182,8 @@ class Board:
         if columnCount == 1:
             (left, right) = self.doColumn(leftIndex)
             self.scheduleWriter.doInformation("Generated column %d" % (leftIndex))
+            if leftIndex == 2:
+                self.scheduleWriter.doInformation("RCSIZE %d %d" % (self.n, columnCount))
             return (left, right)
         rightIndex = leftIndex + columnCount - 1
         self.scheduleWriter.doComment("Generating columns %d .. %d" % (leftIndex, rightIndex))
@@ -196,6 +198,8 @@ class Board:
         if len(rightMid) > 0:
             self.scheduleWriter.doQuantify(rightMid)
         self.scheduleWriter.doInformation("Merged columns %d .. %d with %d .. %d" % (leftIndex, midLeftIndex, midRightIndex, rightIndex))
+        if leftIndex <= self.n // 2 and rightIndex >= (self.n+1)//2 and rightIndex < self.n-1:
+                self.scheduleWriter.doInformation("RCSIZE %d %d" % (self.n, columnCount))
         return (left, right)
 
     def constructBoard(self):
