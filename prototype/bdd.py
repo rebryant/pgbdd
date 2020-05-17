@@ -289,7 +289,7 @@ class Manager:
 
     # Build dictionary mapping nodes in DAG rooted by node to values
     # nodeFunction should be a function mapping a node to a value
-    def buildInformation(self, node, nodeFunction, sofarDict = {}):
+    def buildInformation(self, node, nodeFunction, sofarDict):
         if node in sofarDict:
             return sofarDict
         sofarDict[node] = nodeFunction(node)
@@ -301,7 +301,7 @@ class Manager:
         
     # Find support for function rooted by node
     def getSupport(self, node):
-        varDict = self.buildInformation(node, lambda n: n.variable)
+        varDict = self.buildInformation(node, lambda n: n.variable, {})
         fullList = sorted(varDict.values())
         vlist = []
         for v in fullList:
@@ -310,7 +310,7 @@ class Manager:
         return vlist
 
     def getSize(self, node):
-        oneDict = self.buildInformation(node, lambda n: 1)
+        oneDict = self.buildInformation(node, lambda n: 1, {})
         return len(oneDict)
 
     def showLiteral(self, lit):
