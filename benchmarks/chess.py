@@ -115,6 +115,8 @@ class Board:
     verbose = False
     includeCorners = False
     n = None
+    # What approach should be used to construct board
+    doLinear = True
 
     def __init__(self, n, rootName, verbose = False, includeCorners = False):
         self.n = n
@@ -203,7 +205,7 @@ class Board:
         return (left, right)
 
     def constructBoard(self):
-        if False:
+        if self.doLinear:
             self.constructBoardLinear()
         else:
             self.treeBuild(0, self.n)
