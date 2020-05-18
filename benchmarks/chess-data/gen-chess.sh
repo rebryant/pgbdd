@@ -1,16 +1,18 @@
 #!/bin/bash
 
-make q N=04
-make q N=08
-make q N=12
-make q N=16
-make q N=20
-make q N=24
-make q N=28
-make q N=32
-make q N=36
-make q N=40
-make q N=44
-make q N=48
-make q N=52
-
+make q N=004
+make q N=008
+make q N=012
+make q N=016
+make q N=020
+make q N=024
+make q N=028
+make q N=032
+make q N=036
+make q N=040
+make q N=044
+make q N=048
+make q N=052
+make q N=056
+make q N=060
+make q N=064
