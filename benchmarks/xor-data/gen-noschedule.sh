@@ -1,0 +1,40 @@
+#!/bin/bash
+
+make ns N=004
+make ns N=008
+make ns N=012
+make ns N=016
+make ns N=024
+make ns N=032
+make ns N=040
+make ns N=048
+make ns N=064
+make ns N=080
+make ns N=096
+make ns N=112
+make ns N=128
+make ns N=144
+make ns N=160
+make ns N=176
+make ns N=192
+make ns N=208
+make ns N=224
+make ns N=240
+make ns N=256
+make ns N=272
+make ns N=288
+make ns N=304
+make ns N=320
+make ns N=336
+make ns N=352
+make ns N=368
+make ns N=384
+make ns N=400
+make ns N=416
+make ns N=432
+make ns N=448
+make ns N=464
+make ns N=480
+make ns N=496
+make ns N=512
+
