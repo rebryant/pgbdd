@@ -12,6 +12,9 @@ $(MODES): xor-$(N)-$(MODES).data
 nq: xor-$(N)-noquant.data
 ns: xor-$(N)-noschedule.data
 no: xor-$(N)-noorder.data
+tr: xor-$(N)-toproots.data
+ti: xor-$(N)-topinputs.data
+tf: xor-$(N)-topflip.data
 
 xor-$(N)-$(MODES).data:
 	$(GENERATOR) -n $(N) -r xor-$(N)-$(MODES) -m $(MODES) | tee xor-$(N)-$(MODES).data
@@ -41,6 +44,29 @@ xor-$(N)-noorder.data:
 		-o xor-$(N)-noorder.proof | tee -a xor-$(N)-noorder.data
 	$(CHECKER) -v xor-$(N)-noorder.proof | tee -a xor-$(N)-noorder.data
 	rm -f xor-$(N)-noorder.proof
+
+xor-$(N)-toproots.data:
+	$(GENERATOR) -n $(N) -r xor-$(N)-toproots -m $(MODES) | tee xor-$(N)-toproots.data
+	$(SOLVER) -v $(VLEVEL) -i xor-$(N)-toproots.cnf -b \
+		-p xor-$(N)-toproots.order -o xor-$(N)-toproots.proof | tee -a xor-$(N)-toproots.data
+	$(CHECKER) -v xor-$(N)-toproots.proof | tee -a xor-$(N)-toproots.data
+	rm -f xor-$(N)-toproots.proof
+
+xor-$(N)-topflip.data:
+	$(GENERATOR) -f -n $(N) -r xor-$(N)-topflip -m $(MODES) | tee xor-$(N)-topflip.data
+	$(SOLVER) -v $(VLEVEL) -i xor-$(N)-topflip.cnf -b \
+		-p xor-$(N)-topflip.order -o xor-$(N)-topflip.proof | tee -a xor-$(N)-topflip.data
+	$(CHECKER) -v xor-$(N)-topflip.proof | tee -a xor-$(N)-topflip.data
+	rm -f xor-$(N)-topflip.proof
+
+
+xor-$(N)-topinputs.data:
+	$(GENERATOR) -n $(N) -r xor-$(N)-topinputs -m $(MODES) | tee xor-$(N)-topinputs.data
+	$(SOLVER) -v $(VLEVEL) -i xor-$(N)-topinputs.cnf -b \
+		-o xor-$(N)-topinputs.proof | tee -a xor-$(N)-topinputs.data
+	$(CHECKER) -v xor-$(N)-topinputs.proof | tee -a xor-$(N)-topinputs.data
+	rm -f xor-$(N)-topinputs.proof
+
 
 clean:
 	rm -f *~

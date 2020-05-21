@@ -8,9 +8,10 @@ import writer
 # Generate CNF, order, and schedule files to compare two trees of xor's over a common set of inputs
 
 def usage(name):
-    print("Usage: %s [-h] [-v] [-r ROOT] -n N -m M1M2" % name)
+    print("Usage: %s [-h] [-v] [-f] [-r ROOT] -n N -m M1M2" % name)
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
+    print("  -f       Flip order of tree nodes")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -n N     Specify number of tree inputs")
     print("  -m M1M2  Specify modes for the two trees: ")
@@ -218,15 +219,16 @@ class TreeBuilder:
         self.scheduleWriter.doAnd(3)
         self.scheduleWriter.finish()
 
-    def emitOrder(self):
+    def emitOrder(self, flip = False):
         varDict1 = {}
         self.roots[0].getVariables(varDict1)
-        h1list = sorted(varDict1.keys(), key = lambda h : -h)
+        keyFun = (lambda h : h) if flip else (lambda h : -h)
+        h1list = sorted(varDict1.keys(), key = keyFun)
         for k in h1list:
             self.orderWriter.doOrder(varDict1[k])
         varDict2 = {}
         self.roots[1].getVariables(varDict2)
-        h2list = sorted(varDict2.keys(), key = lambda h : -h)
+        h2list = sorted(varDict2.keys(), key = keyFun)
         for k in h2list:
             self.orderWriter.doOrder(varDict2[k])
         leaves = list(range(1, self.inputCount+1))
@@ -240,12 +242,15 @@ def run(name, args):
     count = 0
     rootName = None
     mstring = ""
+    flip = False
     
-    optlist, args = getopt.getopt(args, "hvr:n:m:")
+    optlist, args = getopt.getopt(args, "hfvr:n:m:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
+        elif opt == '-f':
+            flip = True
         elif opt == '-v':
             verbose = True
         elif opt == '-r':
@@ -269,7 +274,7 @@ def run(name, args):
         mode = t.findMode(m)
         t.addRoot(mode)
     t.emitCnf()
-    t.emitOrder()
+    t.emitOrder(flip = flip)
     t.emitSchedule()
 
 if __name__ == "__main__":
