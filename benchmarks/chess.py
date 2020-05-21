@@ -174,9 +174,11 @@ class Board:
                 self.scheduleWriter.doComment("Combine column %d with predecessors" % c)
                 self.scheduleWriter.doAnd(1)
                 if len(left) > 0:
+                    if c == self.n//2:
+                        self.scheduleWriter.doInformation("Before quantification for column %d" % c)
                     self.scheduleWriter.doQuantify(left)
-            if c < self.n-1:
-                self.scheduleWriter.doInformation("Completed column %d" % c)
+                    if c == self.n//2:
+                        self.scheduleWriter.doInformation("After quantification for column %d" % c)
 
     # Construct constraints for specified number of columns.  
     # Return lists of variables on left and right
