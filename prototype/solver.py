@@ -8,8 +8,9 @@ import resolver
 import datetime
 
 def usage(name):
-    print("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]" % name)
+    print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]" % name)
     print("  -h          Print this message")
+    print("  -b          Process terms via bucket elimination")
     print("  -v LEVEL    Set verbosity level")
     print("  -i CNF      Name of CNF input file")
     print("  -o PROOF    Name of proof output file")
@@ -120,14 +121,14 @@ class Term:
 
     manager = None
     root = None
-    support = []
+#    support = None    # Variables in support represented by clause (omitted)
     size = 0
     validation = None # Clause id providing validation
 
     def __init__(self, manager, root, validation):
         self.manager = manager
         self.root = root
-        self.support = self.manager.getSupport(root)
+#        self.support = self.manager.getSupport(root)
         self.size = self.manager.getSize(root)
         self.validation = validation
 
@@ -309,11 +310,9 @@ class Solver:
     unsat = False
     permuter = None
     prover = None
-    scheduler = None
 
-    def __init__(self, fname = None, prover = None, permuter = None, scheduler = None, verbLevel = 1):
+    def __init__(self, fname = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
-        self.scheduler = scheduler
         if prover is None:
             prover = Prover(verbLevel = verbLevel)
         self.prover = prover
@@ -332,7 +331,8 @@ class Solver:
 
         self.prover.inputDone()
 
-        self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator, nextNodeId = reader.nvar+1, verbLevel = verbLevel)
+        self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator,
+                                   nextNodeId = reader.nvar+1, verbLevel = verbLevel)
         # Generate BDD representations of literals
         if permuter is None:
             # Default is identity permutation
@@ -411,10 +411,10 @@ class Solver:
             for s in self.manager.satisfyStrings(self.activeIds[nid].root):
                 print("  " + s)
         
-    def runSchedule(self):
+    def runSchedule(self, scheduler):
         idStack = []
         lineCount = 0
-        for line in self.scheduler:
+        for line in scheduler:
             lineCount += 1
             fields = line.split()
             if len(fields) == 0:
@@ -463,16 +463,53 @@ class Solver:
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
         
+    def placeInBucket(self, buckets, id):
+        term = self.activeIds[id]
+        level = term.root.variable.level
+        if level == bdd.Variable.leafLevel:
+            buckets[0].append(id)
+        else:
+            buckets[level].append(id)
+#            print("DBG: buckets[%d] = %s" % (level, str(buckets[level])))
+
+    # Bucket elimination
+    def runBucketSchedule(self):
+        maxLevel = len(self.manager.variables)
+        buckets = { level : [] for level in range(0, maxLevel + 1) }
+        # Insert ids into lists according to top variable in BDD
+        ids = sorted(self.activeIds.keys())
+        for id in ids:
+            self.placeInBucket(buckets, id)
+        for blevel in range(0, maxLevel + 1):
+#            print("DBG: Processing bucket %d" % blevel)
+            # Conjunct all terms in bucket
+            while len(buckets[blevel]) > 1:
+                id1 = buckets[blevel][0]
+                id2 = buckets[blevel][1]
+                buckets[blevel] = buckets[blevel][2:]
+#                print("DBG: Combining terms %d and %d" % (id1, id2))
+                newId = self.combineTerms(id1, id2)
+#                print("DBG:      ... generated term %d" % newId)
+                if newId < 0:
+                    # Hit unsat case
+                    return
+                self.placeInBucket(buckets, newId)
+            # Quantify top variable for this bucket
+            if blevel > 0 and len(buckets[blevel]) > 0:
+                id = buckets[blevel][0]
+                buckets[blevel] = []
+                var = self.manager.variables[blevel-1]
+                vid = var.id
+#                print("DBG: Quantifying variable %s" % str(var))
+                newId = self.quantifyTerm(id, [vid])
+                self.placeInBucket(buckets, newId)
+        if self.verbLevel >= 0:
+            print("SAT")
+
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
         rootList = [t.root for t in self.activeIds.values()] 
         return rootList
-
-    def run(self):
-        if self.scheduler is None:
-            self.runNoSchedule()
-        else:
-            self.runSchedule()
 
 def readPermutation(fname):
     valueList = []
@@ -530,14 +567,17 @@ def run(name, args):
     cnfName = None
     proofName = None
     permuter = None
+    doBucket = False
     scheduler = None
     verbLevel = 1
 
-    optlist, args = getopt.getopt(args, "hv:i:o:p:s:")
+    optlist, args = getopt.getopt(args, "hbv:i:o:p:s:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
+        if opt == '-b':
+            doBucket = True
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -557,6 +597,10 @@ def run(name, args):
             usage(name)
             return
 
+    if doBucket and scheduler is not None:
+        print("Cannot have both bucket scheduling and defined scheduler")
+        return
+
     try:
         prover = Prover(proofName, verbLevel = verbLevel)
     except Exception as ex:
@@ -564,8 +608,14 @@ def run(name, args):
         return
 
     start = datetime.datetime.now()
-    solver = Solver(cnfName, prover = prover, permuter = permuter, scheduler = scheduler, verbLevel = verbLevel)
-    solver.run()
+    solver = Solver(cnfName, prover = prover, permuter = permuter, verbLevel = verbLevel)
+    if doBucket:
+        solver.runBucketSchedule()
+    elif scheduler is not None:
+        solver.runSchedule(scheduler)
+    else:
+        solver.runNoSchedule()
+
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
     if verbLevel > 0:

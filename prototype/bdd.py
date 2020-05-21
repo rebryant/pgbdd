@@ -299,7 +299,7 @@ class Manager:
             sofarDict = self.buildInformation(node.high, nodeFunction, sofarDict)
             return self.buildInformation(node.low, nodeFunction, sofarDict)
         
-    # Find support for function rooted by node
+    # Find support for function rooted by node.  Return as clause
     def getSupport(self, node):
         varDict = self.buildInformation(node, lambda n: n.variable, {})
         fullList = sorted(varDict.values())
@@ -307,7 +307,8 @@ class Manager:
         for v in fullList:
             if (len(vlist) == 0 or vlist[-1] != v) and v.level != Variable.leafLevel:
                 vlist.append(v)
-        return vlist
+        lits = [self.literal(v, 1) for v in  vlist]
+        return self.buildClause(lits)
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
