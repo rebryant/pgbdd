@@ -1,0 +1,26 @@
+#!/bin/bash
+make b N=004
+make b N=008
+make b N=012
+make b N=016
+make b N=020
+make b N=024
+make b N=028
+make b N=032
+make b N=036
+make b N=040
+make b N=044
+make b N=048
+make b N=052
+make b N=056
+make b N=060
+make b N=064
+make b N=068
+make b N=072
+make b N=076
+make b N=080
+make b N=084
+make b N=088
+make b N=092
+make b N=096
+make b N=100
