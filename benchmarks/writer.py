@@ -120,7 +120,8 @@ class ScheduleWriter(Writer):
 
     def finish(self):
         if self.stackDepth != 1:
-            raise WriterException("Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
+            print("Warning: Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
+#            raise WriterException("Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
         Writer.finish(self)
 
 class OrderWriter(Writer):
