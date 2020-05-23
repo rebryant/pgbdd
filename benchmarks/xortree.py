@@ -11,7 +11,7 @@ def usage(name):
     print("Usage: %s [-h] [-v] [-f] [-r ROOT] -n N -m M1M2" % name)
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
-    print("  -f       Flip order of tree nodes")
+    print("  -O (f|r) Specify order of nodes (f = flipped, r = random)")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -n N     Specify number of tree inputs")
     print("  -m M1M2  Specify modes for the two trees: ")
@@ -219,10 +219,16 @@ class TreeBuilder:
         self.scheduleWriter.doAnd(3)
         self.scheduleWriter.finish()
 
-    def emitOrder(self, flip = False):
+    def emitOrder(self, doFlip = False, doRandom = False):
+        if doRandom:
+            vars = list(range(1, self.variableCount+1))
+            random.shuffle(vars)
+            self.orderWriter.doOrder(vars)
+            self.orderWriter.finish()
+            return
         varDict1 = {}
         self.roots[0].getVariables(varDict1)
-        keyFun = (lambda h : h) if flip else (lambda h : -h)
+        keyFun = (lambda h : h) if doFlip else (lambda h : -h)
         h1list = sorted(varDict1.keys(), key = keyFun)
         for k in h1list:
             self.orderWriter.doOrder(varDict1[k])
@@ -242,15 +248,22 @@ def run(name, args):
     count = 0
     rootName = None
     mstring = ""
-    flip = False
+    doFlip = False
+    doRandom = False
     
-    optlist, args = getopt.getopt(args, "hfvr:n:m:")
+    optlist, args = getopt.getopt(args, "hvr:n:m:O:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
-        elif opt == '-f':
-            flip = True
+        elif opt == '-O':
+            if val == 'f':
+                doFlip = True
+            elif val == 'r':
+                doRandom = True
+            else:
+                print("Unknown ordering mode '%s'" % val)
+                return
         elif opt == '-v':
             verbose = True
         elif opt == '-r':
@@ -274,7 +287,7 @@ def run(name, args):
         mode = t.findMode(m)
         t.addRoot(mode)
     t.emitCnf()
-    t.emitOrder(flip = flip)
+    t.emitOrder(doFlip = doFlip, doRandom = doRandom)
     t.emitSchedule()
 
 if __name__ == "__main__":

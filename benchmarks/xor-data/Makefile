@@ -15,6 +15,7 @@ no: xor-$(N)-noorder.data
 tr: xor-$(N)-toproots.data
 ti: xor-$(N)-topinputs.data
 tf: xor-$(N)-topflip.data
+tR: xor-$(N)-toprandom.data
 
 xor-$(N)-$(MODES).data:
 	$(GENERATOR) -n $(N) -r xor-$(N)-$(MODES) -m $(MODES) | tee xor-$(N)-$(MODES).data
@@ -53,7 +54,7 @@ xor-$(N)-toproots.data:
 	rm -f xor-$(N)-toproots.proof
 
 xor-$(N)-topflip.data:
-	$(GENERATOR) -f -n $(N) -r xor-$(N)-topflip -m $(MODES) | tee xor-$(N)-topflip.data
+	$(GENERATOR) -O f -n $(N) -r xor-$(N)-topflip -m $(MODES) | tee xor-$(N)-topflip.data
 	$(SOLVER) -v $(VLEVEL) -i xor-$(N)-topflip.cnf -b \
 		-p xor-$(N)-topflip.order -o xor-$(N)-topflip.proof | tee -a xor-$(N)-topflip.data
 	$(CHECKER) -v xor-$(N)-topflip.proof | tee -a xor-$(N)-topflip.data
@@ -66,6 +67,14 @@ xor-$(N)-topinputs.data:
 		-o xor-$(N)-topinputs.proof | tee -a xor-$(N)-topinputs.data
 	$(CHECKER) -v xor-$(N)-topinputs.proof | tee -a xor-$(N)-topinputs.data
 	rm -f xor-$(N)-topinputs.proof
+
+
+xor-$(N)-toprandom.data:
+	$(GENERATOR) -O r -n $(N) -r xor-$(N)-toprandom -m $(MODES) | tee xor-$(N)-toprandom.data
+	$(SOLVER) -v $(VLEVEL) -i xor-$(N)-toprandom.cnf -b \
+		-p xor-$(N)-toprandom.order -o xor-$(N)-toprandom.proof | tee -a xor-$(N)-toprandom.data
+	$(CHECKER) -v xor-$(N)-toprandom.proof | tee -a xor-$(N)-toprandom.data
+	rm -f xor-$(N)-toprandom.proof
 
 
 clean:

@@ -64,3 +64,8 @@ make b N=015 SEED=02
 make b N=015 SEED=03
 make b N=015 SEED=04
 make b N=015 SEED=05
+make b N=016 SEED=01
+make b N=016 SEED=02
+make b N=016 SEED=03
+make b N=016 SEED=04
+make b N=016 SEED=05
