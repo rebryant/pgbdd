@@ -7,6 +7,9 @@ import bdd
 import resolver
 import datetime
 
+# Increase maximum recursion depth
+sys.setrecursionlimit(10 * sys.getrecursionlimit())
+
 def usage(name):
     print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]" % name)
     print("  -h          Print this message")
