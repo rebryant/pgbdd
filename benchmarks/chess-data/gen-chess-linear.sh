@@ -25,4 +25,11 @@ make l N=088
 make l N=092
 make l N=096
 make l N=100
+make l N=104
+make l N=108
+make l N=112
+make l N=116
+make l N=120
+make l N=124
+make l N=128
 

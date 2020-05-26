@@ -5,6 +5,10 @@ import  getopt
 import random
 import writer
 
+# Increase maximum recursion depth
+sys.setrecursionlimit(100 * sys.getrecursionlimit())
+
+
 # Generate CNF, order, and schedule files to compare two trees of xor's over a common set of inputs
 
 def usage(name):
