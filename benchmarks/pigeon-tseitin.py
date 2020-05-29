@@ -14,23 +14,6 @@ def usage(name):
     print("  -n N     Specify number of holes (pigeons = n+1)")
 
 
-def exactlyOne(vars):
-    n = len(vars)
-    if n == 0:
-        return None # Can't do it
-    # Generate integer values for not = 1
-    bits = []
-    for x in range(1<<n):
-        if popcount(x) != 1:
-            bits.append(bitList(x, n))
-    # Build clauses, inverting bits
-    clauses = []
-    for blist in bits:
-        clause = [vars[i] if blist[i] == 0 else -vars[i] for i in range(n)]
-        clauses.append(clause)
-    return clauses
-    
-
 # Numbering scheme:
 # Columns numbered from 0 to N, representing pigeons
 # Rows numbered from 0 to N-1, representing holes
