@@ -17,7 +17,7 @@ int getEdge (int a, int b) {
 void printXOR (int* array, int size, int polarity) {
   int i, j, on;
 
-//  printf ("c XOR %i %i:\n", size, polarity);
+  //  printf ("c XOR %i %i:\n", size, polarity);
   for (i = 0; i <  (1 << size); i++) {
     on = size + 1;
     for (j = 0; j < size; j++)
