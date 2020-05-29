@@ -14,6 +14,8 @@ ns: chess-$(N)-noschedule.data
 
 l: chess-$(N)-linear.data
 
+b: chess-$(N)-bucket.data
+
 chess-$(N).data:
 	$(GENERATOR) -n $(N) -r chess-$(N) | tee chess-$(N).data
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N).cnf -s chess-$(N).schedule \
@@ -42,6 +44,14 @@ chess-$(N)-linear.data:
 		-p chess-$(N)-linear.order -o chess-$(N)-linear.proof | tee -a chess-$(N)-linear.data
 	$(CHECKER) -v chess-$(N)-linear.proof | tee -a chess-$(N)-linear.data
 	rm -f chess-$(N)-linear.proof
+
+chess-$(N)-bucket.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-bucket | tee chess-$(N)-bucket.data
+	$(SOLVER) -b -v $(VLEVEL) -i chess-$(N)-bucket.cnf \
+		-p chess-$(N)-bucket.order -o chess-$(N)-bucket.proof | tee -a chess-$(N)-bucket.data
+	$(CHECKER) -v chess-$(N)-bucket.proof | tee -a chess-$(N)-bucket.data
+	rm -f chess-$(N)-bucket.proof
+
 
 
 clean:
