@@ -85,7 +85,7 @@ def run(name, args):
     permlist = build(N, K)
     for i in range(N):
         slist = [str(permlist[j][i]) for j in range(K)]
-        print("\t%d:" % i + "\t".join(slist))
+        print("\t%d:\t" % i + "\t".join(slist))
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
