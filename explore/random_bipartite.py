@@ -22,43 +22,42 @@ def random_swap(ls, i):
     ls[i], ls[j] = ls[j], ls[i]
     
 
-# Make a pass over the lists, trying to correct self loops and multi-edges
+# Make a pass over the lists, trying to correct multi-edges
 # Return number of swaps performed
+# Assumes that identity permutation will be added later
 def repair_pass(permlist):
-    K = len(permlist)
+    KM1 = len(permlist)
     N = len(permlist[0])
     ioffset = random.randrange(N)
     multiedges = 0
-    loops = 0
     for i in range(N):
         idx = (i + ioffset) % N
         othervals = []
-        joffset = random.randrange(K)
-        for j in range(K):
-            jdx = (j + joffset) % K
+        joffset = random.randrange(KM1)
+        for j in range(KM1):
+            jdx = (j + joffset) % KM1
             val = permlist[jdx][idx]
-            if val in othervals:
+            if val == idx or val in othervals:
                 random_swap(permlist[jdx], idx)
                 multiedges += 1
-            elif val == idx:
-                random_swap(permlist[jdx], idx)
-                loops += 1
             othervals.append(permlist[jdx][idx])
-    return (multiedges, loops)
+    return multiedges
                 
 def build(N, K):
     permlist = []
-    for j in range(K):
+    for j in range(K-1):
         ls = list(range(N))
         random.shuffle(ls)
         permlist.append(ls)
     for p in range(max_pass):
-        multiedges, loops = repair_pass(permlist)
-        fixcount = multiedges + loops
-        print("# Pass %d.  Fixed %d elements (%d multi-edges, %d loops)" % (p+1, fixcount, loops, multiedges))
-        if fixcount == 0:
+        multiedges = repair_pass(permlist)
+        print("# Pass %d.  Fixed %d multi-edges" % (p+1, multiedges))
+        if multiedges == 0:
+            permlist = [list(range(N))] + permlist
             return permlist
     print("# Failed to find valid graph after %d passes" % max_pass)
+    # First permutation is identity
+    permlist = [list(range(N))] + permlist
     return permlist
         
         
