@@ -11,12 +11,13 @@ import datetime
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o PROOF] [-p PERMUTE] [-s SCHEDULE]" % name)
+    print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o TCHK] [-O LRAT] [-p PERMUTE] [-s SCHEDULE]" % name)
     print("  -h          Print this message")
     print("  -b          Process terms via bucket elimination")
     print("  -v LEVEL    Set verbosity level")
     print("  -i CNF      Name of CNF input file")
-    print("  -o PROOF    Name of proof output file")
+    print("  -o TCHK     Name of proof output file (tracecheck format)")
+    print("  -O LRAT     Name of proof output file (LRAT format)")    
     print("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level")
     print("  -s SCHEDULE Name of action schedule file")
 
@@ -225,8 +226,9 @@ class Prover:
     file = None
     opened = False
     verbLevel = 1
+    doLrat = False
 
-    def __init__(self, fname = None, verbLevel = 1):
+    def __init__(self, fname = None, verbLevel = 1, doLrat = False):
         self.verbLevel = verbLevel
         if fname is None:
             self.opened = False
@@ -237,6 +239,7 @@ class Prover:
                 self.file = open(fname, 'w')
             except Exception:
                 raise ProverException("Could not open file '%s'" % fname)
+        self.doLrat = doLrat
         self.clauseCount = 0
         self.proofCount = 0
 
@@ -250,7 +253,7 @@ class Prover:
         if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
-    def createClause(self, result, antecedent, comment = None):
+    def createClause(self, result, antecedent, comment = None, isInput = False):
         self.comment(comment)
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
@@ -258,9 +261,14 @@ class Prover:
         if result == -resolver.tautologyId:
             result = []
         self.clauseCount += 1
-        ilist = [self.clauseCount] + result + [0] + sorted(antecedent) + [0]
+        antecedent = list(antecedent)
+        if not self.doLrat:
+            antecedent.sort()
+        ilist = [self.clauseCount] + result + [0] + antecedent + [0]
         slist = [str(i) for i in ilist]
         istring = " ".join(slist)
+        if isInput and self.doLrat:
+            istring = "c " + istring
         self.file.write(istring + '\n')
         return self.clauseCount
 
@@ -270,7 +278,9 @@ class Prover:
             return ruleIndex[proof.name]
         else:
             antecedent = []
-            for c in proof.children:
+            rchildren = proof.children
+#            rchildren.reverse()
+            for c in rchildren:
                 antecedent.append(self.emitProof(c, ruleIndex, comment))
                 comment = None
             self.proofCount += 1
@@ -330,7 +340,7 @@ class Solver:
         # Print input clauses
         for clause in reader.clauses:
             clauseCount += 1
-            self.prover.createClause(clause, [], "Input clause %d" % clauseCount)
+            self.prover.createClause(clause, [], "Input clause %d" % clauseCount, isInput = True)
 
         self.prover.inputDone()
 
@@ -569,12 +579,13 @@ def readScheduler(fname):
 def run(name, args):
     cnfName = None
     proofName = None
+    doLrat = False
     permuter = None
     doBucket = False
     scheduler = None
     verbLevel = 1
 
-    optlist, args = getopt.getopt(args, "hbv:i:o:p:s:")
+    optlist, args = getopt.getopt(args, "hbv:i:o:O:p:s:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -587,6 +598,9 @@ def run(name, args):
             cnfName = val
         elif opt == '-o':
             proofName = val
+        elif opt == '-O':
+            proofName = val
+            doLrat = True
         elif opt == '-p':
             permuter = readPermutation(val)
             if permuter is None:
@@ -605,7 +619,7 @@ def run(name, args):
         return
 
     try:
-        prover = Prover(proofName, verbLevel = verbLevel)
+        prover = Prover(proofName, verbLevel = verbLevel, doLrat = doLrat)
     except Exception as ex:
         print("Couldn't create prover (%s)" % str(ex))
         return

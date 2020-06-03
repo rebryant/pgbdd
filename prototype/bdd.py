@@ -147,8 +147,14 @@ class VariableNode(Node):
         # id should be first literal in clause for some proof checkers
         self.inferTrueUp = prover.createClause([id, -vid, -hid], [], "ITE assertions for node %s" % self.label())
         self.inferFalseUp = prover.createClause([id, vid, -lid], [])
-        self.inferTrueDown = prover.createClause([-id, -vid, hid], [])
-        self.inferFalseDown = prover.createClause([-id, vid, lid], [])
+        antecedents = []
+        if prover.doLrat:
+            if self.inferTrueUp != resolver.tautologyId:
+                antecedents.append(-self.inferTrueUp)
+            if self.inferFalseUp != resolver.tautologyId:
+                antecedents.append(-self.inferFalseUp)
+        self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents)
+        self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents)
 
     def isLeaf(self):
         return False
@@ -270,12 +276,20 @@ class Manager:
 
     def constructClause(self, clauseId, literalList):
         root = self.buildClause(literalList)
-        litNodes = self.deconstructClause(root)
-        antecedents = [clauseId]
-        antecedents += [node.inferTrueUp for node in litNodes 
-                        if node.inferTrueUp != resolver.tautologyId]
-        antecedents += [node.inferFalseUp for node in litNodes
-                        if node.inferFalseUp != resolver.tautologyId]
+        lits = self.deconstructClause(root)
+        # List antecdents in inverse order of resolution steps
+        antecedents = []
+        for node in lits:
+            positive = node.high == self.leaf1
+            if positive:
+                antecedents.append(node.inferTrueUp)
+                if node.low != self.leaf0:
+                    antecedents.append(node.inferFalseUp)
+            else:
+                antecedents.append(node.inferFalseUp)
+                if node.high != self.leaf0:
+                    antecedents.append(node.inferTrueUp)
+        antecedents.append(clauseId)
         validation = self.prover.createClause([root.id], antecedents, "Validate BDD representation of clause %d" % clauseId)
         return root, validation
     
