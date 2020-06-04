@@ -655,6 +655,9 @@ class Manager:
             for id in k[1:]:
                 kill = kill or id not in markedIds
             if kill:
+                clause = self.operationCache[k][1]
+                if clause != resolver.tautologyId:
+                    clauseList.append(clause)
                 self.cacheRemoved += 1
                 del self.operationCache[k]
         return clauseList
@@ -666,11 +669,11 @@ class Manager:
             node = self.uniqueTable[k]
             # If node is marked, then its children will be, too
             if node not in markedSet:
+                clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
+                clist = [c for c in clist if abs(c) != resolver.tautologyId]
+                clauseList += clist
                 self.nodesRemoved += 1
                 del self.uniqueTable[k]
-            clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
-            clist = [c for c in clist if abs(c) != resolver.tautologyId]
-#            clauseList += clist
         return clauseList
 
 

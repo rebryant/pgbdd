@@ -278,7 +278,7 @@ class Prover:
         prefix = "%d d " % self.clauseCount
         slist = [str(c) for c in clauseList]
         cstring = " ".join(slist)
-        self.file.write(prefix + cstring + '\n');
+        self.file.write(prefix + cstring + '0 0\n');
 
     def emitProof(self, proof, ruleIndex, comment):
         if proof.isLeaf:
