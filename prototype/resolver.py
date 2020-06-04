@@ -206,33 +206,33 @@ class ProofLeaf(ProofStep):
 
 class ProofNode(ProofStep):
     children = []
+    # Flag indicating that all children are leaves
+    leafChildren = False
 
     def __init__(self, clause, children, merge=True):
         ProofStep.__init__(self, clause)
         self.isLeaf = False
-        if merge:
-            # Attempt to merge into linear chain
-            leafList = []
-            otherList = []
-            for c in children:
-                if c.isLeaf:
-                    leafList.append(c)
-                else:
-                    otherList.append(c)
-            if len(otherList) == 0:
-                self.children = children
+        self.leafChildren = False
+        if merge and len(children) == 2:
+            cleft = children[0]
+            cright = children[1]
+            if cleft.isLeaf and cright.isLeaf:
+                self.leafChildren = True
+            elif cleft.isLeaf and cright.leafChildren:
+                children = cright.children + [cleft]
+                self.leafChildren = True
+            elif cleft.leafChildren and cright.isLeaf:
+                children = cleft.children + [cright]
+                self.leafChildren = True
             else:
-                mergeNode = otherList[0]
-                rest = otherList[1:]
-                self.children = leafList + mergeNode.children + rest
-        else:
-            self.children = children
+                children = cleft.children + [cright]
+        self.children = children
 
     def postfix(self, showLiterals = False):
         suffix = "R%d" % len(self.children)
         if showLiterals:
             llist = [str(lit) for lit in self.literalList]
-            suffix = "R(%s)" % (" ".join(llist))
+            suffix = "R%d(%s)" % (len(self.children), " ".join(llist))
         slist = [c.postfix(showLiterals) for c in self.children] + [suffix]
         return " ".join(slist)
 

@@ -277,7 +277,7 @@ class Manager:
     def constructClause(self, clauseId, literalList):
         root = self.buildClause(literalList)
         lits = self.deconstructClause(root)
-        # List antecdents in inverse order of resolution steps
+        # List antecedents in reverse order of resolution steps
         antecedents = []
         for node in lits:
             positive = node.high == self.leaf1
@@ -625,7 +625,8 @@ class Manager:
     def checkGC(self):
         newQuants = len(self.quantifiedVariableSet) - self.lastGC
         if newQuants > self.gcThreshold:
-            self.collectGarbage([])
+            return self.collectGarbage([])
+        return []
 
 
     # Create set nodes that should not be collected
@@ -645,6 +646,7 @@ class Manager:
         return markedSet
 
     def cleanCache(self, markedSet):
+        clauseList = []
         markedIds = set([node.id for node in markedSet])
         klist = list(self.operationCache.keys())
         for k in klist:
@@ -655,8 +657,10 @@ class Manager:
             if kill:
                 self.cacheRemoved += 1
                 del self.operationCache[k]
+        return clauseList
         
     def cleanNodes(self, markedSet):
+        clauseList = []
         klist = list(self.uniqueTable.keys())
         for k in klist:
             node = self.uniqueTable[k]
@@ -664,6 +668,11 @@ class Manager:
             if node not in markedSet:
                 self.nodesRemoved += 1
                 del self.uniqueTable[k]
+            clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
+            clist = [c for c in clist if abs(c) != resolver.tautologyId]
+#            clauseList += clist
+        return clauseList
+
 
     # Start garbage collection.
     # Provided with partial list of accessible roots
@@ -674,11 +683,12 @@ class Manager:
         frontier = [r for r in frontier if not r.isLeaf()]
         # Marking phase
         markedSet = self.doMarking(frontier)
-        self.cleanCache(markedSet)
-        self.cleanNodes(markedSet)
+        clauseList = self.cleanCache(markedSet)
+        clauseList += self.cleanNodes(markedSet)
         # Turn off trigger for garbage collection
         self.lastGC = len(self.quantifiedVariableSet)
         self.gcCount += 1
+        return clauseList
 
     # Summarize activity
     def summarize(self):

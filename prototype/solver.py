@@ -272,6 +272,14 @@ class Prover:
         self.file.write(istring + '\n')
         return self.clauseCount
 
+    def deleteClauses(self, clauseList):
+        if not self.doLrat:
+            return
+        prefix = "%d d " % self.clauseCount
+        slist = [str(c) for c in clauseList]
+        cstring = " ".join(slist)
+        self.file.write(prefix + cstring + '\n');
+
     def emitProof(self, proof, ruleIndex, comment):
         if proof.isLeaf:
             self.comment(comment)
@@ -279,7 +287,7 @@ class Prover:
         else:
             antecedent = []
             rchildren = proof.children
-#            rchildren.reverse()
+            rchildren.reverse()
             for c in rchildren:
                 antecedent.append(self.emitProof(c, ruleIndex, comment))
                 comment = None
@@ -409,7 +417,9 @@ class Solver:
         del self.activeIds[id]
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
-        self.manager.checkGC()
+        clauseList = self.manager.checkGC()
+        if len(clauseList) > 0:
+            self.prover.deleteClauses(clauseList)
         return self.termCount
 
     def runNoSchedule(self):
