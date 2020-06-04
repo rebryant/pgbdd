@@ -66,7 +66,7 @@ int checkRedundancy (int pivot, int start, int *hints, long long thisMask) {
         while (*clause) {
           int clit = convertLit (*clause++);
           if (clit == (pivot^1)) return FAILED; } } }
-    if (clsList[res] == DELETED) { printf ("c ERROR: using DELECT clause\n"); exit (2); };
+    if (clsList[res] == DELETED) { printf ("c ERROR: using DELETE clause\n"); exit (2); };
     int flag = 0, *clause = table + clsList[res];
     while (*clause) {
       int clit = convertLit (*clause++);
@@ -78,7 +78,7 @@ int checkRedundancy (int pivot, int start, int *hints, long long thisMask) {
     if (flag == 0) return FAILED; }
 
   while (*hints > 0) {
-    if (clsList[*hints] == DELETED) { printf ("c ERROR: using DELECT clause\n"); exit (2); };
+    if (clsList[*hints] == DELETED) { printf ("c ERROR: using DELETE clause\n"); exit (2); };
     int unit = 0, *clause = table + clsList[*(hints++)];
     while (*clause) {
       int clit = convertLit (*(clause++));
@@ -151,9 +151,10 @@ void deleteClauses (int* list) {
     int index = *list++;
     if (clsList[index] == DELETED) {
       printf ("c WARNING: clause %i is already deleted\n", index); }
-    clsList[index] = DELETED; } 
-  deleted_clauses++;
-  live_clauses--;
+    clsList[index] = DELETED; 
+    deleted_clauses++;
+    live_clauses--;
+  } 
 }
 
 int parseLine (FILE* file, int *list, int mode) {
