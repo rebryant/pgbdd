@@ -169,7 +169,7 @@ static void addLit(int lit) {
 int parseLine (FILE* file, int mode) {
   int lit, index, tmp;
   litCount = 0;
-  int c = 0;
+  char c = 0;
   while (1) {
     tmp = fscanf (file, " c%c", &c);
     if (tmp == EOF) return 0;
