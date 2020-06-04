@@ -1,7 +1,7 @@
 INTERP = python3
 MODES = LP
 N = 10
-VLEVEL = 2
+VLEVEL = 1
 
 GENERATOR = $(INTERP) ../../xortree.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
@@ -74,7 +74,7 @@ xor-$(N)-toprandom.data:
 	$(SOLVER) -v $(VLEVEL) -i xor-$(N)-toprandom.cnf -b \
 		-p xor-$(N)-toprandom.order -O xor-$(N)-toprandom.lrat | tee -a xor-$(N)-toprandom.data
 	$(CHECKER) xor-$(N)-toprandom.cnf xor-$(N)-toprandom.lrat | tee -a xor-$(N)-toprandom.data
-#	rm -f xor-$(N)-toprandom.lrat
+	rm -f xor-$(N)-toprandom.lrat
 
 
 clean:
