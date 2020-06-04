@@ -21,6 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <sys/time.h>
 
 #define DELETED		-1
 #define SUCCESS		1
@@ -28,6 +29,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define CNF		100
 #define LRAT		200
 #define CLRAT		300
+
+void usage(char *name) {
+  printf("Usage: %s FILE1.cnf FILE2.lrat\n", name);
+  exit(0);
+}
+
+long long added_clauses = 0;
+long long deleted_clauses = 0;
+long long live_clauses = 0;
+long long max_live_clauses = 0;
 
 long long *mask, now;
 
@@ -128,14 +139,22 @@ void addClause (int index, int* literals, int size) {
   clsList[index] = tableSize;
   int i; for (i = 0; i < size; i++) table[tableSize++] = literals[i];
   table[tableSize++] = 0;
-  clsLast = index; }
+  clsLast = index;
+  added_clauses++;
+  live_clauses++;
+  if (live_clauses > max_live_clauses)
+      max_live_clauses = live_clauses;
+}
 
 void deleteClauses (int* list) {
   while (*list) {
     int index = *list++;
     if (clsList[index] == DELETED) {
       printf ("c WARNING: clause %i is already deleted\n", index); }
-    clsList[index] = DELETED; } }
+    clsList[index] = DELETED; } 
+  deleted_clauses++;
+  live_clauses--;
+}
 
 int parseLine (FILE* file, int *list, int mode) {
   int lit, index, tmp, count = 0;
@@ -181,6 +200,11 @@ int parseLine (FILE* file, int *list, int mode) {
   return 0; }
 
 int main (int argc, char** argv) {
+  if (argc != 3)
+     usage(argv[0]);
+  struct timeval start_time, finish_time;
+  int return_code = 0;
+  gettimeofday(&start_time, NULL);
   now = 0, clsLast = 0;
 
   int i, nVar = 0, nCls = 0;
@@ -234,14 +258,21 @@ int main (int argc, char** argv) {
       else {
         printf("c failed to check clause: "); printClause (list + 2);
         printf("c NOT VERIFIED\n");
-        exit (0); }
-
-      if (length == 0) {
+        return_code = 1;
+      }
+      if (length == 0)
         printf ("c VERIFIED\n");
-        exit (1); }
     }
     else {
       printf ("c failed type\n");
-      exit (0); }
+      return_code = 1;
+    }
   }
+  gettimeofday(&finish_time, NULL);
+  double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
+      (start_time.tv_sec + 1e-6 * start_time.tv_usec);
+  printf("c Added clauses = %lld.  Deleted clauses = %lld.  Max live clauses = %lld\n",
+	 added_clauses, deleted_clauses, max_live_clauses);
+  printf("c verification time = %.2f secs\n", secs);
+  return return_code;
 }
