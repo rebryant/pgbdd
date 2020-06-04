@@ -1,0 +1,40 @@
+#!/bin/bash
+
+make no N=004
+make no N=008
+make no N=012
+make no N=016
+make no N=024
+make no N=032
+make no N=040
+make no N=048
+make no N=064
+make no N=080
+make no N=096
+make no N=112
+make no N=128
+make no N=144
+make no N=160
+make no N=176
+make no N=192
+make no N=208
+make no N=224
+make no N=240
+make no N=256
+make no N=272
+make no N=288
+make no N=304
+make no N=320
+make no N=336
+make no N=352
+make no N=368
+make no N=384
+make no N=400
+make no N=416
+make no N=432
+make no N=448
+make no N=464
+make no N=480
+make no N=496
+make no N=512
+
