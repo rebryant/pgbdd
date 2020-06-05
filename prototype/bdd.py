@@ -421,8 +421,10 @@ class Manager:
                           "w":newNode.id, "w1":newHigh.id, "w0":newLow.id }
 
         proof = self.andResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
+        clauseList = []
         if proof == resolver.tautologyId:
             justification = resolver.tautologyId
+            
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
             justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
