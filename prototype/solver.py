@@ -280,19 +280,26 @@ class Prover:
         cstring = " ".join(slist)
         self.file.write(prefix + cstring + ' 0\n');
 
+    # Return index of justifying clause
+    # + list of clauses generated
     def emitProof(self, proof, ruleIndex, comment):
         if proof.isLeaf:
             self.comment(comment)
-            return ruleIndex[proof.name]
+            return ruleIndex[proof.name], []
         else:
+            clauseList = []
             antecedent = []
             rchildren = proof.children
             rchildren.reverse()
             for c in rchildren:
-                antecedent.append(self.emitProof(c, ruleIndex, comment))
+                clause, clist = self.emitProof(c, ruleIndex, comment)
+                antecedent.append(clause)
+                clauseList += clist
                 comment = None
             self.proofCount += 1
-            return self.createClause(proof.literalList, antecedent)
+            nclause = self.createClause(proof.literalList, antecedent)
+            clauseList.append(nclause)
+            return nclause, clauseList
 
     def summarize(self):
         if self.verbLevel >= 1:

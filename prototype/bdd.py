@@ -195,7 +195,7 @@ class Manager:
     # Mapping from (variable, high, low) to node
     uniqueTable = {}
     # Operation cache
-    # Key = (opName, operand1 ...) to (node, justification)
+    # Key = (opName, operand1 ...) to (node, justification, clauseList)
     operationCache = {}
     verbLevel = 1
     andResolver = None
@@ -382,7 +382,7 @@ class Manager:
             nodeA, nodeB = nodeB, nodeA
         key = ("and", nodeA.id, nodeB.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][:2]
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
@@ -425,8 +425,8 @@ class Manager:
             justification = resolver.tautologyId
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification = self.prover.emitProof(proof, ruleIndex, comment)
-        self.operationCache[key] = (newNode, justification)
+            justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
+        self.operationCache[key] = (newNode, justification,clauseList)
         if justification != resolver.tautologyId:
             self.cacheJustifyAdded += 1
         else:
@@ -453,7 +453,7 @@ class Manager:
         newHigh = self.applyNot(high)
         newLow = self.applyNot(low)
         newNode = self.findOrMake(var, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
 
@@ -485,7 +485,7 @@ class Manager:
         newHigh = self.applyOr(highA, highB)
         newLow = self.applyOr(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
 
@@ -517,7 +517,7 @@ class Manager:
         newHigh = self.applyXor(highA, highB)
         newLow = self.applyXor(lowA, lowB)
         newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
     
@@ -539,7 +539,7 @@ class Manager:
 
         key = ("imply", nodeA.id, nodeB.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][:2]
 
         ruleIndex = { }
         splitVar = min(nodeA.variable, nodeB.variable)  
@@ -570,14 +570,14 @@ class Manager:
         if check:
             proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
             if proof == resolver.tautologyId:
-                justification = resolver.tautologyId
+                justification, clauseList = resolver.tautologyId, []
             else:
                 comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-                justification = self.prover.emitProof(proof, ruleIndex, comment)
+                justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
         else:
-            justification = resolver.tautologyId
+            justification, clauseList = resolver.tautologyId, []
 
-        self.operationCache[key] = (check, justification)
+        self.operationCache[key] = (check, justification, clauseList)
         if justification != resolver.tautologyId:
             self.cacheJustifyAdded += 1
         else:
@@ -617,7 +617,7 @@ class Manager:
         newLow = self.equant(node.low, clause, topLevel = False)
         quant = node.variable == clause.variable
         newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId)
+        self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
             
@@ -655,9 +655,8 @@ class Manager:
             for id in k[1:]:
                 kill = kill or id not in markedIds
             if kill:
-                clause = self.operationCache[k][1]
-                if clause != resolver.tautologyId:
-                    clauseList.append(clause)
+                clist = self.operationCache[k][2]
+                clauseList += clist
                 self.cacheRemoved += 1
                 del self.operationCache[k]
         return clauseList
