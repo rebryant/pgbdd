@@ -2,6 +2,7 @@
 #include <fstream>
 #include <stack>
 #include <math.h>
+#include <algorithm>
 #include "Tree.h"
 
 #include <ctime>        // std::time
