@@ -20,8 +20,8 @@ def usage(name):
 # Input variable M(h,p) indicates that pigeon p occupies hole h
 #   Range: h: 0..n-1, p: 0..n
 # Tseitin variable S(h,p):
-#     indicates that hole h does contains at most one pigeon p' such that p' <= p
-#   Range: h: 0..n-2, p: 0..n
+#     indicates that hole h contains at most one pigeon p' such that p' <= p
+#   Range: h: 0..n-1, p: 0..n-2
 
 # Square  at position h,p denotes how the presence of pigeon p
 # will affect the status of hole h
