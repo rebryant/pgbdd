@@ -2584,12 +2584,14 @@ int main (int argc, char** argv) {
 	// using myrandom:
 	std::random_shuffle(myvector.begin(), myvector.end(), myrandom);
 
+#if 0
 	// print out content:
 	std::cout << "myvector contains:";
 	for (std::vector<int>::iterator it = myvector.begin(); it != myvector.end(); ++it)
 		std::cout << ' ' << *it;
 
 	std::cout << '\n';
+#endif
 
 	//getchar();
 	double duration;
@@ -2609,23 +2611,25 @@ int main (int argc, char** argv) {
 		revvector[myvector[i-1]-1] = i;
 	}
 
+#if 0
 	std::cout << "revvector contains:";
 	for (std::vector<int>::iterator it = revvector.begin(); it != revvector.end(); ++it)
 		std::cout << ' ' << *it;
 
 	std::cout << '\n';
+#endif
 
 	ofstream cnffile;
 	cnffile.open("formula.cnf", ios::app);
 	cnffile << "p cnf " << 3 * n -6 << " " << P.cspace << "\n";
 	cnffile.close();
-
 	::f = P;
 	//::f.Display();
 	::f.Print();
 	duration = (std::clock() - start) / (double)CLOCKS_PER_SEC;
 	std::cout << "time for constructing CNF:" << duration << endl;
 	//::reverse.print();
+#ifndef CNF_ONLY
 
 	bool skipprvr = 0;
 
@@ -2660,7 +2664,8 @@ int main (int argc, char** argv) {
 		stats.open("stats.txt", ios::app);
 		stats << " n " << "\t" << "#vars " << "\t" << "#c " << "\t" << "#lines" << "\t" << "#add" << "\t" << "#del" << "\t" <<  "time elapsed "  << endl;
 		stats << n << "\t" << ::maxextvar << "\t" << 8 * (n - 2) << "\t" << ::proofsize << "\t" << ::ATAsize + ::RATAsize << "\t" << ::ATEsize + ::RATEsize << "\t" <<  duration << endl;
-		cnffile.close();
+		//		cnffile.close();
 //		getchar();
 	}
+#endif
 }
