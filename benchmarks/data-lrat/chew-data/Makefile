@@ -11,7 +11,11 @@ CHECKER = ../../../lrat/lrat-check
 
 io: chew-$(N)-inputorder.data
 ro: chew-$(N)-randomorder.data
+cd: chew-$(N)-drat.data
 
+chew-$(N)-drat.data:
+	$(FULLGENERATOR) $(N) $(SEED) | tee chew-$(N)-drat.data
+	rm -f formula.*
 
 chew-$(N)-inputorder.data:
 	$(FULLGENERATOR) $(N) $(SEED) | tee chew-$(N)-inputorder.data
