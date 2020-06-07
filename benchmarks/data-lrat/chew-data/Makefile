@@ -8,6 +8,8 @@ GENERATOR = ../../chew-code/parity-cnf
 RANDOMIZER = ../../randomizer.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
+GRABBER = ../../grab_clauses.py
+DGRABBER = ./grab_drat.py
 
 io: chew-$(N)-inputorder.data
 ro: chew-$(N)-randomorder.data
@@ -34,6 +36,11 @@ chew-$(N)-randomorder.data:
 		-O chew-$(N)-randomorder.lrat | tee -a chew-$(N)-randomorder.data
 	$(CHECKER) chew-$(N)-randomorder.cnf chew-$(N)-randomorder.lrat | tee -a chew-$(N)-randomorder.data
 	rm -f chew-$(N)-randomorder.lrat
+
+data:
+	$(GRABBER) chew*-randomorder.data > chew-clauses-randomorder.txt
+	$(GRABBER) chew*-inputorder.data > chew-clauses-inputorder.txt
+	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-clauses-drat.txt
 
 clean:
 	rm -f *~
