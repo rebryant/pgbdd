@@ -13,8 +13,6 @@ nq: chess-$(N)-noquant.data
 
 ns: chess-$(N)-noschedule.data
 
-l: chess-$(N)-linear.data
-
 b: chess-$(N)-bucket.data
 
 chess-$(N).data:
@@ -22,7 +20,7 @@ chess-$(N).data:
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N).cnf -s chess-$(N).schedule \
 		-p chess-$(N).order -O chess-$(N).lrat | tee -a chess-$(N).data
 	$(CHECKER) chess-$(N).cnf chess-$(N).lrat | tee -a chess-$(N).data
-#	rm -f chess-$(N).lrat
+	rm -f chess-$(N).lrat
 
 chess-$(N)-noquant.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-noquant | tee chess-$(N)-noquant.data
@@ -38,13 +36,6 @@ chess-$(N)-noschedule.data:
 		-p chess-$(N)-noschedule.order -O chess-$(N)-noschedule.lrat | tee -a chess-$(N)-noschedule.data
 	$(CHECKER) -v chess-$(N)-noschedule.lrat | tee -a chess-$(N)-noschedule.data
 	rm -f chess-$(N)-noschedule.lrat
-
-chess-$(N)-linear.data:
-	$(GENERATOR) -n $(N) -r chess-$(N)-linear | tee chess-$(N)-linear.data
-	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-linear.cnf -s chess-$(N)-linear.schedule \
-		-p chess-$(N)-linear.order -O chess-$(N)-linear.lrat | tee -a chess-$(N)-linear.data
-	$(CHECKER) -v chess-$(N)-linear.lrat | tee -a chess-$(N)-linear.data
-	rm -f chess-$(N)-linear.lrat
 
 chess-$(N)-bucket.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-bucket | tee chess-$(N)-bucket.data
