@@ -29,7 +29,8 @@ def bitList(x, count):
         ls.append(b)
     return ls
 
-def exactlyOne(vars):
+# Less efficient version
+def exactlyOneOld(vars):
     n = len(vars)
     if n == 0:
         return None # Can't do it
@@ -44,7 +45,20 @@ def exactlyOne(vars):
         clause = [vars[i] if blist[i] == 0 else -vars[i] for i in range(n)]
         clauses.append(clause)
     return clauses
-    
+
+def exactlyOne(vars):
+    n = len(vars)
+    if n == 0:
+        return None # Can't do it
+    # At least one
+    clauses = [vars]
+    # at most one via pairwise constraints
+    for i in range(n):
+        for j in range(i):
+            clause = [-vars[i], -vars[j]]
+            clauses.append(clause)
+    return clauses
+
 
 # Numbering scheme:
 # Columns numbered from 0 to N-1
