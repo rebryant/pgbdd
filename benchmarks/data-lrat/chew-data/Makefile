@@ -13,6 +13,7 @@ DGRABBER = ./grab_drat.py
 
 io: chew-$(N)-inputorder.data
 ro: chew-$(N)-randomorder.data
+nq: chew-$(N)-noquant.data
 cd: chew-$(N)-drat.data
 
 chew-$(N)-drat.data:
@@ -36,6 +37,15 @@ chew-$(N)-randomorder.data:
 		-O chew-$(N)-randomorder.lrat | tee -a chew-$(N)-randomorder.data
 	$(CHECKER) chew-$(N)-randomorder.cnf chew-$(N)-randomorder.lrat | tee -a chew-$(N)-randomorder.data
 	rm -f chew-$(N)-randomorder.lrat
+
+chew-$(N)-noquant.data:
+	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-noquant.data
+	mv formula.cnf chew-$(N)-noquant.cnf
+	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-noquant.cnf \
+		-O chew-$(N)-noquant.lrat | tee -a chew-$(N)-noquant.data
+	$(CHECKER) chew-$(N)-noquant.cnf chew-$(N)-noquant.lrat | tee -a chew-$(N)-noquant.data
+	rm -f chew-$(N)-noquant.lrat
+
 
 data:
 	$(GRABBER) chew*-randomorder.data > chew-clauses-randomorder.txt
