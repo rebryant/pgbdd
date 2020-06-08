@@ -31,3 +31,8 @@ pigeon-tseitin-$(N)-linear.data:
 		-p pigeon-tseitin-$(N).order -O pigeon-tseitin-$(N).lrat | tee -a pigeon-tseitin-$(N)-linear.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).lrat | tee -a pigeon-tseitin-$(N)-linear.data
 	rm -f pigeon-tseitin-$(N).lrat
+
+data:
+	$(GRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket.csv
+	$(GRABBER) pigeon-*-column.data > pigeon-tseitin-column.csv
+	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
