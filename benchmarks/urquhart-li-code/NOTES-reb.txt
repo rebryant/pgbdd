@@ -1,0 +1,13 @@
+2020-06-08
+
+Observations on reading the code.  Randal E. Bryant
+
+The code uses an adjacency-list representation of a bipartite graph.  Maximum degree = 7.
+
+"Arete" is French for "edge"
+
+The command-line argument p must range between 25 and 75.  It designates
+the percentage of nodes that are assigned polarity 1.
+
+
+
