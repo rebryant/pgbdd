@@ -3,6 +3,9 @@
 import sys
 import re
 
+# Generate csv of number specified on target line
+# Extracts problem size from file name
+
 triggerPhrase = "Total Clauses"
 
 def trim(s):
@@ -61,7 +64,7 @@ def run(name, args):
     for fname in args:
         pair = extract(fname)
         if pair is not None:
-            print("%s %s" % pair)
+            print("%s,%s" % pair)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
