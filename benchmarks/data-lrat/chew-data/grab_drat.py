@@ -12,7 +12,7 @@ def extract(fname):
     try:
         f = open(fname, 'r')
     except:
-        print("Couldn't open file '%s'" % fname)
+        sys.stderr.write("Couldn't open file '%s'\n" % fname)
         return None
     fieldList = []
     valueDict = {}
@@ -26,14 +26,14 @@ def extract(fname):
                 fieldList.append(field)
         elif len(fieldList) > 0:
             if len(fields) != len(fieldList):
-                print("Mismatched lengths.  Field names = %d, fields = %d" % (len(fieldList), len(fields)))
+                sys.stderr.write("File %s.  Mismatched lengths.  Field names = %d, fields = %d\n" % (fname, len(fieldList), len(fields)))
                 f.close()
                 return None
             for i in range(len(fields)):
                 try:
                     val = int(fields[i])
                 except:
-                    print("Couldn't extract integer fields from line '%s'" % line)
+                    sys.stderr.write("File %s.  Couldn't extract integer fields from line '%s'\n" % line)
                     f.close()
                     return None
                 valueDict[fieldList[i]] = val
@@ -41,12 +41,12 @@ def extract(fname):
             return valueDict
         else:
             continue
-    print("Didn't find expected data")
+    sys.stderr.write("File %s.  Didn't find expected data\n" % fname)
     f.close()
     return None
 
 def usage(name):
-    print("Usage: %s file1 file2 ..." % name)
+    sys.stderr.write("Usage: %s file1 file2 ...\n" % name)
     sys.exit(0)
 
 def run(name, args):
@@ -55,7 +55,7 @@ def run(name, args):
     for fname in args:
         valueDict = extract(fname)
         if valueDict is not None:
-            print("%s %s" % (valueDict['n'], valueDict['lines']))
+            print("%s,%s" % (valueDict['n'], valueDict['lines']))
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
