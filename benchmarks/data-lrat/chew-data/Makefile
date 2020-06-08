@@ -48,10 +48,10 @@ chew-$(N)-noquant.data:
 
 
 data:
-	$(GRABBER) chew*-randomorder.data > chew-clauses-randomorder.txt
-	$(GRABBER) chew*-inputorder.data > chew-clauses-inputorder.txt
-	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-clauses-drat.txt
-
+	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
+	$(GRABBER) chew*-inputorder.data > chew-inputorder.csv
+	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-drat.csv
+	$(GRABBER) chew*-noquant.data > chew-noquant.csv
 clean:
 	rm -f *~
 

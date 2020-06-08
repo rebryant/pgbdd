@@ -1,6 +1,6 @@
 #!/bin/bash
 
-make io N=00004
+make io N=00004 SEED=123
 make io N=00008
 make io N=00012
 make io N=00016
