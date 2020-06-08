@@ -16,3 +16,4 @@ propagation in the DLL procedure", Discrete Applied Mathematics 130
 It describes two different variants.  It's unclear which one this code
 generates.
 
+File name cannot contain '-r', or it will confuse this with the commandline switch -r
