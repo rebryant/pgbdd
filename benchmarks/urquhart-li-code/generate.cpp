@@ -5,6 +5,7 @@
 /************************ Modifications ***********************
  *
  *  2020-06-08.  Fixed constant character warnings
+ *  2020-06-08.  Fixed unitialized value of p
  *
  *
  ************************ Modifications ***********************/
@@ -42,7 +43,8 @@ int CGenerator::CheckArguments(char *arg)
 void CGenerator::Init(int argc, char *argv[]) {
 	char *string, *endptr;
 	int i,arg_view[3],Error=0;
-	long m,p;
+	long m = 3;
+        long p = 50;
 	ShowRules=0;
 
 	arg_view[0]=0;
