@@ -11,37 +11,36 @@ SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
 
-io: urquhart-simon-$(M)-inputorder.data
-ro: urquhart-simon-$(M)-randomorder.data
-l: urquhart-simon-$(M)-noquant.data
+io: urquhart-simon-$(M)-$(SEED)-inputorder.data
+ro: urquhart-simon-$(M)-$(SEED)-randomorder.data
+l: urquhart-simon-$(M)-$(SEED)-linear.data
 
-urquhart-simon-$(M)-inputorder.data:
-	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-inputorder.cnf | tee urquhart-simon-$(M)-inputorder.data
-	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-inputorder.cnf -b \
-		-O urquhart-simon-$(M)-inputorder.lrat | tee -a urquhart-simon-$(M)-inputorder.data
-	$(CHECKER) urquhart-simon-$(M)-inputorder.cnf urquhart-simon-$(M)-inputorder.lrat | tee -a urquhart-simon-$(M)-inputorder.data
-	rm -f urquhart-simon-$(M)-inputorder.lrat
+urquhart-simon-$(M)-$(SEED)-inputorder.data:
+	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-$(SEED)-inputorder.cnf | tee urquhart-simon-$(M)-$(SEED)-inputorder.data
+	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-$(SEED)-inputorder.cnf -b \
+		-O urquhart-simon-$(M)-$(SEED)-inputorder.lrat | tee -a urquhart-simon-$(M)-$(SEED)-inputorder.data
+	$(CHECKER) urquhart-simon-$(M)-$(SEED)-inputorder.cnf urquhart-simon-$(M)-$(SEED)-inputorder.lrat | tee -a urquhart-simon-$(M)-$(SEED)-inputorder.data
+	rm -f urquhart-simon-$(M)-$(SEED)-inputorder.lrat
 
-urquhart-simon-$(M)-randomorder.data:
-	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-randomorder.cnf | tee urquhart-simon-$(M)-randomorder.data
-	$(RANDOMIZER) urquhart-simon-$(M)-randomorder.cnf $(SEED)
-	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-randomorder.cnf -b -p urquhart-simon-$(M)-randomorder.order \
-		-O urquhart-simon-$(M)-randomorder.lrat | tee -a urquhart-simon-$(M)-randomorder.data
-	$(CHECKER) urquhart-simon-$(M)-randomorder.cnf urquhart-simon-$(M)-randomorder.lrat | tee -a urquhart-simon-$(M)-randomorder.data
-	rm -f urquhart-simon-$(M)-randomorder.lrat
+urquhart-simon-$(M)-$(SEED)-randomorder.data:
+	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-$(SEED)-randomorder.cnf | tee urquhart-simon-$(M)-$(SEED)-randomorder.data
+	$(RANDOMIZER) urquhart-simon-$(M)-$(SEED)-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-$(SEED)-randomorder.cnf -b -p urquhart-simon-$(M)-$(SEED)-randomorder.order \
+		-O urquhart-simon-$(M)-$(SEED)-randomorder.lrat | tee -a urquhart-simon-$(M)-$(SEED)-randomorder.data
+	$(CHECKER) urquhart-simon-$(M)-$(SEED)-randomorder.cnf urquhart-simon-$(M)-$(SEED)-randomorder.lrat | tee -a urquhart-simon-$(M)-$(SEED)-randomorder.data
+	rm -f urquhart-simon-$(M)-$(SEED)-randomorder.lrat
 
-urquhart-simon-$(M)-linear.data:
-	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-linear.cnf | tee urquhart-simon-$(M)-linear.data
-	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-linear.cnf \
-		-O urquhart-simon-$(M)-linear.lrat | tee -a urquhart-simon-$(M)-linear.data
-	$(CHECKER) urquhart-simon-$(M)-linear.cnf urquhart-simon-$(M)-linear.lrat | tee -a urquhart-simon-$(M)-linear.data
-	rm -f urquhart-simon-$(M)-linear.lrat
+urquhart-simon-$(M)-$(SEED)-linear.data:
+	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-$(SEED)-linear.cnf | tee urquhart-simon-$(M)-$(SEED)-linear.data
+	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-$(SEED)-linear.cnf \
+		-O urquhart-simon-$(M)-$(SEED)-linear.lrat | tee -a urquhart-simon-$(M)-$(SEED)-linear.data
+	$(CHECKER) urquhart-simon-$(M)-$(SEED)-linear.cnf urquhart-simon-$(M)-$(SEED)-linear.lrat | tee -a urquhart-simon-$(M)-$(SEED)-linear.data
+	rm -f urquhart-simon-$(M)-$(SEED)-linear.lrat
 
 
 data:
-	$(GRABBER) urquhart-d*-randomorder.data > urquhart-simon-randomorder.csv
-	$(GRABBER) urquhart-d*-inputorder.data > urquhart-simon-inputorder.csv
-	$(GRABBER) urquhart-d*-linear.data > urquhart-simon-linear.csv
+	$(GRABBER) urquhart-simon-*-randomorder.data > urquhart-simon-randomorder.csv
+	$(GRABBER) urquhart-simon-*-linear.data > urquhart-simon-linear.csv
 clean:
 	rm -f *~
 
