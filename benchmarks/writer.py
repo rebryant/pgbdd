@@ -137,8 +137,11 @@ class OrderWriter(Writer):
 
     def finish(self):
         if self.expectedVariableCount != len(self.variableList):
-            raise WriterException("Incorrect number of variables in ordering %d != %d" % (
+#            raise WriterException("Incorrect number of variables in ordering %d != %d" % (
+#                len(self.variableList), self.expectedVariableCount))
+            print("Warning: Incorrect number of variables in ordering %d != %d" % (
                 len(self.variableList), self.expectedVariableCount))
+
         expected = range(1, self.expectedVariableCount+1)
         self.variableList.sort()
         for (e, a) in zip(expected, self.variableList):
