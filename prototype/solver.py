@@ -357,6 +357,10 @@ class Solver:
             clauseCount += 1
             self.prover.createClause(clause, [], "Input clause %d" % clauseCount, isInput = True)
 
+        if clauseCount == 0:
+            print("No clauses in CNF File")
+            raise SolverException("Empty CNF file")
+
         self.prover.inputDone()
 
         self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator,
@@ -430,6 +434,7 @@ class Solver:
         return self.termCount
 
     def runNoSchedule(self):
+        nid = 0
         while (len(self.activeIds) > 1):
             i, j = self.choosePair()
             nid = self.combineTerms(i, j)
@@ -437,14 +442,15 @@ class Solver:
                 return
         if self.verbLevel >= 0:
             print("SAT")
-        if self.verbLevel >= 4:
-            for s in self.manager.satisfyStrings(self.activeIds[nid].root):
+        if self.verbLevel >= 1:
+            for s in self.manager.satisfyStrings(self.activeIds[nid].root, limit = 20):
                 print("  " + s)
         
     def runSchedule(self, scheduler):
         idStack = []
         lineCount = 0
         for line in scheduler:
+            line = trim(line)
             lineCount += 1
             fields = line.split()
             if len(fields) == 0:

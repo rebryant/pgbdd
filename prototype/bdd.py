@@ -352,7 +352,7 @@ class Manager:
         return  highList + lowList
 
     # Generate strings representing all possible solutions
-    def satisfyStrings(self, node):
+    def satisfyStrings(self, node, limit = None):
         satList = self.satisfy(node)
         stringList = []
         for litList in satList:
@@ -361,6 +361,8 @@ class Manager:
                 positive = lit.high == self.leaf1
                 slist[lit.variable.level-1] = '1' if positive else '0'
             stringList.append(''.join(slist))
+            if limit is not None and len(stringList) >= limit:
+                break
         return stringList
 
     # Return node + id of clause justifying that nodeA & NodeB ==> result

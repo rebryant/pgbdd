@@ -316,12 +316,11 @@ class Forest:
 
         start = datetime.datetime.now()
         self.generate2()
-        fullTreeList = [tree for tree in self.treeList if self.isFull(tree)]
         delta = datetime.datetime.now() - start
         if verbLevel > 0:
             seconds = delta.seconds + 1e-6 * delta.microseconds
-            if self.verbLevel >= 1:
-                print("Resolution forest(%d): Generated %d trees, of which %d are full in %.2f seconds" % (leafCount, len(self.treeList), len(fullTreeList), seconds))
+            if self.verbLevel >= 2:
+                print("Resolution forest(%d): Generated %d trees in %.2f seconds" % (leafCount, len(self.treeList), seconds))
 
     def generate(self):
         for id in unitRange(self.leafCount):
@@ -407,6 +406,10 @@ class Forest:
                     print("Warning.  Tree leads to empty clause: %s" % str(t))
                 t.clause.invalidate()
         # Only get here if failed
+        print("Couldn't find proof of target %s" % str(target))
+        print("Antecedent Clauses:")
+        for i in range(self.leafCount):
+            print("   %s" % str(self.treeList[i].clause))
         print("Couldn't generate resolution proof")
         return None
 
@@ -544,8 +547,7 @@ class ProofManager:
         self.forest.loadClauses(clauseList)
         t = self.forest.search(targetClause)
         if t is None:
-            print("Couldn't find proof of target")
-            return -tautologyId
+            raise ResolveException("Couldn't generate resolution proof")
         proof =  t.getProof(ruleDict)
         self.addProof(variableList, ruleNames, proof)
         nproof = proof.remapLiterals(inverseMap)
