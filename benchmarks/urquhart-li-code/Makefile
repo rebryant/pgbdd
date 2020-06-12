@@ -1,5 +1,5 @@
 generate: main.cpp generate.cpp graph.cpp
-	g++ -o generate main.cpp generate.cpp graph.cpp -I
+	g++ -O2 -Wall -o generate main.cpp generate.cpp graph.cpp
 
 clean:
 	rm generate

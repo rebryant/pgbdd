@@ -5,6 +5,7 @@
 /************************ Modifications ***********************
  *
  *  2020-06-08.  Fixed printing problems with unsigned longs.  REB
+ *  2020-06-08.  Eliminated unused variable.  REB
  *
  *
  ************************ Modifications ***********************/
@@ -271,7 +272,7 @@ void CGraph::CountClauses() {
 
 
 void CGraph::Output(char *Output_File) {
-	unsigned long y,i=0;
+        unsigned long y;
 	long v1,v2,v3;
 	unsigned int State=0,ToDo=0;
 	unsigned long NbTo1;

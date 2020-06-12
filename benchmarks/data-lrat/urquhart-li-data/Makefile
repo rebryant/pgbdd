@@ -12,7 +12,7 @@ GRABBER = ../../grab_clauses.py
 
 io: urquhart-li-$(M)-inputorder.data
 ro: urquhart-li-$(M)-randomorder.data
-nq: urquhart-li-$(M)-noquant.data
+l: urquhart-li-$(M)-linear.data
 
 urquhart-li-$(M)-inputorder.data:
 	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)-inputorder.cnf | tee urquhart-li-$(M)-inputorder.data
@@ -29,18 +29,18 @@ urquhart-li-$(M)-randomorder.data:
 	$(CHECKER) urquhart-li-$(M)_randomorder.cnf urquhart-li-$(M)-randomorder.lrat | tee -a urquhart-li-$(M)-randomorder.data
 	rm -f urquhart-li-$(M)-randomorder.lrat
 
-urquhart-li-$(M)-noquant.data:
-	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)-noquant.cnf | tee urquhart-li-$(M)-noquant.data
-	$(SOLVER) -v $(VLEVEL) -i urquhart-li-$(M)-noquant.cnf \
-		-O urquhart-li-$(M)-noquant.lrat | tee -a urquhart-li-$(M)-noquant.data
-	$(CHECKER) urquhart-li-$(M)-noquant.cnf urquhart-li-$(M)-noquant.lrat | tee -a urquhart-li-$(M)-noquant.data
-	rm -f urquhart-li-$(M)-noquant.lrat
+urquhart-li-$(M)-linear.data:
+	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)-linear.cnf | tee urquhart-li-$(M)-linear.data
+	$(SOLVER) -v $(VLEVEL) -i urquhart-li-$(M)-linear.cnf \
+		-O urquhart-li-$(M)-linear.lrat | tee -a urquhart-li-$(M)-linear.data
+	$(CHECKER) urquhart-li-$(M)-linear.cnf urquhart-li-$(M)-linear.lrat | tee -a urquhart-li-$(M)-linear.data
+	rm -f urquhart-li-$(M)-linear.lrat
 
 
 data:
-	$(GRABBER) urquhart-d*-randomorder.data > urquhart-li-randomorder.csv
-	$(GRABBER) urquhart-d*-inputorder.data > urquhart-li-inputorder.csv
-	$(GRABBER) urquhart-d*-noquant.data > urquhart-li-noquant.csv
+	$(GRABBER) urquhart-li-*-randomorder.data > urquhart-li-randomorder.csv
+	$(GRABBER) urquhart-li-*-inputorder.data > urquhart-li-inputorder.csv
+	$(GRABBER) urquhart-li-*-linear.data > urquhart-li-linear.csv
 clean:
 	rm -f *~
 
