@@ -1,0 +1,37 @@
+Notes on Simon's Urquhart benchmark generator
+
+12 June 2020.  Randal E. Bryant
+
+noeud = node data structure.  Includes adjacency lists
+
+Has three lists:
+
+link
+
+linktoens
+
+numlink: Appears to be IDs of edge variables
+
+Global array noeuds = 2 X n nodes to represent bipartite graph
+
+In main, uses m to represent what is usually n
+
+Main:
+
+First phase.
+  For i in {0..m-1}:
+    Choose unused value ouDansPioche.
+      Based on random choice among remaining unused values
+    Mark as used in array apiocher
+    Create edge from i to ouDansPioche
+  (Effect: generate random permutation for first set of edges)
+
+Second phase.
+   Randomly choose remaining degree for vertex
+   Find random assignment of neighbors to reach this degree,
+     without any duplications and without going beyond
+     maximum degree of other vertices
+
+Third phase.
+   Add side edges
+
