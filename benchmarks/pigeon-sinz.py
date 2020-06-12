@@ -57,7 +57,7 @@ class Position:
         return clist
 
 class Configuration:
-    # Variable ids, indexed by (row, col, ('M'|'Z'|'O'))
+    # Variable ids, indexed by (row, col, ('M'|'S'))
     idDict = {}
     # Positions indexed by (row, col)
     positions = {}
