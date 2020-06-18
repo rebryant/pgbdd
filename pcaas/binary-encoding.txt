@@ -1,0 +1,46 @@
+The first step of the binary encoding is mapping literals in the
+DIMACS format to unsigned integers. The following mapping function is
+used: map(l) := (l > 0)? 2*l : -2*l + 1. The mapping for some DIMACS
+literals are shown below.
+
+     DIMACS literals   unsigned integers
+						  
+		 -63     127
+		 129     258   
+	       -8191   16383
+	       -8193   16387
+	
+
+
+Variable-Byte Encoding of Unsigned Integers
+
+Assume that 'w0, ..., wi' are 7-bit words, 'w1' to 'wi' all non zero
+and the unsigned number 'x' can be represented as
+
+    x = w0 + 2^7*w1 + 2^14*w2 + 2^(7*i)*wi
+
+
+The variable-byte encoding of DRAT (also used in AIGER) is the
+sequence of i bytes b0, ... bi:
+
+    1w0, 1w1, 1w2, ..., 0wi 
+
+
+The MSB of a byte in this sequence signals whether this byte is the
+last byte in the sequence, or whether there are still more bytes to
+follow. Here are some examples:
+
+    unsigned integer   byte sequence of encoding (in hexadecimal)
+	 
+	           x               b0 b1 b2 b3 b4
+						  
+		   0   		   00
+		   1               01
+		2^7-1    =   127   7f
+		2^7      =   128   80 01
+		2^8  + 2 =   258   82 02
+		2^14 - 1 = 16383   ff 7f
+		2^14 + 3 = 16387   83 80 01
+		2^28 - 1           ff ff ff 7f
+		2^28 + 7           87 80 80 80 01
+	
