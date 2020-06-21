@@ -1,3 +1,5 @@
+1. Encoding int into binary form
+
 The first step of the binary encoding is mapping literals in the
 DIMACS format to unsigned integers. The following mapping function is
 used: map(l) := (l > 0)? 2*l : -2*l + 1. The mapping for some DIMACS
@@ -44,3 +46,18 @@ follow. Here are some examples:
 		2^28 - 1           ff ff ff 7f
 		2^28 + 7           87 80 80 80 01
 	
+
+2. Encoding CNF into binary form
+
+The usual header "p cnf vars clauses" is encoded as the binary
+encodings of the integers 'p', vars, clauses 0.
+
+Clauses are encoded in the standard form
+
+3. Encoding proof into binary form
+
+Lines of the form S l1 ... lm 0 a1 ... an 0
+are encoded as the binary encodings of S 'a' l1 ... lm 0 a1 ... an 0
+
+Lines of the form S d c1 ... cm 0
+are encoded as the binary encodings of S 'd' c1 ... cm 0
