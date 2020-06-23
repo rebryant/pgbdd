@@ -15,7 +15,10 @@ translator: translator.c stream.o
 lrat-check: lrat-main.c stream.o lrat.o
 	$(CC) $(CFLAGS) lrat-main.c stream.o lrat.o -o lrat-check
 
+lrat-server: lrat-server.c stream.o lrat.o
+	$(CC) $(CFLAGS) lrat-server.c stream.o lrat.o -o lrat-server
+
 clean:
-	rm -f lrat-check translator *.o *~
+	rm -f lrat-check lrat-server translator *.o *~
 
 

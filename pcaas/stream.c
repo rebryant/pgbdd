@@ -118,11 +118,18 @@ int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn, uint8_t *sep) {
 	usrbuf[nread++] = byte;
 	rc = rio_readnb(rp, &byte, 1);
     }
+    /*
+      When have combined CNF and proof, using single 0 byte to
+      indicate completion of one and start of other.  Want to skip
+      this byte.
+    */
+#if 0
     /* Unget the terminating character so that it will be read again */
     if (byte == 0) {
 	rp->rio_cnt--;
 	rp->rio_bufptr--;
     }
+#endif
     if (sep)
 	*sep = byte;
     /* Terminate string */
