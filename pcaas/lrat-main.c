@@ -30,7 +30,7 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *rp_out);
 
 
 void usage(char *name) {
-  printf("Usage: %s FILE1.cnf FILE2.lrat\n", name);
+  printf("Usage: %s FILE1.cnf FILE2.lrat[b]\n", name);
   exit(0);
 }
 
