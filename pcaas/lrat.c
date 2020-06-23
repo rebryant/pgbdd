@@ -284,6 +284,11 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
 	 added_clauses, deleted_clauses, max_live_clauses);
   rio_nprintf(rp_out, BLEN, "c verification time = %.2f secs\n", secs);
   rio_flush(rp_out);
+  int_list_free(litList);
+  free(clsList);
+  free(table);
+  free(mask);
+  free(intro);
   return ok;
 }
 
