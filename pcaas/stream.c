@@ -103,7 +103,8 @@ ssize_t rio_readnb(rio_t *rp, uint8_t *usrbuf, size_t n)
 
 /* Find next space-delimited token.  Return number of characters in result */
 /* Return value -1 indicates error, 0 indicates EOF */
-int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn) {
+/* *sep set to terminating separator */
+int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn, uint8_t *sep) {
     uint8_t byte;
     ssize_t rc = 0;
     int nread = 0;
@@ -117,12 +118,13 @@ int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn) {
 	usrbuf[nread++] = byte;
 	rc = rio_readnb(rp, &byte, 1);
     }
+    /* Unget the terminating character so that it will be read again */
     if (byte == 0) {
-	/* Unget the terminating character so that it will be read again */
 	rp->rio_cnt--;
 	rp->rio_bufptr--;
     }
-
+    if (sep)
+	*sep = byte;
     /* Terminate string */
     usrbuf[nread] = 0;
     return nread;
@@ -406,7 +408,7 @@ ssize_t rio_read_int_list_text(rio_t *rp, int_list_t *ilist) {
     int rc = 0;
     int value;
     do {
-	rc = rio_read_token(rp, (uint8_t *) buf, 10);
+	rc = rio_read_token(rp, (uint8_t *) buf, 10, NULL);
 	if (rc <= 0)
 	    break;
 	if (sscanf(buf, "%d", &value) != 1)
@@ -458,36 +460,39 @@ bool get_cnf_header(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) 
     int rc = 0;
     int val;
     size_t i;
+    uint8_t sep;
     /* Skip initial comments */
     while (true) {
-	rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	rc = rio_read_token(rp, (uint8_t *) buf, 12, &sep);
 	if (rc <= 0) {
 	    snprintf(err_buf, maxlen, "Line %zd.  Unexpected end of file", rp->line_cnt);
 	    return false;
 	}
 	if (buf[0] == 'c') {
-	    rc = rio_skip_line(rp);
-	    if (rc < 0) {
-		snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
-		return false;
+	    if (sep != '\n') {
+		rc = rio_skip_line(rp);
+		if (rc < 0) {
+		    snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
+		    return false;
+		}
 	    }
 	} else
 	    break;
     }
     int_list_reset(ilist);
     if (buf[0] != 'p') {
-	snprintf(err_buf, maxlen, "Line %zd.  Unknown line type '%c'", rp->line_cnt, buf[0]);
+	snprintf(err_buf, maxlen, "Line %zd.  Unknown line type '%s'", rp->line_cnt, buf);
 	return false;
     }
     /* Skip 'cnf' */
-    rc = rio_read_token(rp, (uint8_t *) buf, 12);
+    rc = rio_read_token(rp, (uint8_t *) buf, 12, NULL);
     if (rc <= 0) {
 	snprintf(err_buf, maxlen, "Line %zd.  Unexpected end of file", rp->line_cnt);
 	return false;
     }
     /* Get input parameters */
     for (i = 0; i < 2; i++) {
-	rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	rc = rio_read_token(rp, (uint8_t *) buf, 12, NULL);
 	if (rc <= 0) {
 	    snprintf(err_buf, maxlen, "Line %zd.  Invalid header line", rp->line_cnt);
 	    return false;
@@ -511,10 +516,11 @@ bool get_cnf_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) 
     char buf[12];
     int rc = 0;
     int val = 0;
+    uint8_t sep;
     int_list_reset(ilist);
     /* Skip comments */
     while (true) {
-	rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	rc = rio_read_token(rp, (uint8_t *) buf, 12, &sep);
 	if (rc == 0)
 	    return true;
 	if (rc < 0) {
@@ -522,12 +528,14 @@ bool get_cnf_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) 
 	    return false;
 	}
 	if (buf[0] == 'c') {
-	    rc = rio_skip_line(rp);
-	    if (rc == 0)
-		return true;
-	    if (rc < 0) {
-		snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
-		return false;
+	    if ((char) sep != '\n') {
+		rc = rio_skip_line(rp);
+		if (rc == 0)
+		    return true;
+		if (rc < 0) {
+		    snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
+		    return false;
+		}
 	    }
 	} else
 	    break;
@@ -565,11 +573,12 @@ static bool get_text_proof_clause(rio_t *rp, int_list_t *ilist, char *err_buf, s
     size_t i;
     /* Default is to add */
     int nzero = 2;
+    uint8_t sep = 0;
     int_list_reset(ilist);
     for (i = 0; i < nzero; i++) {
 	/* Skip comments */
 	while (true) {
-	    rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	    rc = rio_read_token(rp, (uint8_t *) buf, 12, &sep);
 	    if (rc == 0)
 		return true;
 	    if (rc < 0) {
@@ -577,12 +586,14 @@ static bool get_text_proof_clause(rio_t *rp, int_list_t *ilist, char *err_buf, s
 		return false;
 	    }
 	    if (buf[0] == 'c') {
-		rc = rio_skip_line(rp);
-		if (rc == 0)
-		    return true;
-		if (rc < 0) {
-		    snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
-		    return false;
+		if ((char) sep != '\n') {
+		    rc = rio_skip_line(rp);
+		    if (rc == 0)
+			return true;
+		    if (rc < 0) {
+			snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
+			return false;
+		    }
 		}
 	    } else
 		break;
@@ -593,7 +604,7 @@ static bool get_text_proof_clause(rio_t *rp, int_list_t *ilist, char *err_buf, s
 	}
 	int_list_append(ilist, val);
 	if (i == 0) {
-	    rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	    rc = rio_read_token(rp, (uint8_t *) buf, 12, NULL);
 	    if (rc <= 0) {
 		snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
 		return false;

@@ -204,8 +204,9 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   litList = int_list_new(0);
   
   if (!get_cnf_header(rp_cnf, litList, err_buf, BLEN)) {
-      rio_nprintf(rp_out, BLEN, "c Failed to read CNF header\n");
+      rio_nprintf(rp_out, BLEN, "c Failed to read CNF header: %s\n", err_buf);
       rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
+      rio_flush(rp_out);
       return false;
   }
   int nVar = litList->contents[0];
@@ -227,8 +228,9 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   int index = 1;
   while (1) {
       if (!get_cnf_clause(rp_cnf, litList, err_buf, BLEN)) {
-	  fprintf(stderr, "c Failed reading clause #%d\n", index);
+	  fprintf(stderr, "c Failed reading clause #%d: %s\n", index, err_buf);
 	  rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
+	  rio_flush(rp_out);
 	  return false;
       }
       if (litList->count == 0)
@@ -244,6 +246,7 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
       if (!get_proof_clause(rp_proof, litList, is_binary, err_buf, BLEN)) {
 	  fprintf(stderr, "c Proof line #%d.  Couldn't read: %s\n", index, err_buf);
 	  rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
+	  rio_flush(rp_out);
 	  return false;
       }
     if (getType (litList->contents) == (int) 'd') {

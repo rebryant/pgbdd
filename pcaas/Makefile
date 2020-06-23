@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS = -O2 -g
+CFLAGS = -O0 -g
 
 all: lrat-check translator
 

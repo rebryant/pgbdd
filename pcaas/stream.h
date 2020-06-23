@@ -82,7 +82,8 @@ ssize_t	rio_readnb(rio_t *rp, uint8_t *usrbuf, size_t n);
 
 /* Find next space-delimited token.  Return number of characters in result */
 /* Return value -1 indicates error, 0 indicates EOF */
-int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn);
+/* If sep non-NULL, then *sep set to terminating separator */
+int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn, uint8_t *sep);
 
 /* Read through input until encounter next newline character */
 int rio_skip_line(rio_t *rp);
