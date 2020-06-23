@@ -28,7 +28,7 @@ urquhart-li-$(M)-randomorder.data:
 	$(SOLVER) -v $(VLEVEL) -i urquhart-li-$(M)_randomorder.cnf -b -p urquhart-li-$(M)_randomorder.order \
 		-o urquhart-li-$(M)-randomorder.$(EXTENSION) | tee -a urquhart-li-$(M)-randomorder.data
 	$(CHECKER) urquhart-li-$(M)_randomorder.cnf urquhart-li-$(M)-randomorder.$(EXTENSION) | tee -a urquhart-li-$(M)-randomorder.data
-#	rm -f urquhart-li-$(M)-randomorder.$(EXTENSION)
+	rm -f urquhart-li-$(M)-randomorder.$(EXTENSION)
 
 urquhart-li-$(M)-linear.data:
 	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)-linear.cnf | tee urquhart-li-$(M)-linear.data
