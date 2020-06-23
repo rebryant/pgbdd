@@ -3,21 +3,22 @@
 
 import sys
 import getopt
+import datetime
+
 import bdd
 import resolver
-import datetime
+import stream
 
 # Increase maximum recursion depth
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o TCHK] [-O LRAT] [-p PERMUTE] [-s SCHEDULE]" % name)
+    print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-p PERMUTE] [-s SCHEDULE]" % name)
     print("  -h          Print this message")
     print("  -b          Process terms via bucket elimination")
     print("  -v LEVEL    Set verbosity level")
     print("  -i CNF      Name of CNF input file")
-    print("  -o TCHK     Name of proof output file (tracecheck format)")
-    print("  -O LRAT     Name of proof output file (LRAT format)")    
+    print("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)")
     print("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level")
     print("  -s SCHEDULE Name of action schedule file")
 
@@ -227,8 +228,9 @@ class Prover:
     opened = False
     verbLevel = 1
     doLrat = False
+    doBinary = False
 
-    def __init__(self, fname = None, verbLevel = 1, doLrat = False):
+    def __init__(self, fname = None, verbLevel = 1, doLrat = False, doBinary = False):
         self.verbLevel = verbLevel
         if fname is None:
             self.opened = False
@@ -236,10 +238,11 @@ class Prover:
         else:
             self.opened = True
             try:
-                self.file = open(fname, 'w')
+                self.file = open(fname, 'wb' if doBinary else 'w')
             except Exception:
                 raise ProverException("Could not open file '%s'" % fname)
         self.doLrat = doLrat
+        self.doBinary = doBinary
         self.clauseCount = 0
         self.proofCount = 0
 
@@ -250,7 +253,7 @@ class Prover:
         return self.opened
 
     def comment(self, comment):
-        if self.verbLevel > 1 and comment is not None:
+        if self.verbLevel > 1 and comment is not None and not self.doBinary:
             self.file.write("c " + comment + '\n')
 
     def createClause(self, result, antecedent, comment = None, isInput = False):
@@ -264,21 +267,37 @@ class Prover:
         antecedent = list(antecedent)
         if not self.doLrat:
             antecedent.sort()
-        ilist = [self.clauseCount] + result + [0] + antecedent + [0]
-        slist = [str(i) for i in ilist]
-        istring = " ".join(slist)
-        if isInput and self.doLrat:
-            istring = "c " + istring
-        self.file.write(istring + '\n')
+        middle = [ord('a')] if self.doBinary else []
+        rest = result + [0] + antecedent + [0]
+        ilist = [self.clauseCount] + middle + rest
+        if self.doBinary:
+            if isInput and self.doLrat:
+                pass
+            else:
+                bytes = stream.CompressArray(ilist).bytes
+                self.file.write(bytes)
+        else:
+            slist = [str(i) for i in ilist]
+            istring = " ".join(slist)
+            if isInput and self.doLrat:
+                self.comment(istring)
+            else:
+                self.file.write(istring + '\n')
         return self.clauseCount
 
     def deleteClauses(self, clauseList):
         if not self.doLrat:
             return
-        prefix = "%d d " % self.clauseCount
-        slist = [str(c) for c in clauseList]
-        cstring = " ".join(slist)
-        self.file.write(prefix + cstring + ' 0\n');
+        middle = [ord('d')] if self.doBinary else ['d']
+        rest = clauseList + [0]
+        ilist = [self.clauseCount] + middle + rest
+        if self.doBinary:
+            bytes = stream.CompressArray(ilist).bytes
+            self.file.write(bytes)
+        else:
+            slist = [str(i) for i in ilist]
+            istring = " ".join(slist)
+            self.file.write(istring + '\n')
 
     # Return index of justifying clause
     # + list of clauses generated
@@ -603,12 +622,13 @@ def run(name, args):
     cnfName = None
     proofName = None
     doLrat = False
+    doBinary = False
     permuter = None
     doBucket = False
     scheduler = None
     verbLevel = 1
 
-    optlist, args = getopt.getopt(args, "hbv:i:o:O:p:s:")
+    optlist, args = getopt.getopt(args, "hbv:i:o:p:s:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -621,9 +641,10 @@ def run(name, args):
             cnfName = val
         elif opt == '-o':
             proofName = val
-        elif opt == '-O':
-            proofName = val
-            doLrat = True
+            extension = proofName.split('.')[-1]
+            if extension == 'lrat' or extension == 'lratb':
+                doLrat = True
+                doBinary = extension[-1] == 'b'
         elif opt == '-p':
             permuter = readPermutation(val)
             if permuter is None:
@@ -642,7 +663,7 @@ def run(name, args):
         return
 
     try:
-        prover = Prover(proofName, verbLevel = verbLevel, doLrat = doLrat)
+        prover = Prover(proofName, verbLevel = verbLevel, doLrat = doLrat, doBinary = doBinary)
     except Exception as ex:
         print("Couldn't create prover (%s)" % str(ex))
         return
