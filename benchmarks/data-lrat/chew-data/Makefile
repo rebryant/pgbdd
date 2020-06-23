@@ -7,9 +7,10 @@ FULLGENERATOR = ../../chew-code/parity
 GENERATOR = ../../chew-code/parity-cnf
 RANDOMIZER = ../../randomizer.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
-CHECKER = ../../../lrat/lrat-check
+CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
 DGRABBER = ./grab_drat.py
+EXTENSION = lratb
 
 io: chew-$(N)-inputorder.data
 ro: chew-$(N)-randomorder.data
@@ -25,26 +26,26 @@ chew-$(N)-inputorder.data:
 	mv formula.cnf chew-$(N)-inputorder.cnf
 	rm -f formula.drat
 	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-inputorder.cnf -b \
-		-O chew-$(N)-inputorder.lrat | tee -a chew-$(N)-inputorder.data
-	$(CHECKER) chew-$(N)-inputorder.cnf chew-$(N)-inputorder.lrat | tee -a chew-$(N)-inputorder.data
-	rm -f chew-$(N)-inputorder.lrat
+		-o chew-$(N)-inputorder.$(EXTENSION) | tee -a chew-$(N)-inputorder.data
+	$(CHECKER) chew-$(N)-inputorder.cnf chew-$(N)-inputorder.$(EXTENSION) | tee -a chew-$(N)-inputorder.data
+	rm -f chew-$(N)-inputorder.$(EXTENSION)
 
 chew-$(N)-randomorder.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-randomorder.data
 	mv formula.cnf chew-$(N)-randomorder.cnf
 	$(RANDOMIZER) chew-$(N)-randomorder.cnf $(SEED)
 	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-randomorder.cnf -b -p chew-$(N)-randomorder.order \
-		-O chew-$(N)-randomorder.lrat | tee -a chew-$(N)-randomorder.data
-	$(CHECKER) chew-$(N)-randomorder.cnf chew-$(N)-randomorder.lrat | tee -a chew-$(N)-randomorder.data
-	rm -f chew-$(N)-randomorder.lrat
+		-o chew-$(N)-randomorder.$(EXTENSION) | tee -a chew-$(N)-randomorder.data
+	$(CHECKER) chew-$(N)-randomorder.cnf chew-$(N)-randomorder.$(EXTENSION) | tee -a chew-$(N)-randomorder.data
+	rm -f chew-$(N)-randomorder.$(EXTENSION)
 
 chew-$(N)-noquant.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-noquant.data
 	mv formula.cnf chew-$(N)-noquant.cnf
 	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-noquant.cnf \
-		-O chew-$(N)-noquant.lrat | tee -a chew-$(N)-noquant.data
-	$(CHECKER) chew-$(N)-noquant.cnf chew-$(N)-noquant.lrat | tee -a chew-$(N)-noquant.data
-	rm -f chew-$(N)-noquant.lrat
+		-o chew-$(N)-noquant.$(EXTENSION) | tee -a chew-$(N)-noquant.data
+	$(CHECKER) chew-$(N)-noquant.cnf chew-$(N)-noquant.$(EXTENSION) | tee -a chew-$(N)-noquant.data
+	rm -f chew-$(N)-noquant.$(EXTENSION)
 
 
 data:
@@ -56,4 +57,4 @@ clean:
 	rm -f *~
 
 superclean: clean
-	rm -f *.cnf *.lrat *.data *.order *.schedule
+	rm -f *.cnf *.lrat *.lratb *.data *.order *.schedule
