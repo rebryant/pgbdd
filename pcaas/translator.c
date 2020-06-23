@@ -1,3 +1,23 @@
+/************************************************************************************[lrat-check.c]
+Copyright (c) 2017-2020 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+Last edit: June 1, 2020
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**************************************************************************************************/
+
 /* Test of stream code */
 /* Translate between different versions of proofs and CNF files.
    All convert to integer list format, and so text-to-text and binary-to-binary
@@ -25,7 +45,7 @@ static void usage(char *name) {
     exit(0);
 }
 
-bool cnf_input = true;
+bool cnf_input = false;
 bool text_input = true;
 bool text_output = true;
 
@@ -35,6 +55,9 @@ int outfd = STDOUT_FILENO;
 /* Global data structures */
 int_list_t *ilist = NULL;
 rio_t rio_in, rio_out;
+
+#define BLEN 1024
+char err_buf[BLEN];
 
 /* Statistics gathering */
 size_t comment_count = 0;
@@ -53,134 +76,61 @@ bool process_int_list(bool first_time) {
     if (ilist->count == 0)
 	/* Empty line */
 	return true;
-    if (first_time && cnf_input && text_output) {
-	wc = rio_writenb(&rio_out, (uint8_t *) "p cnf ", 6);
-	if (wc <= 0)
+    if (cnf_input) {
+	if (first_time) {
+	    wc = rio_writenb(&rio_out, (uint8_t *) "p cnf ", 6);
+	    if (wc <= 0)
 	    return false;
-	/* Take away final 0 */
-	ilist->count--;
-	wc = rio_write_int_list_text(&rio_out, ilist, 1);
-    } else if (cnf_input || !text_output ) {
-	if (text_output) {
-	    wc = rio_write_int_list_text(&rio_out, ilist, 0);
 	}
-	else
-	    wc = rio_write_int_list_binary(&rio_out, ilist, 0);
+	wc = rio_write_int_list_text(&rio_out, ilist, 0);
     } else {
-	/* Text representation of proof.  Must adjust line type */
-	int cn, c;
-	char buf[16];
-	int len = 0;
-	if (ilist->count < 3) {
-	    fprintf(stderr, "Can't have proof with only %zd tokens\n", ilist->count);
-	    return false;
-	}
-	cn = ilist->contents[0];
-	c = ilist->contents[1];
-	if (c == 'a') {
-	    len = sprintf(buf, "%d ",cn);
-	} else {
-	    len = sprintf(buf, "%d %c ", cn, c);
-	}
-
-	wc = rio_writenb(&rio_out, (uint8_t *) buf, len);
-	if (wc < 0)
-	    return false;
-	wc += rio_write_int_list_text(&rio_out, ilist, 2);
+	if (text_output) {
+	    /* Text representation of proof.  Must adjust line type */
+	    int cn, c;
+	    char buf[16];
+	    int len = 0;
+	    if (ilist->count < 3) {
+		fprintf(stderr, "Can't have proof with only %zd tokens\n", ilist->count);
+		return false;
+	    }
+	    cn = ilist->contents[0];
+	    c = ilist->contents[1];
+	    if (c == 'a') {
+		len = sprintf(buf, "%d ",cn);
+	    } else {
+		len = sprintf(buf, "%d %c ", cn, c);
+	    }
+	    wc = rio_writenb(&rio_out, (uint8_t *) buf, len);
+	    if (wc < 0)
+		return false;
+	    wc += rio_write_int_list_text(&rio_out, ilist, 2);
+	} else
+	    wc = rio_write_int_list_binary(&rio_out, ilist, 0);
     }
     return wc > 1;
 }
 
-bool run_cnf_text() {
+bool run_cnf() {
     char buf[12];
     int rc = 0;
     int val;
     size_t i;
-    /* Skip initial comments */
-    while (true) {
-	rc = rio_read_token(&rio_in, (uint8_t *) buf, 12);
-	if (rc <= 0) {
-	    fprintf(stderr, "Line %zd.  Unexpected end of file\n", rio_in.line_cnt);
-	    return false;
-	}
-	if (buf[0] == 'c') {
-	    comment_count++;
-	    rc = rio_skip_line(&rio_in);
-	    if (rc < 0) {
-		fprintf(stderr, "Line %zd.  Error reading comment\n", rio_in.line_cnt);
-		return false;
-	    }
-	} else
-	    break;
-    }
-    int_list_reset(ilist);
-
-    if (buf[0] != 'p') {
-	fprintf(stderr, "Line %zd.  Unknown line type '%c'\n", rio_in.line_cnt, buf[0]);
+    if (!get_cnf_header(&rio_in, ilist, err_buf, BLEN)) {
+	fprintf(stderr, "%s\n", err_buf);
 	return false;
     }
-    int_list_append(ilist, buf[0]);
-    /* Skip 'cnf' */
-    rc = rio_read_token(&rio_in, (uint8_t *) buf, 12);
-    if (rc <= 0) {
-	fprintf(stderr, "Line %zd.  Unexpected end of file\n", rio_in.line_cnt);
-	return false;
-    }
-    /* Get input parameters */
-    for (i = 0; i < 2; i++) {
-	rc = rio_read_token(&rio_in, (uint8_t *) buf, 12);
-	if (rc <= 0) {
-	    fprintf(stderr, "Line %zd.  Invalid header line\n", rio_in.line_cnt);
-	    return false;
-	}
-	if (sscanf(buf, "%d", &val) != 1) {
-	    fprintf(stderr, "Line %zd.  Invalid header line\n", rio_in.line_cnt);
-	    return false;
-	}
-	int_list_append(ilist, val);
-    }
-    /* Put 0 at end */
-    int_list_append(ilist, 0);
     if (!process_int_list(true)) {
-	fprintf(stderr, "Input line %zd.  Output failed.  List length = %zd\n", rio_in.line_cnt, ilist->count);
+	fprintf(stderr, "Input line %zd.  Output failed.\n", rio_in.line_cnt);
 	return false;
     }
     /* Get clauses */
     while (true) {
-	/* Skip comments */
-	while (true) {
-	    rc = rio_read_token(&rio_in, (uint8_t *) buf, 12);
-	    if (rc == 0)
-		return true;
-	    if (rc < 0) {
-		fprintf(stderr, "Line %zd.  Error reading file\n", rio_in.line_cnt);
-		return false;
-	    }
-	    if (buf[0] == 'c') {
-		comment_count++;
-		rc = rio_skip_line(&rio_in);
-		if (rc == 0)
-		    return true;
-		if (rc < 0) {
-		    fprintf(stderr, "Line %zd.  Error reading comment\n", rio_in.line_cnt);
-		    return false;
-		}
-	    } else
-		break;
-	}
-	int_list_reset(ilist);
-	if (sscanf(buf, "%d", &val) != 1) {
-	    fprintf(stderr, "Line %zd.  Invalid initial integer\n", rio_in.line_cnt);
+	if (!get_cnf_clause(&rio_in, ilist, err_buf, BLEN)) {
+	    fprintf(stderr, "%s\n", err_buf);
 	    return false;
 	}
-	int_list_append(ilist, val);
-	if (val != 0) {
-	    rc = rio_read_int_list_text(&rio_in, ilist);
-	    if (rc < 0) {
-		fprintf(stderr, "Line %zd.  Error reading file\n", rio_in.line_cnt);
-		return false;
-	    }
-	}
+	if (ilist->count == 0)
+	    break;
 	if (!process_int_list(false)) {
 	    fprintf(stderr, "Input line %zd.  Output failed\n", rio_in.line_cnt);
 	    return false;
@@ -190,138 +140,27 @@ bool run_cnf_text() {
     return true;
 }
 
-bool run_cnf_binary() {
-    bool first_time = true;
-    int rc;
-    int cn = 0;
-    do {
-	int_list_reset(ilist);
-	rc = rio_read_int_list_binary(&rio_in, ilist);
-	if (rc < 0) {
-	    fprintf(stderr, "Byte %zd.  Error reading file\n", rio_in.byte_cnt);
-	    return false;
-	}
-	
-	if (!process_int_list(first_time)) {
-	    cn = ilist->count = 0 ? 0 : ilist->contents[0];
-	    fprintf(stderr, "Failed on clause %d\n", cn);
-	    return false;
-	}
-	if (!first_time)
-	    clause_count++;
-	first_time = false;
-    } while (ilist->count > 1);
-    return true;
-}
-
-bool run_proof_text() {
-    char buf[12];
-    int rc = 0;
-    int val;
-    size_t i;
-    bool get_antecedents = false;
+bool run_proof(bool is_binary) {
     /* Get clauses */
     while (true) {
-	/* Skip comments */
-	while (true) {
-	    rc = rio_read_token(&rio_in, (uint8_t *) buf, 12);
-	    if (rc == 0)
-		return true;
-	    if (rc < 0) {
-		fprintf(stderr, "Line %zd.  Error reading file\n", rio_in.line_cnt);
-		return false;
-	    }
-	    if (buf[0] == 'c') {
-		comment_count++;
-		rc = rio_skip_line(&rio_in);
-		if (rc == 0)
-		    return true;
-		if (rc < 0) {
-		    fprintf(stderr, "Line %zd.  Error reading comment\n", rio_in.line_cnt);
-		    return false;
-		}
-	    } else
-		break;
-	}
-	if (!get_antecedents)
-	    int_list_reset(ilist);
-	if (sscanf(buf, "%d", &val) != 1) {
-	    fprintf(stderr, "Line %zd.  Invalid initial integer\n", rio_in.line_cnt);
+	if (!get_proof_clause(&rio_in, ilist, is_binary, err_buf, BLEN)) {
+	    fprintf(stderr, "%s\n", err_buf);
 	    return false;
 	}
-	int_list_append(ilist, val);
-	if (get_antecedents) 
-	    get_antecedents = false;
-	else {
-	    rc = rio_read_token(&rio_in, (uint8_t *) buf, 12);
-	    if (rc <= 0) {
-		fprintf(stderr, "Line %zd.  Error reading file\n", rio_in.line_cnt);
-		return false;
-	    }
-	    if (buf[0] == 'd') {
-		delete_count++;
-		int_list_append(ilist, 'd');
-		get_antecedents = false;
-	    } else {
-		int_list_append(ilist, 'a');
-		get_antecedents = true;
-		clause_count++;
-		if (sscanf(buf, "%d", &val) != 1) {
-		    fprintf(stderr, "Line %zd.  Invalid integer\n", rio_in.line_cnt);
-		    return false;
-		}
-		int_list_append(ilist, val);
-	    }
-	}
-	if (val != 0) {
-	    rc = rio_read_int_list_text(&rio_in, ilist);
-	    if (rc < 0) {
-		fprintf(stderr, "Line %zd.  Error reading file\n", rio_in.line_cnt);
-		return false;
-	    }
-	}
-	if (!get_antecedents) {
-	    if (!process_int_list(false)) {
-		fprintf(stderr, "Input line %zd.  Output failed\n", rio_in.line_cnt);
-		return false;
-	    }
-	}
-    }
-    return true;
-}
-
-bool run_proof_binary() {
-    int rc;
-    int last_cn = 0;
-    int cn;
-    while (true) {
-	int_list_reset(ilist);
-	rc = rio_read_int_list_binary(&rio_in, ilist);
-	if (rc == 0)
+	if (ilist->count == 0)
 	    return true;
-	if (rc < 0) {
-	    fprintf(stderr, "Byte %zd.  Error reading clause\n", rio_in.byte_cnt);
-	    return false;
-	}
-	if (ilist->count >= 2 && ilist->contents[1] == 'a') {
-	    clause_count++;
-	    /* Get antecedents */
-	    rc = rio_read_int_list_binary(&rio_in, ilist);
-	    if (rc < 0) {
-		fprintf(stderr, "Byte %zd.  Error reading antecedents\n", rio_in.byte_cnt);
-		return false;
-	    }
-	} else {
-	    delete_count++;
-	}
-	cn = ilist->count == 0 ? -1 : ilist->contents[0];
 	if (!process_int_list(false)) {
-	    fprintf(stderr, "Failed on clause %d (after clause %d)\n", cn, last_cn);
+	    fprintf(stderr, "Input line %zd.  Output failed\n", rio_in.line_cnt);
 	    return false;
 	}
-	last_cn = cn;
+	if (ilist->contents[1] == 'a')
+	    clause_count++;
+	else
+	    delete_count++;
+			  
     }
-    return true;
+    fprintf(stderr, "Proof ended prematurely");
+    return false;
 }
 
 
@@ -394,16 +233,15 @@ int main(int argc, char *argv[]) {
     }
     init();
     bool ok;
-    if (text_input) {
-	if (cnf_input)
-	    ok = run_cnf_text();
-	else
-	    ok = run_proof_text();
+    if (cnf_input) {
+	if (!text_input || !text_output) {
+	    fprintf(stderr, "CNF only has text form\n");
+	    exit(1);
+	}
+	ok = run_cnf();
+	
     } else {
-	if (cnf_input)
-	    ok = run_cnf_binary();
-	else
-	    ok = run_proof_binary();
+	ok = run_proof(!text_input);
     }
     if (have_infile) {
 	close(infd);
@@ -414,10 +252,6 @@ int main(int argc, char *argv[]) {
     }
 
     fprintf(stderr, "Result:\n");
-    if (text_input) {
-	fprintf(stderr, "  Lines processed: %zd\n", rio_in.line_cnt);
-	fprintf(stderr, "  Comment lines: %zd\n", comment_count);
-    }
     fprintf(stderr, "  Input bytes: %zd\n", rio_in.byte_cnt);
     fprintf(stderr, "  Output bytes: %zd\n", rio_out.byte_cnt);    
     fprintf(stderr, "  Output clauses: %zd\n", clause_count);

@@ -1,3 +1,23 @@
+/************************************************************************************[lrat-check.c]
+Copyright (c) 2017-2020 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+Last edit: June 1, 2020
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**************************************************************************************************/
+
 #ifndef __STREAM_H__
 #define __STREAM_H__
 
@@ -6,6 +26,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -74,6 +95,11 @@ int rio_skip_line(rio_t *rp);
 ssize_t rio_writenb(rio_t *rp, uint8_t *usrbuf, size_t n);
 
 /*
+ * Like snprintf, except that writes to rio
+ */
+int rio_nprintf(rio_t *rp, size_t maxlen, const char *format, ...);
+
+/*
  * Write current contents of RIO buffer
  */
 ssize_t rio_flush(rio_t *rp);
@@ -127,6 +153,37 @@ ssize_t rio_read_int_list_text(rio_t *rp, int_list_t *ilist);
  */
 ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist);
 
+
+/****** Reading CNF and proofs ************************************************/
+
+/* 
+ * Read representation of header in CNF file.
+ * Result stored in integer list with count 2 (number of variables, number of clauses)
+ * Return value = true if successful
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+bool get_cnf_header(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen);
+
+/* 
+ * Read single clause in CNF file
+ * Result stored in integer list
+ * Return value = true if successful
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+bool get_cnf_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen);
+
+/* 
+ * Read single clause in text or binary representation of a proof
+ * Result stored in integer list
+ * First element is step number.
+ * Second element is either 'a' (add clause) or 'd' (delete clauses)
+ * For add, rest of list contains [literals 0 antecedentIds 0]
+ * For delete, rest of list contains [clauseIds 0]
+ * Return value = true if successful
+ * If encounter EOF, resulting integer list is of length 0
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+bool get_proof_clause(rio_t *rp, int_list_t *ilist, bool is_binary, char *err_buf, size_t maxlen);
 
 /****** Client/server support *************************************************/
 

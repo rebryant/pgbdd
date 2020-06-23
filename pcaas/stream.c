@@ -1,3 +1,23 @@
+/************************************************************************************[lrat-check.c]
+Copyright (c) 2017-2020 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+Last edit: June 1, 2020
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**************************************************************************************************/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -182,6 +202,18 @@ ssize_t rio_writenb(rio_t *rp, uint8_t *usrbuf, size_t n) {
     }
 }    
 
+/*
+ * Like snprintf, except that writes to rio
+ */
+int rio_nprintf(rio_t *rp, size_t maxlen, const char *format, ...) {
+    va_list ap;
+    char buf[maxlen];
+    va_start(ap, format);
+    int count = vsnprintf(buf, maxlen, format, ap);
+    return (int) rio_writenb(rp, (uint8_t *) buf, count);
+}
+
+
 /****** Compressed integer (cint) support *******************************************/
 
 /* Read byte sequence to get integer value */
@@ -296,13 +328,11 @@ ssize_t rio_write_int_list_text(rio_t *rp, int_list_t *ilist, size_t start_index
     size_t i;
     if (ilist->count <= start_index)
 	return 0;
-    len = sprintf(buf, "%d", ilist->contents[start_index]);
-    nwritten = rio_writenb(rp, (uint8_t *) buf, len);
+    nwritten = rio_nprintf(rp, 11, "%d", ilist->contents[start_index]);
     if (nwritten < 0)
 	return nwritten;
     for (i = start_index + 1; i < ilist->count; i++) {
-	len = sprintf(buf, " %d", ilist->contents[i]);
-	nw = rio_writenb(rp, (uint8_t *) buf, len);
+	nw = rio_nprintf(rp, 11, " %d", ilist->contents[i]);
 	if (nw < 0)
 	    return nw;
 	nwritten += nw;
@@ -412,6 +442,239 @@ ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist) {
     return nread;
 }
 
+
+/******************************** 
+ * Support for CNF and proofs
+ ********************************/
+
+/* 
+ * Read representation of header in CNF file.
+ * Result stored in integer list with count 2 (number of variables, number of clauses)
+ * Return value = true if successful
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+bool get_cnf_header(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) {
+    char buf[12];
+    int rc = 0;
+    int val;
+    size_t i;
+    /* Skip initial comments */
+    while (true) {
+	rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	if (rc <= 0) {
+	    snprintf(err_buf, maxlen, "Line %zd.  Unexpected end of file", rp->line_cnt);
+	    return false;
+	}
+	if (buf[0] == 'c') {
+	    rc = rio_skip_line(rp);
+	    if (rc < 0) {
+		snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
+		return false;
+	    }
+	} else
+	    break;
+    }
+    int_list_reset(ilist);
+    if (buf[0] != 'p') {
+	snprintf(err_buf, maxlen, "Line %zd.  Unknown line type '%c'", rp->line_cnt, buf[0]);
+	return false;
+    }
+    /* Skip 'cnf' */
+    rc = rio_read_token(rp, (uint8_t *) buf, 12);
+    if (rc <= 0) {
+	snprintf(err_buf, maxlen, "Line %zd.  Unexpected end of file", rp->line_cnt);
+	return false;
+    }
+    /* Get input parameters */
+    for (i = 0; i < 2; i++) {
+	rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	if (rc <= 0) {
+	    snprintf(err_buf, maxlen, "Line %zd.  Invalid header line", rp->line_cnt);
+	    return false;
+	}
+	if (sscanf(buf, "%d", &val) != 1) {
+	    snprintf(err_buf, maxlen, "Line %zd.  Invalid header line", rp->line_cnt);
+	    return false;
+	}
+	int_list_append(ilist, val);
+    }
+    return true;
+}
+
+/* 
+ * Read single clause in CNF file
+ * Result stored in integer list
+ * Return value = true if successful
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+bool get_cnf_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) {
+    char buf[12];
+    int rc = 0;
+    int val = 0;
+    int_list_reset(ilist);
+    /* Skip comments */
+    while (true) {
+	rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	if (rc == 0)
+	    return true;
+	if (rc < 0) {
+	    snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
+	    return false;
+	}
+	if (buf[0] == 'c') {
+	    rc = rio_skip_line(rp);
+	    if (rc == 0)
+		return true;
+	    if (rc < 0) {
+		snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
+		return false;
+	    }
+	} else
+	    break;
+    }
+    if (sscanf(buf, "%d", &val) != 1) {
+	snprintf(err_buf, maxlen, "Line %zd.  Invalid initial integer", rp->line_cnt);
+	return false;
+    }
+    int_list_append(ilist, val);
+    if (val != 0) {
+	rc = rio_read_int_list_text(rp, ilist);
+	if (rc < 0) {
+	    snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
+	    return false;
+	}
+    }
+    return true;
+}
+
+/* 
+ * Read single clause in text representation of a proof
+ * Result stored in integer list
+ * First element is step number.
+ * Second element is either 'a' (add clause) or 'd' (delete clauses)
+ * For add, rest of list contains [literals 0 antecedentIds 0]
+ * For delete, rest of list contains [clauseIds 0]
+ * Return value = true if successful
+ * If encounter EOF, resulting integer list is of length 0
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+static bool get_text_proof_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) {
+    char buf[12];
+    int rc = 0;
+    int val;
+    size_t i;
+    /* Default is to add */
+    int nzero = 2;
+    int_list_reset(ilist);
+    for (i = 0; i < nzero; i++) {
+	/* Skip comments */
+	while (true) {
+	    rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	    if (rc == 0)
+		return true;
+	    if (rc < 0) {
+		snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
+		return false;
+	    }
+	    if (buf[0] == 'c') {
+		rc = rio_skip_line(rp);
+		if (rc == 0)
+		    return true;
+		if (rc < 0) {
+		    snprintf(err_buf, maxlen, "Line %zd.  Error reading comment", rp->line_cnt);
+		    return false;
+		}
+	    } else
+		break;
+	}
+	if (sscanf(buf, "%d", &val) != 1) {
+	    snprintf(err_buf, maxlen, "Line %zd.  Invalid initial integer", rp->line_cnt);
+	    return false;
+	}
+	int_list_append(ilist, val);
+	if (i == 0) {
+	    rc = rio_read_token(rp, (uint8_t *) buf, 12);
+	    if (rc <= 0) {
+		snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
+		return false;
+	    }
+	    if (buf[0] == 'd') {
+		int_list_append(ilist, 'd');
+		/* Don't need second pass */
+		nzero = 1;
+	    } else {
+		int_list_append(ilist, 'a');
+		if (sscanf(buf, "%d", &val) != 1) {
+		    snprintf(err_buf, maxlen, "Line %zd.  Invalid integer", rp->line_cnt);
+		    return false;
+		}
+		int_list_append(ilist, val);
+	    }
+	}
+	if (i == 0 || val != 0) {
+	    rc = rio_read_int_list_text(rp, ilist);
+	    if (rc < 0) {
+		snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
+		return false;
+	    }
+	}
+    }
+    return true;
+}
+
+/* 
+ * Read single clause in binary representation of a proof
+ * Result stored in integer list
+ * First element is step number.
+ * Second element is either 'a' (add clause) or 'd' (delete clauses)
+ * For add, rest of list contains [literals 0 antecedentIds 0]
+ * For delete, rest of list contains [clauseIds 0]
+ * Return value = true if successful
+ * If encounter EOF, resulting integer list is of length 0
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+static bool get_binary_proof_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) {
+    int nzero = 2;
+    int i;
+    int rc;
+    int_list_reset(ilist);
+    for (i = 0; i < nzero; i++) {
+	rc = rio_read_int_list_binary(rp, ilist);
+	if (rc < 0) {
+	    snprintf(err_buf, maxlen, "Byte %zd.  Error reading file", rp->byte_cnt);
+	    return false;
+	}
+	if (ilist->count == 0)
+	    return true;
+	if (ilist->count < 2) {
+	    snprintf(err_buf, maxlen, "Byte %zd.  Cannot read proof step.  Only %zd integers",
+		     rp->byte_cnt, ilist->count);
+	    return false;
+	}
+	if (ilist->contents[1] == 'd')
+	    /* Delete step */
+	    nzero = 1;
+    }
+    return true;
+}
+
+/* 
+ * Read single clause in text or binary representation of a proof
+ * Result stored in integer list
+ * First element is step number.
+ * Second element is either 'a' (add clause) or 'd' (delete clauses)
+ * For add, rest of list contains [literals 0 antecedentIds 0]
+ * For delete, rest of list contains [clauseIds 0]
+ * Return value = true if successful
+ * If encounter EOF, resulting integer list is of length 0
+ * If error occurs, a diagnostic message is written to err_buf (up to maxlen characters)
+ */
+bool get_proof_clause(rio_t *rp, int_list_t *ilist, bool is_binary, char *err_buf, size_t maxlen) {
+    if (is_binary)
+	return get_binary_proof_clause(rp, ilist, err_buf, maxlen);
+    else
+	return get_text_proof_clause(rp, ilist, err_buf, maxlen);
+}
 
 
 /******************************** 
