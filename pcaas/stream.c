@@ -123,13 +123,10 @@ int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn, uint8_t *sep) {
       indicate completion of one and start of other.  Want to skip
       this byte.
     */
-#if 0
     /* Unget the terminating character so that it will be read again */
     if (byte == 0) {
-	rp->rio_cnt--;
-	rp->rio_bufptr--;
+	rio_unreadb(rp);
     }
-#endif
     if (sep)
 	*sep = byte;
     /* Terminate string */
@@ -148,6 +145,19 @@ int rio_skip_line(rio_t *rp) {
 	nread += rc;
     } while (rc > 0 && (char) byte != '\n');
     return nread;
+}
+
+/*
+ * Reset buffer by one character, effectively "unreading" it
+ * Reliable if most recent read had rc > 0,
+ * and can only be used once.
+ */
+void rio_unreadb(rio_t *rp) {
+    rp->rio_cnt++;
+    rp->rio_bufptr--;
+    rp->byte_cnt--;
+    if (*rp->rio_bufptr == (uint8_t) '\n')
+	rp->line_cnt--;
 }
 
 /*
@@ -316,6 +326,8 @@ void int_list_reset(int_list_t *ilist) {
 
 /* Free list */
 void int_list_free(int_list_t *ilist) {
+    if (!ilist)
+	return;
     free(ilist->contents);
     free(ilist);
 }

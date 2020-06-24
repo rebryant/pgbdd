@@ -89,6 +89,13 @@ int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn, uint8_t *sep);
 int rio_skip_line(rio_t *rp);
 
 /*
+ * Reset buffer by one character, effectively "unreading" it
+ * Reliable if most recent read had rc > 0,
+ * and can only be used once.
+ */
+void rio_unreadb(rio_t *rp);
+
+/*
  * Write (up to) n bytes.
  *  Return value -1 indicates error
  *  < n indicates short read due to EOF

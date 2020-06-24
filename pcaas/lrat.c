@@ -46,9 +46,11 @@ long long max_live_clauses = 0;
 
 long long *mask, *intro, now;
 
-int *clsList, clsAlloc, clsLast;
-int *table, tableSize, tableAlloc, maskAlloc;
-int_list_t *litList;
+int *clsList = NULL;
+int clsAlloc, clsLast;
+int *table = NULL;
+int tableSize, tableAlloc, maskAlloc;
+int_list_t *litList = NULL;
 
 rio_t *rp_out;
 
@@ -194,9 +196,9 @@ void deleteClauses (int* list) {
 
 bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_out) {
   struct timeval start_time, finish_time;
-  bool ok = true;
   char err_buf[BLEN];
   int i;
+  bool ok = true;
 
   rp_out = arg_rp_out;
   gettimeofday(&start_time, NULL);
@@ -205,9 +207,8 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   
   if (!get_cnf_header(rp_cnf, litList, err_buf, BLEN)) {
       rio_nprintf(rp_out, BLEN, "c Failed to read CNF header: %s\n", err_buf);
-      rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
-      rio_flush(rp_out);
-      return false;
+      ok = false;
+      goto done;
   }
   int nVar = litList->contents[0];
   int nCls = litList->contents[1];
@@ -228,10 +229,9 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   int index = 1;
   while (1) {
       if (!get_cnf_clause(rp_cnf, litList, err_buf, BLEN)) {
-	  fprintf(stderr, "c Failed reading clause #%d: %s\n", index, err_buf);
-	  rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
-	  rio_flush(rp_out);
-	  return false;
+	  rio_nprintf(rp_out, BLEN, "c Failed reading clause #%d: %s\n", index, err_buf);
+	  ok = false;
+	  goto done;
       }
       if (litList->count == 0)
 	  break;
@@ -241,41 +241,78 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   rio_nprintf(rp_out, BLEN, "c parsed a formula with %i variables and %i clauses (%zd bytes)\n",
 	      nVar, nCls, rp_cnf->byte_cnt);
 
-  index = 1;
-  while (1) {
-      if (!get_proof_clause(rp_proof, litList, is_binary, err_buf, BLEN)) {
-	  fprintf(stderr, "c Proof line #%d.  Couldn't read: %s\n", index, err_buf);
-	  rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
-	  rio_flush(rp_out);
-	  return false;
-      }
-    if (getType (litList->contents) == (int) 'd') {
-      deleteClauses (litList->contents + 2); }
-    else if (getType (litList->contents) == (int) 'a') {
-      int  index  = getIndex  (litList->contents);
-      int  length = getLength (litList->contents);
-      int* hints  = getHints  (litList->contents);
+  /* 
+     When CNF and proof are part of unified stream,
+     the CNF will be terminated by one or more bytes with value 0.
+     Need to skip these bytes to get to start of proof.
+     (The actual proof will start with a clause number > 0,
+     and so the first proof byte will be nonzero .)
+  */
+  if (rp_proof == NULL) {
+      rp_proof = rp_cnf;
+      uint8_t byte = 0;
+      do {
+	  int rc = rio_readnb(rp_proof, &byte, 1);
+	  if (rc == 0) {
+	      rio_nprintf(rp_out, BLEN, "c No proof found\n");
+	      ok = false;
+	      goto done;
+	  } else if (rc < 0) {
+	      rio_nprintf(rp_out, BLEN, "c Error at start of proof: %s\n", err_buf);
+	      ok = false;
+	      goto done;
+	  }
+      } while(byte == 0);
+      rio_unreadb(rp_proof);
+ }
 
-      if (checkClause (litList->contents + 2, length, hints) == SUCCESS) {
-        addClause (index, litList->contents + 2, length); }
-      else {
-        rio_nprintf(rp_out, BLEN, "c failed to check clause: "); printClause (litList->contents + 2);
-        rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
+  while (1) {
+    if (!get_proof_clause(rp_proof, litList, is_binary, err_buf, BLEN)) {
+	if (is_binary) 
+	    rio_nprintf(rp_out, BLEN, "c Byte %zd.  ", rp_proof->byte_cnt);
+	else
+	    rio_nprintf(rp_out, BLEN, "c Line %zd.  ", rp_proof->line_cnt);
+	rio_nprintf(rp_out, BLEN, "Couldn't read proof clause: %s\n", err_buf);
 	ok = false;
-	break;
+	goto done;
+    }
+    int  *lits = litList->contents;
+    int type = getType(lits);
+    int cindex  = getIndex(lits);
+    if (type == (int) 'd') {
+      deleteClauses (lits + 2); }
+    else if (type == (int) 'a') {
+      int  length = getLength (lits);
+      int* hints  = getHints  (lits);
+      if (checkClause (lits + 2, length, hints) == SUCCESS) {
+        addClause (cindex, lits + 2, length); 
+	//	rio_nprintf(rp_out, BLEN, "c Checked and added clause #%d.  Length = %d\n", cindex, length);
+	if (length == 0)
+	    goto done;
       }
-      if (length == 0) {
-        rio_nprintf(rp_out, BLEN, "c VERIFIED\n");
-	break;
+      else {
+	rio_nprintf(rp_out, BLEN, "c failed to check clause #%d: ", cindex); printClause (lits + 2);
+	ok = false;
+	goto done;
       }
     }
     else {
-      rio_nprintf(rp_out, BLEN, "c failed type\n");
-      rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
+      if (is_binary) 
+	  rio_nprintf(rp_out, BLEN, "c Byte %zd.  ", rp_proof->byte_cnt);
+      else
+	  rio_nprintf(rp_out, BLEN, "c Line %zd.  ", rp_proof->line_cnt);
+      rio_nprintf(rp_out, BLEN, "Clause #%d.  Unknown type '%c' (0x%.2x)\n", 
+		    cindex, type, type);
       ok = false;
+      goto done;
     }
     index++;
   }
+ done:
+  if (ok)
+      rio_nprintf(rp_out, BLEN, "c VERIFIED\n");
+  else
+      rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n");
   gettimeofday(&finish_time, NULL);
   double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
       (start_time.tv_sec + 1e-6 * start_time.tv_usec);

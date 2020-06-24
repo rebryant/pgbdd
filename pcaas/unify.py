@@ -3,7 +3,7 @@
 import sys
 # Merge files together.  Single byte of 0 as separator
 
-sep = bytearray(b'\x00')
+sep = bytearray(b'\x00\x00\x00')
 
 def run(outname, flist):
     try:

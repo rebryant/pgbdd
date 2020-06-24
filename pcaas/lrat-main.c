@@ -30,17 +30,19 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *rp_out);
 
 
 void usage(char *name) {
-  printf("Usage: %s FILE1.cnf FILE2.lrat[b]\n", name);
+  printf("Usage: %s (FILE.uratb|FILE1.cnf FILE2.lrat[b])\n", name);
   exit(0);
 }
 
 int main (int argc, char** argv) {
   bool ok = true;
-  if (argc != 3)
+  if (argc < 2 || argc > 3)
      usage(argv[0]);
+  bool unified = argc == 2;
   rio_t rio_cnf;
   rio_t rio_proof;
   rio_t rio_out;
+  rio_t *rp_proof;
   bool is_binary = false;
 
   rio_initb(&rio_out, STDIN_FILENO);
@@ -53,16 +55,22 @@ int main (int argc, char** argv) {
   }
   rio_initb(&rio_cnf, cnf_fd);
 
-  is_binary = argv[2][strlen(argv[2])-1] == 'b';
-  int proof_fd =  open(argv[2], O_RDONLY);
-  if (proof_fd < 0) {
-      fprintf(stderr, "Couldn't open input file '%s'\n", argv[2]);
-      exit(1);
+  is_binary = unified || argv[2][strlen(argv[2])-1] == 'b';
+  if (unified) {
+      rp_proof = NULL;
+  } else {
+      int proof_fd =  open(argv[2], O_RDONLY);
+      if (proof_fd < 0) {
+	  fprintf(stderr, "Couldn't open input file '%s'\n", argv[2]);
+	  exit(1);
+      }
+      rp_proof = &rio_proof;
+      rio_initb(rp_proof, proof_fd);
   }
-  rio_initb(&rio_proof, proof_fd);
-  ok = check_proof(&rio_cnf, &rio_proof, is_binary, &rio_out) ? 0 : 1;
+  ok = check_proof(&rio_cnf, rp_proof, is_binary, &rio_out) ? 0 : 1;
   close(rio_cnf.rio_fd);
-  close(rio_proof.rio_fd);  
+  if (!unified)
+      close(rio_proof.rio_fd);  
   close(rio_out.rio_fd);
   return ok;
 }
