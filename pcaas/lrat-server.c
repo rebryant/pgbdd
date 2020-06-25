@@ -23,31 +23,67 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <stdlib.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "stream.h"
+
+#define MAXLINE 1024
 
 /* Defined in lrat.c */
 bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *rp_out);
 
-
 /* Default port: Year of George Boole's birth */
-char *port = "1815";
+char *default_port = "1815";
 rio_t rio_in;
 rio_t rio_out;
+int client_id = 0;
 
-typedef enum {LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG } log_type_t;
+void usage(char *name) {
+    fprintf(stdout, "Usage: %s [-h] [-P port] [-L logfile] [-v 0-4]\n", name);
+    exit(0);
+}
 
-const char *log_table[4] = {"ERROR", "WARNING", "INFO", "DEBUG"};
+typedef enum {LOG_NONE, LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG } log_type_t;
 
+const char *log_table[5] = {"NONE", "ERROR", "WARNING", "INFO", "DEBUG"};
+
+char logname[MAXLINE] = "";
+int loglevel = LOG_INFO;
 
 static void log_printf(log_type_t level, const char *format, ...) {
+    struct timeval ltime;
+    struct timezone zone;
+    struct tm tinfo;
+    char tbuf[MAXLINE] = "";
+    if (gettimeofday(&ltime, NULL) == 0) {
+	localtime_r((time_t *) &(ltime.tv_sec), &tinfo);
+	asctime_r(&tinfo, tbuf);
+	size_t len = strlen(tbuf);
+	if (len > 0 && tbuf[len-1] == '\n')
+	    tbuf[len-1] = '\0';
+    }
     va_list ap;
     va_start(ap, format);
-    int rval = 0;
-    if (level <= LOG_DEBUG) {
-	rval += fprintf(stdout, "%s:", log_table[level]);
-	rval += vfprintf(stdout, format, ap);
+    if (level <= loglevel) {
+	if (strlen(tbuf) > 0)
+	    fprintf(stdout, "%s.  %s:", tbuf, log_table[level]);
+	else
+	    fprintf(stdout, "%s:", log_table[level]);	  
+	vfprintf(stdout, format, ap);
 	fflush(stdout);
+    }
+    if (strlen(logname) > 0) {
+	FILE *lfile = fopen(logname, "a");
+	if (lfile == NULL)
+	    return;
+	va_start(ap, format);
+	if (strlen(tbuf) > 0)
+	    fprintf(lfile, "%s.  %s:", tbuf, log_table[level]);
+	else
+	    fprintf(lfile, "%s:", log_table[level]);	  
+	vfprintf(lfile, format, ap);
+	fclose(lfile);
     }
 }
 
@@ -57,33 +93,83 @@ void sigchld_handler(int sig) {
     return;
 }
 
+void process_client(int connfd) {
+    struct timeval start_time, finish_time;
+    gettimeofday(&start_time, NULL);
+    rio_initb(&rio_in, connfd);
+    rio_initb(&rio_out, connfd);
+    bool ok = check_proof(&rio_in, NULL, true, &rio_out);
+    rio_flush(&rio_out);
+    gettimeofday(&finish_time, NULL);
+    double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
+	(start_time.tv_sec + 1e-6 * start_time.tv_usec);
+    if (ok)
+	log_printf(LOG_INFO, "Client #%d.  Proof completed.  %zd bytes received.  %zd bytes sent.  %.1f seconds total\n",
+		   client_id, rio_in.byte_cnt, rio_out.byte_cnt, secs);
+    else 
+	log_printf(LOG_WARN, "Client #%d.  Could not complete proof.    %zd bytes received.  %zd bytes sent.  %.1f seconds total\n",
+		   client_id, rio_in.byte_cnt, rio_out.byte_cnt, secs);
+    close(connfd);
+}
+
 int main(int argc, char *argv[]) {
     int listenfd, connfd;
-    socklen_t clientlen=sizeof(struct sockaddr_in);
-    struct sockaddr_in clientaddr;
+    socklen_t clientlen=sizeof(struct sockaddr_storage);
+    struct sockaddr_storage clientaddr;
+    char client_hostname[MAXLINE], client_port[MAXLINE];
+    char port[MAXLINE] = "";
+    int c;
 
-    if (argc > 1)
-	port = argv[1];
+    while ((c = getopt(argc, argv, "hP:L:v:")) != -1) {
+	switch(c) {
+	case 'h':
+	    usage(argv[0]);
+	case 'P':
+	    strcpy(port, optarg);
+	    break;
+	case 'L':
+	    strcpy(logname, optarg);
+	    break;
+	case 'v':
+	    loglevel = atoi(optarg);
+	    break;
+	default:
+	    fprintf(stderr, "Unrecognized option -%c\n", c);
+	    usage(argv[0]);
+	}
+    }
+    if (strlen(port) == 0)
+	strcpy(port, default_port);
 
     signal(SIGCHLD, sigchld_handler);
     listenfd = open_listenfd(port);
     if (listenfd < 0) {
+	if (listenfd == -1 && errno == EADDRINUSE) {
+	    log_printf(LOG_DEBUG, "Server already running on port %s\n", port);
+	    return 0;
+	}
 	log_printf(LOG_ERROR, "Cannot set up listening socket on port %s\n", port);
 	return 1;
     }
-    log_printf(LOG_DEBUG, "Set up server on port %s\n", port);
+    log_printf(LOG_INFO, "Set up server on port %s\n", port);
     while (1) {
 	connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
-	log_printf(LOG_DEBUG, "New client connected\n");
+	if (connfd <= 0) {
+	    log_printf(LOG_ERROR, "Accept returned %d\n", connfd);
+	    exit(1);
+	}
+	client_id++;
+	if (getnameinfo((struct sockaddr *) &clientaddr, clientlen, client_hostname, MAXLINE,
+			client_port, MAXLINE, 0) == 0) {
+	    log_printf(LOG_INFO, "Client #%d connected from %s:%s\n", client_id, client_hostname, client_port);
+	} else
+	    log_printf(LOG_INFO, "Client #%d connected\n", client_id);
 	if (fork() == 0) {
 	    close(listenfd);
-	    rio_initb(&rio_in, connfd);
-	    rio_initb(&rio_out, STDOUT_FILENO);
-	    if (check_proof(&rio_in, &rio_in, true, &rio_out))
-		log_printf(LOG_INFO, "Proof completed\n");
-	    else
-		log_printf(LOG_WARN, "Could not complete proof\n");
-	}
-	close(connfd);
+	    process_client(connfd);
+	    exit(0);
+	} else
+	    close(connfd);
     }
+    return 0;
 }

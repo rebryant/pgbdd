@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS = -O0 -g
 
-all: lrat-check translator
+all: lrat-check translator lrat-server upload
 
 stream.o: stream.c stream.h
 	$(CC) $(CFLAGS) -c stream.c
@@ -18,7 +18,10 @@ lrat-check: lrat-main.c stream.o lrat.o
 lrat-server: lrat-server.c stream.o lrat.o
 	$(CC) $(CFLAGS) lrat-server.c stream.o lrat.o -o lrat-server
 
+upload: upload.c stream.o
+	$(CC) $(CFLAGS) upload.c stream.o -o upload
+
 clean:
-	rm -f lrat-check lrat-server translator *.o *~
+	rm -f lrat-check lrat-server translator upload *.o *~
 
 
