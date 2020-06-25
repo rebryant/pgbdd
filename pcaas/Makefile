@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS = -O0 -g
+CFLAGS = -O0 -g -Wall
 
 all: lrat-check translator lrat-server upload
 

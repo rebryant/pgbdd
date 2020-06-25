@@ -21,6 +21,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 /* Support for Proof server */
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <sys/time.h>
@@ -53,7 +55,6 @@ int loglevel = LOG_INFO;
 
 static void log_printf(log_type_t level, const char *format, ...) {
     struct timeval ltime;
-    struct timezone zone;
     struct tm tinfo;
     char tbuf[MAXLINE] = "";
     if (gettimeofday(&ltime, NULL) == 0) {

@@ -111,10 +111,6 @@ bool process_int_list(bool first_time) {
 }
 
 bool run_cnf() {
-    char buf[12];
-    int rc = 0;
-    int val;
-    size_t i;
     if (!get_cnf_header(&rio_in, ilist, err_buf, BLEN)) {
 	fprintf(stderr, "%s\n", err_buf);
 	return false;

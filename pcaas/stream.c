@@ -345,7 +345,6 @@ ssize_t rio_write_int_list_text(rio_t *rp, int_list_t *ilist, size_t start_index
     char buf[12];
     ssize_t nwritten = 0;
     ssize_t nw = 0;
-    int len;
     size_t i;
     if (ilist->count <= start_index)
 	return 0;
@@ -423,7 +422,6 @@ static ssize_t rio_read_int_binary(rio_t *rp, int *value) {
 ssize_t rio_read_int_list_text(rio_t *rp, int_list_t *ilist) {
     char buf[10];
     ssize_t nread = 0;
-    unsigned count = 0;
     int rc = 0;
     int value;
     do {
@@ -446,9 +444,7 @@ ssize_t rio_read_int_list_text(rio_t *rp, int_list_t *ilist) {
  * Append to existing list
  */
 ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist) {
-    uint8_t buf[CINT_LENGTH];
     ssize_t nread = 0;
-    unsigned count = 0;
     int rc = 0;
     int value;
     do {
