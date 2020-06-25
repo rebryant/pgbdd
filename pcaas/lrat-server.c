@@ -167,7 +167,7 @@ int main(int argc, char *argv[]) {
     
     while (1) {
 	connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
-	if (connfd <= 0) {
+	if (connfd < 0) {
 	    log_printf(LOG_ERROR, "Accept returned %d\n", connfd);
 	    exit(1);
 	}
