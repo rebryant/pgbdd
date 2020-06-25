@@ -42,7 +42,12 @@ rio_t rio_out;
 int client_id = 0;
 
 void usage(char *name) {
-    fprintf(stdout, "Usage: %s [-h] [-P port] [-L logfile] [-v 0-4]\n", name);
+    fprintf(stdout, "Usage: %s [-h] [-d] [-P port] [-L logfile] [-v 0-4]\n", name);
+    fprintf(stdout, "  -h         Print this message\n");
+    fprintf(stdout, "  -d         Run as daemon\n");
+    fprintf(stdout, "  -P port    Specify port number\n");
+    fprintf(stdout, "  -L logfile Maintain log file\n");
+    fprintf(stdout, "  -v vlevel  Set logging level (0-4)\n");
     exit(0);
 }
 
@@ -50,6 +55,7 @@ typedef enum {LOG_NONE, LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG } log_type_t;
 
 const char *log_table[5] = {"NONE", "ERROR", "WARNING", "INFO", "DEBUG"};
 
+bool have_log = false;
 char logname[MAXLINE] = "";
 int loglevel = LOG_INFO;
 bool stdout_closed = false;
@@ -77,7 +83,7 @@ static void log_printf(log_type_t level, const char *format, ...) {
 	vfprintf(stdout, format, ap);
 	fflush(stdout);
     }
-    if (strlen(logname) > 0) {
+    if (have_log) {
 	FILE *lfile = fopen(logname, "a");
 	if (lfile == NULL)
 	    return;
@@ -122,17 +128,22 @@ int main(int argc, char *argv[]) {
     struct sockaddr_storage clientaddr;
     char client_hostname[MAXLINE], client_port[MAXLINE];
     char port[MAXLINE] = "";
+    bool run_daemon = false;
     int c;
 
-    while ((c = getopt(argc, argv, "hP:L:v:")) != -1) {
+    while ((c = getopt(argc, argv, "hdP:L:v:")) != -1) {
 	switch(c) {
 	case 'h':
 	    usage(argv[0]);
+	case 'd':
+	    run_daemon = true;
+	    break;
 	case 'P':
 	    strcpy(port, optarg);
 	    break;
 	case 'L':
 	    strcpy(logname, optarg);
+	    have_log = true;
 	    break;
 	case 'v':
 	    loglevel = atoi(optarg);
@@ -158,13 +169,19 @@ int main(int argc, char *argv[]) {
     log_printf(LOG_INFO, "Set up server on port %s\n", port);
 
     /* Run as standalone server */
-    if (strlen(logname) > 0) {
+    if (have_log) {
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
 	close(STDIN_FILENO);
 	stdout_closed = true;
     }
-    
+
+    /* Run as daemon */
+    if (run_daemon) {
+	if (fork() != 0)
+	    /* Parent exits while child keeps running */
+	    exit(0);
+    }    
     while (1) {
 	connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
 	if (connfd < 0) {
