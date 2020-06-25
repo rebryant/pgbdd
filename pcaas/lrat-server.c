@@ -52,11 +52,14 @@ const char *log_table[5] = {"NONE", "ERROR", "WARNING", "INFO", "DEBUG"};
 
 char logname[MAXLINE] = "";
 int loglevel = LOG_INFO;
+bool stdout_closed = false;
 
 static void log_printf(log_type_t level, const char *format, ...) {
     struct timeval ltime;
     struct tm tinfo;
     char tbuf[MAXLINE] = "";
+    if (level > loglevel)
+	return;
     if (gettimeofday(&ltime, NULL) == 0) {
 	localtime_r((time_t *) &(ltime.tv_sec), &tinfo);
 	asctime_r(&tinfo, tbuf);
@@ -65,10 +68,10 @@ static void log_printf(log_type_t level, const char *format, ...) {
 	    tbuf[len-1] = '\0';
     }
     va_list ap;
-    va_start(ap, format);
-    if (level <= loglevel) {
+    if (!stdout_closed) {
+	va_start(ap, format);
 	if (strlen(tbuf) > 0)
-	    fprintf(stdout, "%s.  %s:", tbuf, log_table[level]);
+	    fprintf(stdout, "%s %s:", tbuf, log_table[level]);
 	else
 	    fprintf(stdout, "%s:", log_table[level]);	  
 	vfprintf(stdout, format, ap);
@@ -80,7 +83,7 @@ static void log_printf(log_type_t level, const char *format, ...) {
 	    return;
 	va_start(ap, format);
 	if (strlen(tbuf) > 0)
-	    fprintf(lfile, "%s.  %s:", tbuf, log_table[level]);
+	    fprintf(lfile, "%s %s:", tbuf, log_table[level]);
 	else
 	    fprintf(lfile, "%s:", log_table[level]);	  
 	vfprintf(lfile, format, ap);
@@ -105,10 +108,10 @@ void process_client(int connfd) {
     double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
 	(start_time.tv_sec + 1e-6 * start_time.tv_usec);
     if (ok)
-	log_printf(LOG_INFO, "Client #%d.  Proof completed.  %zd bytes received.  %zd bytes sent.  %.1f seconds total\n",
+	log_printf(LOG_INFO, "Client #%d. Proof completed. %zd bytes received. %zd bytes sent. %.1f seconds elapsed\n",
 		   client_id, rio_in.byte_cnt, rio_out.byte_cnt, secs);
     else 
-	log_printf(LOG_WARN, "Client #%d.  Could not complete proof.    %zd bytes received.  %zd bytes sent.  %.1f seconds total\n",
+	log_printf(LOG_WARN, "Client #%d. Proof NOT completed. %zd bytes received. %zd bytes sent. %.1f seconds elapsed\n",
 		   client_id, rio_in.byte_cnt, rio_out.byte_cnt, secs);
     close(connfd);
 }
@@ -153,6 +156,15 @@ int main(int argc, char *argv[]) {
 	return 1;
     }
     log_printf(LOG_INFO, "Set up server on port %s\n", port);
+
+    /* Run as standalone server */
+    if (strlen(logname) > 0) {
+	close(STDOUT_FILENO);
+	close(STDERR_FILENO);
+	close(STDIN_FILENO);
+	stdout_closed = true;
+    }
+    
     while (1) {
 	connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
 	if (connfd <= 0) {
