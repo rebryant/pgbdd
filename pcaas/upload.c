@@ -43,7 +43,7 @@ void flusher() {
 
 
 void usage(char *name) {
-    rio_nprintf(&rio_out, BLEN, "Usage: %s [-h] [-H host] [-P port] -c file1.cnf -l file2.lratb\n", name);
+    rio_nprintf(&rio_out, BLEN, "Usage: %s [-h] [-H host] [-P port] -c file1.cnf -l file2.lrat[b]\n", name);
     exit(0);
 }
 
@@ -77,6 +77,15 @@ bool upload_file(char *fname) {
     return true;
 }
 
+bool upload_text(char *text) {
+    size_t len = strlen(text);
+    if (rio_writenb(&rio_upload, (uint8_t *) text, len) != len) {
+	rio_nprintf(&rio_out, BLEN, "Error writing text '%s' to server\n", text);
+	return false;
+    }
+    return true;
+}
+
 bool upload_null() {
     uint8_t byte = 0;
     if (rio_writenb(&rio_upload, &byte, 1) != 1) {
@@ -95,6 +104,7 @@ int main(int argc, char *argv[]) {
     char port[NSIZE] = "";
     uint8_t buf[BSIZE];
     int rc, c;
+    bool is_binary = false;
     rio_initb(&rio_out, STDOUT_FILENO);
     atexit(flusher);
     while ((c = getopt(argc, argv, "hH:P:c:l:")) != -1) {
@@ -106,6 +116,7 @@ int main(int argc, char *argv[]) {
 	    break;
 	case 'l':
 	    strcpy(lrat_name, optarg);
+	    is_binary = optarg[strlen(optarg)-1] == 'b';
 	    break;
 	case 'H':
 	    strcpy(host, optarg);
@@ -122,7 +133,7 @@ int main(int argc, char *argv[]) {
 	usage(argv[0]);
     }
     if (strlen(lrat_name) == 0) {
-	rio_nprintf(&rio_out, BLEN, "Require LRATB file\n");
+	rio_nprintf(&rio_out, BLEN, "Require LRAT[B] file\n");
 	usage(argv[0]);
     }
     if (strlen(host) == 0)
@@ -140,11 +151,20 @@ int main(int argc, char *argv[]) {
     rio_initb(&rio_download, client_fd);
     if (!upload_file(cnf_name))
 	return 1;
-    if (!upload_null())
-	return 1;
+    if (is_binary) {
+	if (!upload_text(" DONE BINARY "))
+	    return 1;
+	if (!upload_null())
+	    return 1;
+    } else {
+	if (!upload_text(" DONE TEXT "))
+	    return 1;
+    }
     if (!upload_file(lrat_name))
 	return 1;
-    rio_flush(&rio_upload);
+    if (rio_flush(&rio_upload) < 0)
+	return 1;;
+    
     /* Get response from server */
     while ((rc = rio_readnb(&rio_download, buf, BSIZE)) > 0) {
 	rio_writenb(&rio_out, buf, rc);

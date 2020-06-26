@@ -250,21 +250,44 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   */
   if (rp_proof == NULL) {
       rp_proof = rp_cnf;
+      char buf[BLEN];
       uint8_t byte = 0;
-      do {
-	  int rc = rio_readnb(rp_proof, &byte, 1);
-	  if (rc == 0) {
-	      rio_nprintf(rp_out, BLEN, "c No proof found\n");
-	      ok = false;
-	      goto done;
-	  } else if (rc < 0) {
-	      rio_nprintf(rp_out, BLEN, "c Error at start of proof: %s\n", err_buf);
-	      ok = false;
-	      goto done;
-	  }
-      } while(byte == 0);
-      rio_unreadb(rp_proof);
- }
+      int rc;
+      /* See what type of proof it's going to be */
+      rc = rio_read_token(rp_proof, (uint8_t *) buf, BLEN, NULL);
+      if (rc == 0) {
+	  rio_nprintf(rp_out, BLEN, "c No proof found\n");
+	  ok = false;
+	  goto done;
+      } else if (rc < 0) {
+	  rio_nprintf(rp_out, BLEN, "c Error at start of proof: %s\n", err_buf);
+	  ok = false;
+	  goto done;
+      } else if (strcmp(buf, text_text) == 0) {
+	  is_binary = false;
+      } else if (strcmp(buf, binary_text) == 0) {
+	  is_binary = true;
+      } else {
+	  rio_nprintf(rp_out, BLEN, "c Error at start of proof.  Unknown proof format '%s'\n", buf);
+	  ok = false;
+	  goto done;
+      }
+      if (is_binary) {
+	  do {
+	      rc = rio_readnb(rp_proof, &byte, 1);
+	      if (rc == 0) {
+		  rio_nprintf(rp_out, BLEN, "c No proof found\n");
+		  ok = false;
+		  goto done;
+	      } else if (rc < 0) {
+		  rio_nprintf(rp_out, BLEN, "c Error at start of proof: %s\n", err_buf);
+		  ok = false;
+		  goto done;
+	      }
+	  } while(byte == 0);
+	  rio_unreadb(rp_proof);
+      }
+  }
 
   while (1) {
     if (!get_proof_clause(rp_proof, litList, is_binary, err_buf, BLEN)) {
@@ -286,7 +309,7 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
       int* hints  = getHints  (lits);
       if (checkClause (lits + 2, length, hints) == SUCCESS) {
         addClause (cindex, lits + 2, length); 
-	//	rio_nprintf(rp_out, BLEN, "c Checked and added clause #%d.  Length = %d\n", cindex, length);
+	//	rio_nprintf(rp_out, BLEN, "c Checked and added clause #%d.  Length = %d (Bytes = %zd)\n", cindex, length, rp_proof->byte_cnt);
 	if (length == 0)
 	    goto done;
       }

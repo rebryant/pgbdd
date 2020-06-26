@@ -164,6 +164,12 @@ ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist);
 
 /****** Reading CNF and proofs ************************************************/
 
+/* Strings to indicate end of CNF + proof type */
+extern const char *done_text;
+extern const char *text_text;
+extern const char *binary_text;
+
+
 /* 
  * Read representation of header in CNF file.
  * Result stored in integer list with count 2 (number of variables, number of clauses)

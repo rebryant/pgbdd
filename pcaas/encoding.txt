@@ -1,4 +1,19 @@
-1. Encoding int into binary form
+1. CNF must be in text form according to DIMACS format.
+
+2. Proof can be either text or binary.
+
+3. When combined into single stream, do so as follows:
+
+   [CNF] DONE TEXT [PROOF TEXT]
+   [CNF] DONE BINARY 0+ [PROOF BINARY]
+
+   where:
+	[CNF] is CNF file in DIMACS format
+	DONE / TEXT / BINARY are strings
+	0+  one or more bytes with value 0
+	[PROOF TEXT], [PROOF BINARY] is proof in text or binary format
+
+4. Encoding int into binary form
 
 The first step of the binary encoding is mapping literals in the
 DIMACS format to unsigned integers. The following mapping function is
@@ -47,14 +62,7 @@ follow. Here are some examples:
 		2^28 + 7           87 80 80 80 01
 	
 
-2. Encoding CNF into binary form
-
-The usual header "p cnf vars clauses" is encoded as the binary
-encodings of the integers 'p', vars, clauses 0.
-
-Clauses are encoded in the standard form
-
-3. Encoding proof into binary form
+5. Encoding proof into binary form
 
 Lines of the form S l1 ... lm 0 a1 ... an 0
 are encoded as the binary encodings of S 'a' l1 ... lm 0 a1 ... an 0

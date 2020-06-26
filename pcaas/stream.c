@@ -119,9 +119,11 @@ int rio_read_token(rio_t *rp, uint8_t *usrbuf, size_t maxn, uint8_t *sep) {
 	rc = rio_readnb(rp, &byte, 1);
     }
     /*
-      When have combined CNF and proof, using single 0 byte to
-      indicate completion of one and start of other.  Want to skip
-      this byte.
+      When have combined CNF and proof, CNF ends with text "DONE"
+      Proof begins with either "TEXT" or "BINARY"
+
+      When text, have whitespace followed by proof in text format
+      When binary, have one or more 0 bytes, followed by proof in binary format
     */
     /* Unget the terminating character so that it will be read again */
     if (byte == 0) {
@@ -189,6 +191,7 @@ ssize_t rio_flush(rio_t *rp) {
     ssize_t rval = rio_writen(rp->rio_fd, rp->rio_buf, rp->rio_cnt);
     rp->rio_cnt = 0;
     rp->rio_bufptr = rp->rio_buf;
+    
     return rval;
 }
 
@@ -464,6 +467,11 @@ ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist) {
  * Support for CNF and proofs
  ********************************/
 
+/* Text to indicate CNF completed */
+const char *done_text = "DONE";
+const char *text_text = "TEXT";
+const char *binary_text = "BINARY";
+
 /* 
  * Read representation of header in CNF file.
  * Result stored in integer list with count 2 (number of variables, number of clauses)
@@ -542,6 +550,8 @@ bool get_cnf_clause(rio_t *rp, int_list_t *ilist, char *err_buf, size_t maxlen) 
 	    snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);
 	    return false;
 	}
+	if (strcmp(buf, done_text) == 0)
+	    return true;
 	if (buf[0] == 'c') {
 	    if ((char) sep != '\n') {
 		rc = rio_skip_line(rp);
@@ -637,7 +647,7 @@ static bool get_text_proof_clause(rio_t *rp, int_list_t *ilist, char *err_buf, s
 		int_list_append(ilist, val);
 	    }
 	}
-	if (i == 0 || val != 0) {
+	if (val != 0) {
 	    rc = rio_read_int_list_text(rp, ilist);
 	    if (rc < 0) {
 		snprintf(err_buf, maxlen, "Line %zd.  Error reading file", rp->line_cnt);

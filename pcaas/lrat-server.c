@@ -109,7 +109,9 @@ void process_client(int connfd) {
     rio_initb(&rio_in, connfd);
     rio_initb(&rio_out, connfd);
     bool ok = check_proof(&rio_in, NULL, true, &rio_out);
-    rio_flush(&rio_out);
+    if (rio_flush(&rio_out) < 0)
+	log_printf(LOG_WARN, "Client #%d.  Unable to complete flush. %zd bytes received. %zd bytes sent.\n",
+		   client_id, rio_in.byte_cnt, rio_out.byte_cnt);
     gettimeofday(&finish_time, NULL);
     double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
 	(start_time.tv_sec + 1e-6 * start_time.tv_usec);

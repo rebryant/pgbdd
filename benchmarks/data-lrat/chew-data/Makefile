@@ -10,7 +10,7 @@ SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
 DGRABBER = ./grab_drat.py
-EXTENSION = lratb
+EXTENSION = lrat
 
 io: chew-$(N)-inputorder.data
 ro: chew-$(N)-randomorder.data
@@ -28,7 +28,7 @@ chew-$(N)-inputorder.data:
 	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-inputorder.cnf -b \
 		-o chew-$(N)-inputorder.$(EXTENSION) | tee -a chew-$(N)-inputorder.data
 	$(CHECKER) chew-$(N)-inputorder.cnf chew-$(N)-inputorder.$(EXTENSION) | tee -a chew-$(N)-inputorder.data
-	rm -f chew-$(N)-inputorder.$(EXTENSION)
+#	rm -f chew-$(N)-inputorder.$(EXTENSION)
 
 chew-$(N)-randomorder.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-randomorder.data
@@ -37,7 +37,7 @@ chew-$(N)-randomorder.data:
 	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-randomorder.cnf -b -p chew-$(N)-randomorder.order \
 		-o chew-$(N)-randomorder.$(EXTENSION) | tee -a chew-$(N)-randomorder.data
 	$(CHECKER) chew-$(N)-randomorder.cnf chew-$(N)-randomorder.$(EXTENSION) | tee -a chew-$(N)-randomorder.data
-	rm -f chew-$(N)-randomorder.$(EXTENSION)
+#	rm -f chew-$(N)-randomorder.$(EXTENSION)
 
 chew-$(N)-noquant.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-noquant.data
