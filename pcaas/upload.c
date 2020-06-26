@@ -43,8 +43,38 @@ void flusher() {
 
 
 void usage(char *name) {
-    rio_nprintf(&rio_out, BLEN, "Usage: %s [-h] [-H host] [-P port] -c file1.cnf -l file2.lrat[b]\n", name);
+    rio_nprintf(&rio_out, BLEN, "Usage: %s [-h] [-m (b|t)] [-H host] [-P port] -c file1.cnf [-l file2.lrat[b]]\n", name);
+    rio_nprintf(&rio_out, BLEN, "  -h               Print this message\n");
+    rio_nprintf(&rio_out, BLEN, "  -m (b|t)         Accept proof file from standard input in either binary (b) or text(t) format\n");
+    rio_nprintf(&rio_out, BLEN, "  -H host          Specify server host\n");
+    rio_nprintf(&rio_out, BLEN, "  -P port          Specify server port\n");
+    rio_nprintf(&rio_out, BLEN, "  -c file1.cnf     Specify CNF file\n");    
+    rio_nprintf(&rio_out, BLEN, "  -l file2.lrat[b] Specify proof file in either text (.lrat) or binary (.lratb) fomrat\n");    
     exit(0);
+}
+
+bool upload_stdin() {
+    uint8_t buf[BSIZE];
+    rio_t rio_in;
+    ssize_t nread = 0;
+    ssize_t rc = 0;
+    ssize_t wc = 0;
+
+    rio_initb(&rio_in, STDIN_FILENO);
+    while ((rc = rio_readnb(&rio_in, buf, BSIZE)) > 0) {
+	nread += rc;
+	wc = rio_writenb(&rio_upload, buf, rc);
+	if (wc != rc) {
+	    rio_nprintf(&rio_out, BLEN, "Error sending standard input to server.  %zd bytes read\n", nread);
+	    return false;
+	}
+    }
+
+    if (rc < 0) {
+	rio_nprintf(&rio_out, BLEN, "Error reading standard input.  %zd bytes read\n", nread);
+	return false;
+    }
+    return true;
 }
 
 bool upload_file(char *fname) {
@@ -105,12 +135,22 @@ int main(int argc, char *argv[]) {
     uint8_t buf[BSIZE];
     int rc, c;
     bool is_binary = false;
+    bool use_stdin = false;
     rio_initb(&rio_out, STDOUT_FILENO);
     atexit(flusher);
-    while ((c = getopt(argc, argv, "hH:P:c:l:")) != -1) {
+    while ((c = getopt(argc, argv, "hm:H:P:c:l:")) != -1) {
 	switch(c) {
 	case 'h':
 	    usage(argv[0]);
+	case 'm':
+	    use_stdin = true;
+	    if (optarg[0] == 'b')
+		is_binary = true;
+	    else if (optarg[0] != 't') {
+		rio_nprintf(&rio_out, BLEN, "Unknown input mode '%s'\n", optarg);
+		usage(argv[0]);
+	    }
+	    break;
 	case 'c':
 	    strcpy(cnf_name, optarg);
 	    break;
@@ -132,8 +172,8 @@ int main(int argc, char *argv[]) {
 	rio_nprintf(&rio_out, BLEN, "Require CNF file\n");
 	usage(argv[0]);
     }
-    if (strlen(lrat_name) == 0) {
-	rio_nprintf(&rio_out, BLEN, "Require LRAT[B] file\n");
+    if (strlen(lrat_name) == 0 && !use_stdin) {
+	rio_nprintf(&rio_out, BLEN, "Require either LRAT[B] file or pipe mode specification\n");
 	usage(argv[0]);
     }
     if (strlen(host) == 0)
@@ -160,8 +200,15 @@ int main(int argc, char *argv[]) {
 	if (!upload_text(" DONE TEXT "))
 	    return 1;
     }
-    if (!upload_file(lrat_name))
-	return 1;
+
+    if (use_stdin) {
+	if (!upload_stdin())
+	    return 1;
+    } else {
+	if (!upload_file(lrat_name))
+	    return 1;
+    }
+
     if (rio_flush(&rio_upload) < 0)
 	return 1;;
     
