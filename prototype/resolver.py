@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import datetime
+import sys
 
 # Search for resolution tree that will yield target clause
 
@@ -307,10 +308,12 @@ class Forest:
     treeList = []
     allAtoms = 0
     verbLevel = 1
+    writer = None
 
-    def __init__(self, leafCount, verbLevel = 1):
+    def __init__(self, leafCount, verbLevel = 1, writer = None):
         self.leafCount = leafCount
         self.verbLevel = verbLevel
+        self.writer = sys.stderr if writer is None else writer
         self.treeList = []
         self.allAtoms = 0       
 
@@ -320,13 +323,13 @@ class Forest:
         if verbLevel > 0:
             seconds = delta.seconds + 1e-6 * delta.microseconds
             if self.verbLevel >= 2:
-                print("Resolution forest(%d): Generated %d trees in %.2f seconds" % (leafCount, len(self.treeList), seconds))
+                self.writer.write("Resolution forest(%d): Generated %d trees in %.2f seconds\n" % (leafCount, len(self.treeList), seconds))
 
     def generate(self):
         for id in unitRange(self.leafCount):
             leaf = Leaf(id)
             if self.verbLevel >= 5:
-                print("Generated tree #%d: %s" % (leaf.id, str(leaf)))
+                self.writer.write("Generated tree #%d: %s\n" % (leaf.id, str(leaf)))
             self.treeList.append(leaf)
             self.allAtoms = self.allAtoms | leaf.atoms
         nextId = self.leafCount+1
@@ -338,7 +341,7 @@ class Forest:
                 if left.compatible(right):
                     newTree = left.newTree(nextId, right)
                     if self.verbLevel >= 5:
-                        print("Generated tree #%d: %s" % (newTree.id, str(newTree)))
+                        self.writer.write("Generated tree #%d: %s\n" % (newTree.id, str(newTree)))
                     self.treeList.append(newTree)
                     nextId += 1
             nextRight += 1
@@ -350,7 +353,7 @@ class Forest:
         for id in unitRange(self.leafCount):
             leaf = Leaf(id)
             if self.verbLevel >= 5:
-                print("Generated tree #%d: %s" % (leaf.id, str(leaf)))
+                self.writer.write("Generated tree #%d: %s\n" % (leaf.id, str(leaf)))
             self.treeList.append(leaf)
             self.allAtoms = self.allAtoms | leaf.atoms
             treeDict[1][leaf.atoms] = [leaf]
@@ -374,12 +377,12 @@ class Forest:
                                         self.treeList.append(newTree)
                                         treeDict[tcount][natoms].append(newTree)
                                         if self.verbLevel >= 5:
-                                            print("Generated tree #%d: %s" % (newTree.id, str(newTree)))
+                                            self.writer.write("Generated tree #%d: %s\n" % (newTree.id, str(newTree)))
                                         nextId += 1
                 
     def loadClauses(self, clauseList):
         if len(clauseList) > self.leafCount:
-            raise ResolveException("Can only handle max of %d input clauses" % self.leafCount)
+            raise ResolveException("Can only handle max of %d input clauses\n" % self.leafCount)
         for t in self.treeList:
             t.clause.invalidate()
         for i in range(len(clauseList)):
@@ -396,21 +399,21 @@ class Forest:
                 if cres.isValid():
                     t.clause.copyFrom(cres)
             if self.verbLevel >= 4:
-                print("Tree %d.  Resolvent = %s" % (id, str(t.clause)))
+                self.writer.write("Tree %d.  Resolvent = %s\n" % (id, str(t.clause)))
             if t.clause == target:
                 return t
             if t.clause.isTautology():
                 t.clause.invalidate()
             if t.clause.isEmpty():
                 if self.verbLevel >= 1:
-                    print("Warning.  Tree leads to empty clause: %s" % str(t))
+                    self.writer.write("Warning.  Tree leads to empty clause: %s\n" % str(t))
                 t.clause.invalidate()
         # Only get here if failed
-        print("Couldn't find proof of target %s" % str(target))
-        print("Antecedent Clauses:")
+        self.writer.write("Couldn't find proof of target %s\n" % str(target))
+        self.writer.write("Antecedent Clauses:\n")
         for i in range(self.leafCount):
-            print("   %s" % str(self.treeList[i].clause))
-        print("Couldn't generate resolution proof")
+            self.writer.write("   %s\n" % str(self.treeList[i].clause))
+        self.writer.write("Couldn't generate resolution proof\n")
         return None
 
     def isFull(self, tree):
@@ -430,12 +433,14 @@ class ProofManager:
     clauseRules = {}
     # Target clause
     target = None
+    writer = None
     
-    def __init__(self, variableNames, maxRules, target, verbLevel = 1):
+    def __init__(self, variableNames, maxRules, target, verbLevel = 1, writer = None):
         self.verbLevel = verbLevel
         self.variableNames = variableNames
         self.verbLevel = verbLevel
-        self.forest = Forest(maxRules, verbLevel)
+        self.writer = sys.stderr if writer is None else writer
+        self.forest = Forest(maxRules, verbLevel, writer = writer)
         self.proofCache = {}
         self.proofCounts = {}
         self.clauseRules = {}
@@ -471,10 +476,10 @@ class ProofManager:
 
             pstring = str(self.proofCache[key])
             if self.verbLevel >= 2:
-                print("[%s : %s] --> %s (%d uses)" % (rstring, vstring, pstring, self.proofCounts[key]))
+                self.writer.write("[%s : %s] --> %s (%d uses)\n" % (rstring, vstring, pstring, self.proofCounts[key]))
             accessCount += self.proofCounts[key]
         if self.verbLevel >= 1:
-            print("%d keys.  %d total uses" % (len(keyList), accessCount))
+            self.writer.write("%d keys.  %d total uses\n" % (len(keyList), accessCount))
 
     def lookupProof(self, variableList, ruleNames):
         key = self.proofKey(variableList, ruleNames)
@@ -508,7 +513,7 @@ class ProofManager:
                 inverseMap[canonicalVariable] = externalVariable
         if self.verbLevel >= 3:
             mapStrings = ["%s:%d->%d" % (vname, valueMap[vname], canonicalMap[vname]) for vname in self.variableNames]
-            print("Constructed canonical literals: " + " ".join(mapStrings))
+            self.writer.write("Constructed canonical literals: " + " ".join(mapStrings))
         # See if already have proof in cache
         variableList = [canonicalMap[vname] for vname in self.variableNames]
         proof = self.lookupProof(variableList, ruleNames)
@@ -516,17 +521,17 @@ class ProofManager:
             nproof = proof.remapLiterals(inverseMap)
             if self.verbLevel >= 3:
                 pstring = nproof.postfix(showLiterals = True)
-                print("Found cached proof: " + pstring)
+                self.writer.write("Found cached proof: " + pstring)
             return nproof
         # Construct target clause
         targetClause = self.makeClause(self.target, canonicalMap)
         if targetClause.isTautology():
             if self.verbLevel >= 3:
-                print("Target is tautology")
+                self.writer.write("Target is tautology\n")
             return tautologyId
         if targetClause.isEmpty():
             if self.verbLevel >= 3:
-                print("Target is empty")
+                self.writer.write("Target is empty\n")
             return -tautologyId
         # Build list of non-degenerate clauses
         clauseList = []
@@ -543,7 +548,7 @@ class ProofManager:
                 ruleDict[ruleCount] = ruleName
         if self.verbLevel >= 3:
             nameList = [ruleDict[id] for id in unitRange(ruleCount)]
-            print("Found %d clauses for proof generation: %s" % (len(nameList), " ".join(nameList)))
+            self.writer.write("Found %d clauses for proof generation: %s\n" % (len(nameList), " ".join(nameList)))
         self.forest.loadClauses(clauseList)
         t = self.forest.search(targetClause)
         if t is None:
@@ -553,7 +558,7 @@ class ProofManager:
         nproof = proof.remapLiterals(inverseMap)
         if self.verbLevel >= 3:
             pstring = nproof.postfix(showLiterals = True)
-            print("Generated proof: " + pstring)
+            self.writer.write("Generated proof: " + pstring)
         return nproof
 
     # Generate a clause from a symbolic rule
@@ -568,22 +573,22 @@ class ProofManager:
             literalList.append(literal)
         return Clause(literalList)
 
-
-
 class Resolver:
     variableNames = []
     rules = {}
     target = []
     verbLevel = 1
     manager = None
+    writer = None
 
-    def __init__(self, variableNames, rules, target, verbLevel = 1):
+    def __init__(self, variableNames, rules, target, verbLevel = 1, writer = None):
         self.verbLevel = verbLevel
         self.variableNames = variableNames
         self.rules = rules
         self.target = target
         self.verbLevel = verbLevel
-        self.manager = ProofManager(self.variableNames, len(rules), self.target, verbLevel = self.verbLevel)
+        self.writer = sys.stderr if writer is None else writer
+        self.manager = ProofManager(self.variableNames, len(rules), self.target, verbLevel = self.verbLevel, writer = self.writer)
 #        for cname in self.rules.keys():
 #            self.manager.addRule(cname, self.rules[cname])
 
@@ -609,7 +614,7 @@ class Resolver:
 
 class AndResolver(Resolver):
     
-    def __init__(self, verbLevel = 1):
+    def __init__(self, verbLevel = 1, writer = None):
         variableNames = ["x", "u", "u1", "u0", "v", "v1", "v0", "w", "w1", "w0"]
         rules = { "UTD" : ["!x",  "!u",  "u1"],
                   "UFD" : ["x",   "!u",  "u0"],
@@ -620,7 +625,7 @@ class AndResolver(Resolver):
                   "IMT" : ["!u1", "!v1", "w1"],
                   "IMF" : ["!u0", "!v0", "w0"] }
         target = ["!u", "!v", "w"]
-        Resolver.__init__(self, variableNames, rules, target, verbLevel)
+        Resolver.__init__(self, variableNames, rules, target, verbLevel, writer = writer)
         
     def nobranchU(self, valueMap):
         valueMap["u1"] = valueMap["u"]
@@ -662,7 +667,7 @@ class AndResolver(Resolver):
 
 class ImplyResolver(Resolver):
     
-    def __init__(self, verbLevel = 1):
+    def __init__(self, verbLevel = 1, writer = None):
         variableNames = ["x", "u", "u1", "u0", "v", "v1", "v0"]
         rules = { 
             "UTD" : ["!x",  "!u",  "u1"],
@@ -672,5 +677,5 @@ class ImplyResolver(Resolver):
             "IMT" : ["!u1", "v1"],
             "IMF" : ["!u0", "v0"] }
         target = ["!u", "v"]
-        Resolver.__init__(self, variableNames, rules, target, verbLevel)
+        Resolver.__init__(self, variableNames, rules, target, verbLevel, writer = writer)
     

@@ -2,6 +2,7 @@
 
 from functools import total_ordering
 
+import sys
 import resolver
 
 class BddException(Exception):
@@ -16,9 +17,11 @@ class BddException(Exception):
 class DummyProver:
 
     clauseCount = 0
+    writer = None
 
     def __init__(self, fname = None):
         self.clauseCount = 0
+        self.writer = sys.stderr
 
     def comment(self, comment):
         pass
@@ -186,6 +189,7 @@ class VariableNode(Node):
 
 class Manager:
     prover = None
+    writer = None
     # List of variables, ordered by level
     variables = []
     nextNodeId = 0
@@ -224,6 +228,7 @@ class Manager:
 
         self.verbLevel = verbLevel
         self.prover = DummyProver() if prover is None else prover
+        self.writer = prover.writer
         self.rootGenerator = rootGenerator
         self.variables = []
         self.leaf0 = LeafNode(0)
@@ -231,8 +236,8 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel)
-        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel)
+        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel, writer = self.writer)
+        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel, writer = self.writer)
         self.quantifiedVariableSet = set([])
         self.lastGC = 0
         self.cacheJustifyAdded = 0
@@ -699,22 +704,22 @@ class Manager:
     # Summarize activity
     def summarize(self):
         if self.verbLevel >= 1:
-            print("Input variables: %d" % self.variableCount)
-            print("Variables quantified out: %d" % len(self.quantifiedVariableSet))
-            print("Total nodes: %d" % self.nodeCount)
-            print("Total nodes removed by gc: %d" % self.nodesRemoved)
-            print("Maximum live nodes: %d" % self.maxLiveCount)
-            print("Total apply operations: %d" % self.applyCount)            
-            print("Total cached results not requiring proofs: %d" % self.cacheNoJustifyAdded)
-            print("Total cached results requiring proofs: %d" % self.cacheJustifyAdded)
-            print("Total cache entries removed: %d" % self.cacheRemoved)
-            print("Total GCs performed: %d" % self.gcCount)
+            self.writer.write("Input variables: %d\n" % self.variableCount)
+            self.writer.write("Variables quantified out: %d\n" % len(self.quantifiedVariableSet))
+            self.writer.write("Total nodes: %d\n" % self.nodeCount)
+            self.writer.write("Total nodes removed by gc: %d\n" % self.nodesRemoved)
+            self.writer.write("Maximum live nodes: %d\n" % self.maxLiveCount)
+            self.writer.write("Total apply operations: %d\n" % self.applyCount)            
+            self.writer.write("Total cached results not requiring proofs: %d\n" % self.cacheNoJustifyAdded)
+            self.writer.write("Total cached results requiring proofs: %d\n" % self.cacheJustifyAdded)
+            self.writer.write("Total cache entries removed: %d\n" % self.cacheRemoved)
+            self.writer.write("Total GCs performed: %d\n" % self.gcCount)
         if self.verbLevel >= 1:
-            print("Results from And Operations:")
+            self.writer.write("Results from And Operations:\n")
             self.andResolver.summarize()
-            print("Results from Implication Testing Operations:")
+            self.writer.write("Results from Implication Testing Operations:\n")
             self.implyResolver.summarize()
         if self.verbLevel >= 1:
-            print("Results from proof generation")
+            self.writer.write("Results from proof generation\n")
             self.prover.summarize()
         

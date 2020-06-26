@@ -13,14 +13,16 @@ import stream
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    print("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-p PERMUTE] [-s SCHEDULE]" % name)
-    print("  -h          Print this message")
-    print("  -b          Process terms via bucket elimination")
-    print("  -v LEVEL    Set verbosity level")
-    print("  -i CNF      Name of CNF input file")
-    print("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)")
-    print("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level")
-    print("  -s SCHEDULE Name of action schedule file")
+    sys.stderr.write("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-m t|b|p] [-p PERMUTE] [-s SCHEDULE] [-L logfile]\n" % name)
+    sys.stderr.write("  -h          Print this message\n")
+    sys.stderr.write("  -b          Process terms via bucket elimination\n")
+    sys.stderr.write("  -v LEVEL    Set verbosity level\n")
+    sys.stderr.write("  -i CNF      Name of CNF input file\n")
+    sys.stderr.write("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)\n")
+    sys.stderr.write("  -m (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
+    sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
+    sys.stderr.write("  -s SCHEDULE Name of action schedule file\n")
+    sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
 # Verbosity levels
 # 0: Totally silent
@@ -219,28 +221,44 @@ class ProverException(Exception):
         return "Prover Exception: " + str(self.value)
 
 
+# Hack to allow writing binary data to standard output
+class StdOutWriter:
+
+    def write(self, data):
+        if sys.version_info < (3,0):
+            sys.stdout.write(data)
+        elif type(data) is str:
+            sys.stdout.buffer.write(bytearray(data, 'ascii'))
+        else:
+            sys.stdout.buffer.write(data)
+
+    def close(self):
+        pass
+
 class Prover:
 
     inputClauseCount = 0
     clauseCount = 0
     proofCount = 0
     file = None
+    writer = None
     opened = False
     verbLevel = 1
     doLrat = False
     doBinary = False
 
-    def __init__(self, fname = None, verbLevel = 1, doLrat = False, doBinary = False):
+    def __init__(self, fname = None, writer = None, verbLevel = 1, doLrat = False, doBinary = False):
         self.verbLevel = verbLevel
         if fname is None:
             self.opened = False
-            self.file = sys.stdout
+            self.file = StdOutWriter()
         else:
             self.opened = True
             try:
                 self.file = open(fname, 'wb' if doBinary else 'w')
             except Exception:
                 raise ProverException("Could not open file '%s'" % fname)
+        self.writer = sys.stderr if writer is None else writer
         self.doLrat = doLrat
         self.doBinary = doBinary
         self.clauseCount = 0
@@ -322,11 +340,11 @@ class Prover:
 
     def summarize(self):
         if self.verbLevel >= 1:
-            print("Total Clauses: %d" % self.clauseCount)
-            print("Input clauses: %d" % self.inputClauseCount)
+            self.writer.write("Total Clauses: %d\n" % self.clauseCount)
+            self.writer.write("Input clauses: %d\n" % self.inputClauseCount)
             acount = self.clauseCount - self.inputClauseCount - self.proofCount
-            print("Added clauses without antecedents: %d" % acount)
-            print("Added clauses requiring proofs: %d" % (self.proofCount))
+            self.writer.write("Added clauses without antecedents: %d\n" % acount)
+            self.writer.write("Added clauses requiring proofs: %d\n" % (self.proofCount))
 
     def __del__(self):
         if self.opened:
@@ -357,16 +375,18 @@ class Solver:
     unsat = False
     permuter = None
     prover = None
+    writer = None
 
     def __init__(self, fname = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
         if prover is None:
             prover = Prover(verbLevel = verbLevel)
         self.prover = prover
+        self.writer = prover.writer
         try:
             reader = CnfReader(fname, verbLevel = verbLevel)
         except Exception as ex:
-            print("Aborted: %s" % str(ex))
+            self.writer.write("Aborted: %s\n" % str(ex))
             raise ex
         clauseCount = 0
         for line in reader.commentLines:
@@ -377,7 +397,7 @@ class Solver:
             self.prover.createClause(clause, [], "Input clause %d" % clauseCount, isInput = True)
 
         if clauseCount == 0:
-            print("No clauses in CNF File")
+            self.writer.write("No clauses in CNF File\n")
             raise SolverException("Empty CNF file")
 
         self.prover.inputDone()
@@ -425,11 +445,11 @@ class Solver:
         del self.activeIds[id1]
         del self.activeIds[id2]
         if self.prover.fileOutput() and self.verbLevel >= 3:
-            print(comment)
+            self.writer.write(comment)
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
             if self.prover.fileOutput() and self.verbLevel >= 1:
-                print("UNSAT")
+                self.writer.write("UNSAT\n")
             self.unsat = True
             self.manager.summarize()
             return -1
@@ -460,10 +480,10 @@ class Solver:
             if nid < 0:
                 return
         if self.verbLevel >= 0:
-            print("SAT")
+            self.writer.write("SAT\n")
         if self.verbLevel >= 1:
             for s in self.manager.satisfyStrings(self.activeIds[nid].root, limit = 20):
-                print("  " + s)
+                self.writer.write("  " + s)
         
     def runSchedule(self, scheduler):
         idStack = []
@@ -483,7 +503,7 @@ class Solver:
                 cstring = line[1:] if  len(line) >= 1 else ""
                 root =  self.activeIds[idStack[-1]].root
                 size = self.manager.getSize(root)
-                print("Node %d.  Size = %d.%s" % (root.id, size, cstring))
+                self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
                 continue
             try:
                 values = [int(v) for v in fields[1:]]
@@ -525,7 +545,7 @@ class Solver:
             buckets[0].append(id)
         else:
             buckets[level].append(id)
-#            print("DBG: buckets[%d] = %s" % (level, str(buckets[level])))
+#            self.writer.write("DBG: buckets[%d] = %s\n" % (level, str(buckets[level])))
 
     # Bucket elimination
     def runBucketSchedule(self):
@@ -536,15 +556,15 @@ class Solver:
         for id in ids:
             self.placeInBucket(buckets, id)
         for blevel in range(0, maxLevel + 1):
-#            print("DBG: Processing bucket %d" % blevel)
+#            self.writer.write("DBG: Processing bucket %d\n" % blevel)
             # Conjunct all terms in bucket
             while len(buckets[blevel]) > 1:
                 id1 = buckets[blevel][0]
                 id2 = buckets[blevel][1]
                 buckets[blevel] = buckets[blevel][2:]
-#                print("DBG: Combining terms %d and %d" % (id1, id2))
+#                self.writer.write("DBG: Combining terms %d and %d\n" % (id1, id2))
                 newId = self.combineTerms(id1, id2)
-#                print("DBG:      ... generated term %d" % newId)
+#                self.writer.write("DBG:      ... generated term %d\n" % newId)
                 if newId < 0:
                     # Hit unsat case
                     return
@@ -555,26 +575,28 @@ class Solver:
                 buckets[blevel] = []
                 var = self.manager.variables[blevel-1]
                 vid = var.id
-#                print("DBG: Quantifying variable %s" % str(var))
+#                self.writer.write("DBG: Quantifying variable %s\n" % str(var))
                 newId = self.quantifyTerm(id, [vid])
                 self.placeInBucket(buckets, newId)
         if self.verbLevel >= 0:
-            print("SAT")
+            self.writer.write("SAT\n")
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
         rootList = [t.root for t in self.activeIds.values()] 
         return rootList
 
-def readPermutation(fname):
+def readPermutation(fname, writer = None):
     valueList = []
     permutedList = []
     vcount = 0
     lineCount = 0
+    if writer is None:
+        writer = sys.stderr
     try:
         infile = open(fname, 'r')
     except:
-        print("Could not open permutation file '%s'" % fname)
+        writer.write("Could not open permutation file '%s'\n" % fname)
         return None
     for line in infile:
         lineCount += 1
@@ -586,7 +608,7 @@ def readPermutation(fname):
         try:
             values = [int(v) for v in fields]
         except Exception:
-                print("Line #%d.  Invalid list of variables '%s'" % (lineCount, line))
+                writer.write("Line #%d.  Invalid list of variables '%s'\n" % (lineCount, line))
                 return None
         for v in values:
             vcount += 1
@@ -596,17 +618,19 @@ def readPermutation(fname):
     try:
         permuter = Permuter(valueList, permutedList)
     except Exception as ex:
-        print("Invalid permutation: %s" % str(ex))
+        writer.write("Invalid permutation: %s\n" % str(ex))
         return None
     return permuter
         
-def readScheduler(fname):
+def readScheduler(fname, writer = None):
     lineCount = 0
     actionList = []
+    if writer is None:
+        writer = sys.stderr
     try:
         infile = open(fname, 'r')
     except:
-        print("Could not open schedule file '%s'" % fname)
+        writer.write("Could not open schedule file '%s'\n" % fname)
         return None
     for line in infile:
         lineCount += 1
@@ -627,8 +651,9 @@ def run(name, args):
     doBucket = False
     scheduler = None
     verbLevel = 1
+    logName = None
 
-    optlist, args = getopt.getopt(args, "hbv:i:o:p:s:")
+    optlist, args = getopt.getopt(args, "hbv:i:o:m:p:s:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -645,6 +670,13 @@ def run(name, args):
             if extension == 'lrat' or extension == 'lratb':
                 doLrat = True
                 doBinary = extension[-1] == 'b'
+        elif opt == '-m':
+            proofName = None
+            if val == 'b':
+                doLrat = True
+                doBinary = True
+            elif val == 't':
+                doLrat = True
         elif opt == '-p':
             permuter = readPermutation(val)
             if permuter is None:
@@ -653,19 +685,23 @@ def run(name, args):
             scheduler = readScheduler(val)
             if scheduler is None:
                 return
+        elif opt == '-L':
+            logName = val
         else:
-            print("Unknown option '%s'" % opt)
+            sys.stderr.write("Unknown option '%s'\n" % opt)
             usage(name)
             return
 
+    writer = stream.Logger(logName)
+
     if doBucket and scheduler is not None:
-        print("Cannot have both bucket scheduling and defined scheduler")
+        writer.write("Cannot have both bucket scheduling and defined scheduler\n")
         return
 
     try:
-        prover = Prover(proofName, verbLevel = verbLevel, doLrat = doLrat, doBinary = doBinary)
+        prover = Prover(proofName, writer = writer, verbLevel = verbLevel, doLrat = doLrat, doBinary = doBinary)
     except Exception as ex:
-        print("Couldn't create prover (%s)" % str(ex))
+        writer.write("Couldn't create prover (%s)\n" % str(ex))
         return
 
     start = datetime.datetime.now()
@@ -680,14 +716,12 @@ def run(name, args):
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
     if verbLevel > 0:
-        print("Elapsed time for SAT: %.2f seconds" % seconds)
-
+        writer.write("Elapsed time for SAT: %.2f seconds\n" % seconds)
+    if writer != sys.stderr:
+        writer.close()
     
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
-            
-                    
-            
 
     
 

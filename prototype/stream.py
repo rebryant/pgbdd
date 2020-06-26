@@ -2,6 +2,29 @@
 # and for communicating with proof server
 
 import binascii
+import sys
+
+class Logger:
+    outFile = None
+
+    def __init__(self, outName = None):
+        self.outFile = None
+        if outName is not None:
+            try:
+                self.outFile = open(outName, 'a')
+            except:
+                sys.stderr.write("Couldn't open log file '%s'\n", outName)
+                self.outFile = None
+
+    def write(self, text):
+        sys.stderr.write(text)
+        if self.outFile is not None:
+            self.outFile.write(text)
+
+    def close(self):
+        if self.outFile is not None:
+            self.outFile.close()
+
 
 class CompressArray:
     bytes = None
