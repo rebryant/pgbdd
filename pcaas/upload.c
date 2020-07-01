@@ -163,8 +163,9 @@ int main(int argc, char *argv[]) {
 	    break;
 	case 'P':
 	    strcpy(port, optarg);
+	    break;
 	default:
-	    rio_nprintf(&rio_out, BLEN, "Uknown option -%c\n", c);
+	    rio_nprintf(&rio_out, BLEN, "Unknown option -%c\n", c);
 	    usage(argv[0]);
 	}
     }
