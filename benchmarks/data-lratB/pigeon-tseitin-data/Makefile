@@ -6,7 +6,7 @@ GENERATOR = $(INTERP) ../../pigeon-sinz.py
 SOLVER = $(INTERP) ../../../protoB/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
-EXTENSION = lratb
+EXTENSION = lrat
 
 c: pigeon-tseitin-$(N)-column.data
 b: pigeon-tseitin-$(N)-bucket.data
