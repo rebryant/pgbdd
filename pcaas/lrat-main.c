@@ -45,7 +45,7 @@ int main (int argc, char** argv) {
   rio_t *rp_proof;
   bool is_binary = false;
 
-  rio_initb(&rio_out, STDIN_FILENO);
+  rio_initb(&rio_out, STDOUT_FILENO);
 
   /* Process CNF file */
   int cnf_fd =  open(argv[1], O_RDONLY);
