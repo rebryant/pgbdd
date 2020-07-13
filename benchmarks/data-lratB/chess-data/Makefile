@@ -22,7 +22,7 @@ chess-$(N)-column.data:
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-column.cnf -s chess-$(N)-column.schedule \
 		-p chess-$(N)-column.order -o chess-$(N)-column.$(EXTENSION) 2>&1 | tee -a chess-$(N)-column.data
 	$(CHECKER) chess-$(N)-column.cnf chess-$(N)-column.$(EXTENSION) | tee -a chess-$(N)-column.data
-#	rm -f chess-$(N)-column.$(EXTENSION)
+	rm -f chess-$(N)-column.$(EXTENSION)
 
 chess-$(N)-noquant.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-noquant | tee chess-$(N)-noquant.data
