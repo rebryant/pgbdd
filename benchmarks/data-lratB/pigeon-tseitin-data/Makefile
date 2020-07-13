@@ -15,21 +15,21 @@ l: pigeon-tseitin-$(N)-linear.data
 pigeon-tseitin-$(N)-column.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-column.data
 	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N).cnf -s pigeon-tseitin-$(N).schedule \
-		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-column.data
+		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-column.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-column.data
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
 
 pigeon-tseitin-$(N)-bucket.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-bucket.data
 	$(SOLVER) -b -v $(VLEVEL) -i pigeon-tseitin-$(N).cnf \
-		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-bucket.data
+		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-bucket.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-bucket.data
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
 
 pigeon-tseitin-$(N)-linear.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-linear.data
 	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N).cnf \
-		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-linear.data
+		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-linear.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-linear.data
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
 
