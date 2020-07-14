@@ -35,14 +35,14 @@ chess-$(N)-noquant.data:
 chess-$(N)-noschedule.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-noschedule | tee chess-$(N)-noschedule.data
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-noschedule.cnf \
-		-p chess-$(N)-noschedule.order -o chess-$(N)-noschedule.$(EXTENSION)  2>&1 | tee -a chess-$(N)-noschedule.data
+		-p chess-$(N)-noschedule.order -o chess-$(N)-noschedule.$(EXTENSION) 2>&1 | tee -a chess-$(N)-noschedule.data
 	$(CHECKER) chess-$(N)-noschedule.cnf chess-$(N)-noschedule.$(EXTENSION) | tee -a chess-$(N)-noschedule.data
 	rm -f chess-$(N)-noschedule.$(EXTENSION)
 
 chess-$(N)-bucket.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-bucket | tee chess-$(N)-bucket.data
 	$(SOLVER) -b -v $(VLEVEL) -i chess-$(N)-bucket.cnf \
-		-p chess-$(N)-bucket.order -o chess-$(N)-bucket.$(EXTENSION)  2>&1 | tee -a chess-$(N)-bucket.data
+		-p chess-$(N)-bucket.order -o chess-$(N)-bucket.$(EXTENSION) 2>&1 | tee -a chess-$(N)-bucket.data
 	$(CHECKER) chess-$(N)-bucket.cnf chess-$(N)-bucket.$(EXTENSION) | tee -a chess-$(N)-bucket.data
 	rm -f chess-$(N)-bucket.$(EXTENSION)
 
