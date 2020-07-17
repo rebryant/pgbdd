@@ -213,7 +213,11 @@ class VResolver:
     antecedentCount = 0
     clauseCount = 0
     runCount = 0
+    tryCount = 0
     profiler = None
+    # Should we just enumerate last few possibilities, 
+    # or try to fully determine how to perform handle each chain?
+    enumerate = True
     
     def __init__(self, prover, rule1Names, rule2Names):
         self.prover = prover
@@ -222,6 +226,7 @@ class VResolver:
         self.antecedentCount = 0
         self.clauseCount = 0
         self.runCount = 0
+        self.tryCount = 0
         self.profiler = Profiler(prover)
 
     def showRules(self, ruleIndex):
@@ -229,22 +234,44 @@ class VResolver:
         return "[" + ", ".join(rlist) + "]"
 
     def run(self, targetClause, ruleIndex, comment):
+        if self.enumerate:
+            return self.runSet(targetClause, ruleIndex, comment)
+        else:
+            return self.runSingle(targetClause, ruleIndex, comment)
+
+    def runSingle(self, targetClause, ruleIndex, comment):
         self.runCount += 1
         pair1 = self.buildChain(self.rule1Names, ruleIndex)
         pair2 = self.buildChain(self.rule2Names, ruleIndex)
-        localTryCount = 0
-        idx1 = 0
         (r1, a1) = pair1
         (r2, a2) = pair2
         r = resolveClauses(r1, r2)
+        self.tryCount += 1
         if r is None:
             msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
             raise ResolveException(msg)
         if not testClauseEquality(r, targetClause):
             msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
             raise ResolveException(msg)
+
         return self.generateProof(r, r1, a1, r2, a2, comment)
-            
+
+    def runSet(self, targetClause, ruleIndex, comment):
+        self.runCount += 1
+        pairList1 = self.buildChainSet(self.rule1Names, ruleIndex)
+        pairList2 = self.buildChainSet(self.rule2Names, ruleIndex)
+        for pair1 in pairList1:
+            (r1, a1) = pair1
+            for pair2 in pairList2:
+                (r2, a2) = pair2
+                r = resolveClauses(r1, r2)
+                self.tryCount += 1
+                if r is not None and testClauseEquality(r, targetClause):
+                    return self.generateProof(r, r1, a1, r2, a2, comment)
+        msg = "Could not justify clause %s.  Tried %d combinations" % (showClause(targetClause), len(pairList1) * len(pairList2))
+        raise ResolveException(msg)
+
+
     # Filter set of clauses to include only those useful in single-clause resolution proof
     # This version will be overloaded by operation-specific ones
     def filterClauses(self, idList, ruleIndex):
@@ -272,6 +299,30 @@ class VResolver:
         self.profiler.profile(chain, pair, ruleIndex)
         return pair
 
+    # Build chain of clauses for resolution proof
+    def buildChainSet(self, ruleNames, ruleIndex):
+        clauseDict = self.prover.clauseDict
+        chain = []
+        for n in ruleNames:
+            if n in ruleIndex:
+                if ruleIndex[n] != tautologyId:
+                    chain.append(ruleIndex[n])
+        if len(chain) == 0:
+            msg = "No applicable rules in chain (rule index = %s)." % (self.showRules(ruleIndex))
+            raise ResolveException(msg)
+        if len(chain) == 1:
+            id = chain[0]
+            pairList = [(clauseDict[id], [id])]
+        else:
+            pair = chainResolve(chain, clauseDict)
+            if pair is None:
+                id = self.filterClauses(chain, ruleIndex)
+                pairList = [(clauseDict[id], [id]) for id in chain]
+            else:
+                pairList = [pair]
+        return pairList
+
+    
     def generateProof(self, r, r1, a1, r2, a2, comment):
         self.antecedentCount += len(a1) + len(a2)
         self.prover.proofCount += 1
@@ -293,7 +344,8 @@ class VResolver:
         if self.prover.verbLevel >= 1 and self.runCount > 0:
             antecedentAvg = float(self.antecedentCount) / float(self.runCount)
             clauseAvg = float(self.clauseCount) / float(self.runCount)
-            self.prover.writer.write("  Avg antecedents / proof = %.2f.  Avg clauses / proof = %.2f.\n" % (antecedentAvg, clauseAvg))
+            tryAvg = float(self.tryCount) / float(self.runCount)
+            self.prover.writer.write("  Avg antecedents / proof = %.2f.  Avg clauses / proof = %.2f.  Avg tries / proof = %.2f\n" % (antecedentAvg, clauseAvg, tryAvg))
             self.profiler.summarize()
 
 
