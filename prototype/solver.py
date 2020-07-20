@@ -246,6 +246,7 @@ class Prover:
     verbLevel = 1
     doLrat = False
     doBinary = False
+    clauseDict = {}  # Mapping from clause ID to list of literals in clause
 
     def __init__(self, fname = None, writer = None, verbLevel = 1, doLrat = False, doBinary = False):
         self.verbLevel = verbLevel
@@ -263,6 +264,7 @@ class Prover:
         self.doBinary = doBinary
         self.clauseCount = 0
         self.proofCount = 0
+        self.clauseDict = {}
 
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
@@ -301,9 +303,12 @@ class Prover:
                 self.comment(istring)
             else:
                 self.file.write(istring + '\n')
+        self.clauseDict[self.clauseCount] = result
         return self.clauseCount
 
     def deleteClauses(self, clauseList):
+        for id in clauseList:
+            del self.clauseDict[id]
         if not self.doLrat:
             return
         middle = [ord('d')] if self.doBinary else ['d']
@@ -316,27 +321,6 @@ class Prover:
             slist = [str(i) for i in ilist]
             istring = " ".join(slist)
             self.file.write(istring + '\n')
-
-    # Return index of justifying clause
-    # + list of clauses generated
-    def emitProof(self, proof, ruleIndex, comment):
-        if proof.isLeaf:
-            self.comment(comment)
-            return ruleIndex[proof.name], []
-        else:
-            clauseList = []
-            antecedent = []
-            rchildren = proof.children
-            rchildren.reverse()
-            for c in rchildren:
-                clause, clist = self.emitProof(c, ruleIndex, comment)
-                antecedent.append(clause)
-                clauseList += clist
-                comment = None
-            self.proofCount += 1
-            nclause = self.createClause(proof.literalList, antecedent)
-            clauseList.append(nclause)
-            return nclause, clauseList
 
     def summarize(self):
         if self.verbLevel >= 1:
@@ -376,6 +360,8 @@ class Solver:
     permuter = None
     prover = None
     writer = None
+    # Turn on to have information about node include number of solutions
+    countSolutions = True
 
     def __init__(self, fname = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
@@ -495,6 +481,8 @@ class Solver:
             if len(fields) == 0:
                 continue
             cmd = fields[0]
+            if cmd == '#':
+                continue
             if cmd == 'i':  # Information request
                 if len(idStack) == 0:
                     raise SolverException("Line #%d.  Nothing on stack" % lineCount)
@@ -503,15 +491,18 @@ class Solver:
                 cstring = line[1:] if  len(line) >= 1 else ""
                 root =  self.activeIds[idStack[-1]].root
                 size = self.manager.getSize(root)
-                self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
+                if self.verbLevel >= 1:
+                    if self.countSolutions:
+                        count = self.manager.satisfyCount(root)
+                        self.writer.write("Node %d.  Size = %d, Solutions = %d.%s\n" % (root.id, size, count, cstring))
+                    else:
+                        self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
                 continue
             try:
                 values = [int(v) for v in fields[1:]]
             except:
                 raise SolverException("Line #%d.  Invalid field '%s'" % (lineCount, line))
-            if cmd == '#':
-                continue
-            elif cmd == 'c':  # Put listed clauses onto stack
+            if cmd == 'c':  # Put listed clauses onto stack
                 idStack += values
             elif cmd == 'a':  # Pop n+1 clauses from stack.  Form their conjunction.  Push result back on stack
                 count = values[0]
@@ -545,7 +536,6 @@ class Solver:
             buckets[0].append(id)
         else:
             buckets[level].append(id)
-#            self.writer.write("DBG: buckets[%d] = %s\n" % (level, str(buckets[level])))
 
     # Bucket elimination
     def runBucketSchedule(self):
@@ -556,15 +546,12 @@ class Solver:
         for id in ids:
             self.placeInBucket(buckets, id)
         for blevel in range(0, maxLevel + 1):
-#            self.writer.write("DBG: Processing bucket %d\n" % blevel)
             # Conjunct all terms in bucket
             while len(buckets[blevel]) > 1:
                 id1 = buckets[blevel][0]
                 id2 = buckets[blevel][1]
                 buckets[blevel] = buckets[blevel][2:]
-#                self.writer.write("DBG: Combining terms %d and %d\n" % (id1, id2))
                 newId = self.combineTerms(id1, id2)
-#                self.writer.write("DBG:      ... generated term %d\n" % newId)
                 if newId < 0:
                     # Hit unsat case
                     return
@@ -575,7 +562,6 @@ class Solver:
                 buckets[blevel] = []
                 var = self.manager.variables[blevel-1]
                 vid = var.id
-#                self.writer.write("DBG: Quantifying variable %s\n" % str(var))
                 newId = self.quantifyTerm(id, [vid])
                 self.placeInBucket(buckets, newId)
         if self.verbLevel >= 0:

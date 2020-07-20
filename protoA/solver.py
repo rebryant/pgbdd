@@ -246,7 +246,6 @@ class Prover:
     verbLevel = 1
     doLrat = False
     doBinary = False
-    clauseDict = {}  # Mapping from clause ID to list of literals in clause
 
     def __init__(self, fname = None, writer = None, verbLevel = 1, doLrat = False, doBinary = False):
         self.verbLevel = verbLevel
@@ -264,7 +263,6 @@ class Prover:
         self.doBinary = doBinary
         self.clauseCount = 0
         self.proofCount = 0
-        self.clauseDict = {}
 
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
@@ -303,12 +301,9 @@ class Prover:
                 self.comment(istring)
             else:
                 self.file.write(istring + '\n')
-        self.clauseDict[self.clauseCount] = result
         return self.clauseCount
 
     def deleteClauses(self, clauseList):
-        for id in clauseList:
-            del self.clauseDict[id]
         if not self.doLrat:
             return
         middle = [ord('d')] if self.doBinary else ['d']
@@ -321,6 +316,27 @@ class Prover:
             slist = [str(i) for i in ilist]
             istring = " ".join(slist)
             self.file.write(istring + '\n')
+
+    # Return index of justifying clause
+    # + list of clauses generated
+    def emitProof(self, proof, ruleIndex, comment):
+        if proof.isLeaf:
+            self.comment(comment)
+            return ruleIndex[proof.name], []
+        else:
+            clauseList = []
+            antecedent = []
+            rchildren = proof.children
+            rchildren.reverse()
+            for c in rchildren:
+                clause, clist = self.emitProof(c, ruleIndex, comment)
+                antecedent.append(clause)
+                clauseList += clist
+                comment = None
+            self.proofCount += 1
+            nclause = self.createClause(proof.literalList, antecedent)
+            clauseList.append(nclause)
+            return nclause, clauseList
 
     def summarize(self):
         if self.verbLevel >= 1:

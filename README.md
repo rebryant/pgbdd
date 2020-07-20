@@ -21,3 +21,27 @@ That is, the overall program operation is similar to that of SBSAT,
 but it generates proofs using generalizations of the ideas found in
 EBDDRES (Jussila, Sinz, Biere).
 
+Directories:
+
+benchmarks:
+	Contains benchmarks used for evaluting solver
+
+booleforce-1.3:
+	Downloaded from JKU Linz.  Make use of its proof checker tracecheck
+
+explore:
+	Code for generating different graph types.
+
+lrat:
+	LRAT proof checker
+
+pcaas:
+	LRAT proof checker modified to support "Proof checking as a service"
+
+protoA:
+	Initial implementation of solver.  Uses general-purpose resolution engine
+
+prototype:
+	Refined implementation of solver.  Uses resolution engine
+	tailored to needs of solver
+

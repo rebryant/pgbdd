@@ -16,6 +16,7 @@ class BddException(Exception):
 # Place holder to allow program to run without proving anything
 class DummyProver:
 
+    doLrat = False
     clauseCount = 0
     writer = None
 
@@ -228,7 +229,7 @@ class Manager:
 
         self.verbLevel = verbLevel
         self.prover = DummyProver() if prover is None else prover
-        self.writer = prover.writer
+        self.writer = self.prover.writer
         self.rootGenerator = rootGenerator
         self.variables = []
         self.leaf0 = LeafNode(0)
@@ -236,8 +237,8 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel, writer = self.writer)
-        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel, writer = self.writer)
+        self.andResolver = resolver.AndResolver(prover)
+        self.implyResolver = resolver.ImplyResolver(prover)
         self.quantifiedVariableSet = set([])
         self.lastGC = 0
         self.cacheJustifyAdded = 0
@@ -344,6 +345,43 @@ class Manager:
     def showLiteralList(self, litLL):
         return '[' + ', '.join(self.showLiterals(ls) for ls in litLL) + ']'
 
+    # Count number of solutions to function
+    # Over variables consisting of support set for function
+    def satisfyCount(self, root):
+        supportClause = self.getSupport(root)
+        # Mapping from (node, support) to count
+        countDict = {(self.leaf1, self.leaf0) : 1}
+        count = self.countStep(root, supportClause, countDict)
+        return count
+
+    # Recursive step of solution counting
+    def countStep(self, root, supportClause, countDict):
+        if (root, supportClause) in countDict:
+            return countDict[(root, supportClause)]
+        if root == self.leaf0:
+            countDict[(root, supportClause)] = 0
+            return 0
+        if supportClause == self.leaf0:
+            msg = "Ran out of support variables with nonleaf root node %s" % (str(root))
+            raise BddException(msg)
+        varS = supportClause.variable
+        varR = root.variable
+        nsupport = supportClause.low
+        if varS < varR:
+            ncount = self.countStep(root, nsupport, countDict)
+            count = 2 * ncount
+        elif varS == varR:
+            highR = root.high
+            lowR =  root.low
+            countH = self.countStep(highR, nsupport, countDict)
+            countL = self.countStep(lowR, nsupport, countDict)
+            count = countH + countL
+        else:
+            msg = "Node variable not in support set" % (str(root))
+            raise BddException(msg)
+        countDict[(root, supportClause)] = count
+        return count
+
     # Return lists of literals representing all solutions
     def satisfy(self, node):
         if node.isLeaf():
@@ -401,50 +439,70 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UTD"] = nodeA.inferTrueDown
-            ruleIndex["UFD"] = nodeA.inferFalseDown
+            ruleIndex["UHD"] = nodeA.inferTrueDown
+            ruleIndex["ULD"] = nodeA.inferFalseDown
         if highB != lowB:
-            ruleIndex["VTD"] = nodeB.inferTrueDown
-            ruleIndex["VFD"] = nodeB.inferFalseDown
+            ruleIndex["VHD"] = nodeB.inferTrueDown
+            ruleIndex["VLD"] = nodeB.inferFalseDown
 
-        (newHigh, implyHigh) = self.applyAndJustify(highA, highB)
-        if implyHigh != resolver.tautologyId:
-            ruleIndex["IMT"] = implyHigh
+        (newHigh, andHigh) = self.applyAndJustify(highA, highB)
+        ruleIndex["ANDH"] = andHigh
             
-        (newLow, implyLow) = self.applyAndJustify(lowA, lowB)
-        if implyLow != resolver.tautologyId:
-            ruleIndex["IMF"] = implyLow
+        (newLow, andLow) = self.applyAndJustify(lowA, lowB)
+        ruleIndex["ANDL"] = andLow
 
         if newHigh == newLow:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
-            ruleIndex["WTU"] = newNode.inferTrueUp
-            ruleIndex["WFU"] = newNode.inferFalseUp
+            ruleIndex["WHU"] = newNode.inferTrueUp
+            ruleIndex["WLU"] = newNode.inferFalseUp
 
-        variableIndex = { "x":splitVar.id,
-                          "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
-                          "v":nodeB.id, "v1":highB.id, "v0":lowB.id,
-                          "w":newNode.id, "w1":newHigh.id, "w0":newLow.id }
-
-        proof = self.andResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
-        clauseList = []
-        if proof == resolver.tautologyId:
-            justification = resolver.tautologyId
-            
+        targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, newNode.id])
+        if targetClause == resolver.tautologyId:
+            justification, clauseList = resolver.tautologyId, []
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
+            justification, clauseList = self.andResolver.run(targetClause, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification,clauseList)
-        if justification != resolver.tautologyId:
-            self.cacheJustifyAdded += 1
-        else:
-            self.cacheNoJustifyAdded += 1
+        self.cacheJustifyAdded += 1
         return (newNode, justification)
 
     # Version that runs without generating justification
     def applyAnd(self, nodeA, nodeB):
-        newNode, justification = self.applyAndJustify(nodeA, nodeB)
+        self.applyCount += 1
+        # Constant cases.
+        if nodeA == self.leaf0 or nodeB == self.leaf0:
+            return self.leaf0
+        if nodeA == self.leaf1:
+            return nodeB
+        if nodeB == self.leaf1:
+            return nodeA
+        if nodeA == nodeB:
+            return nodeA
+
+        if nodeA.id > nodeB.id:
+            nodeA, nodeB = nodeB, nodeA
+        key = ("andnj", nodeA.id, nodeB.id)
+        if key in self.operationCache:
+            return self.operationCache[key]
+
+        # Mapping from variable names to variable numbers
+        splitVar = min(nodeA.variable, nodeB.variable)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+
+        newHigh = self.applyAnd(highA, highB)
+        newLow  = self.applyAnd(lowA, lowB)
+
+        if newHigh == newLow:
+            newNode = newHigh
+        else:
+            newNode = self.findOrMake(splitVar, newHigh, newLow)
+
+        self.operationCache[key] = newNode
         return newNode
 
     def applyNot(self, node):
@@ -558,31 +616,24 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UTD"] = nodeA.inferTrueDown
-            ruleIndex["UFD"] = nodeA.inferFalseDown
+            ruleIndex["UHD"] = nodeA.inferTrueDown
+            ruleIndex["ULD"] = nodeA.inferFalseDown
         if highB != lowB:
-            ruleIndex["VTU"] = nodeB.inferTrueUp
-            ruleIndex["VFU"] = nodeB.inferFalseUp
+            ruleIndex["VHU"] = nodeB.inferTrueUp
+            ruleIndex["VLU"] = nodeB.inferFalseUp
 
         (checkHigh, implyHigh) = self.justifyImply(highA, highB)
         if implyHigh != resolver.tautologyId:
-            ruleIndex["IMT"] = implyHigh
+            ruleIndex["IMH"] = implyHigh
         (checkLow, implyLow) = self.justifyImply(lowA, lowB)
         if implyLow != resolver.tautologyId:
-            ruleIndex["IMF"] = implyLow
-
-        variableIndex = { "x":splitVar.id,
-                          "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
-                          "v":nodeB.id, "v1":highB.id, "v0":lowB.id }
+            ruleIndex["IML"] = implyLow
 
         check = checkHigh and checkLow
         if check:
-            proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
-            if proof == resolver.tautologyId:
-                justification, clauseList = resolver.tautologyId, []
-            else:
-                comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-                justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
+            targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
+            comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
+            justification, clauseList = self.implyResolver.run(targetClause, ruleIndex, comment)
         else:
             justification, clauseList = resolver.tautologyId, []
 

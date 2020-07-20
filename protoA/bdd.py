@@ -236,8 +236,8 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.AndResolver(prover)
-        self.implyResolver = resolver.ImplyResolver(prover)
+        self.andResolver = resolver.AndResolver(verbLevel = self.verbLevel, writer = self.writer)
+        self.implyResolver = resolver.ImplyResolver(verbLevel = self.verbLevel, writer = self.writer)
         self.quantifiedVariableSet = set([])
         self.lastGC = 0
         self.cacheJustifyAdded = 0
@@ -401,33 +401,45 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UTD"] = nodeA.inferTrueDown
+            ruleIndex["UFD"] = nodeA.inferFalseDown
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.inferTrueDown
-            ruleIndex["VLD"] = nodeB.inferFalseDown
+            ruleIndex["VTD"] = nodeB.inferTrueDown
+            ruleIndex["VFD"] = nodeB.inferFalseDown
 
-        (newHigh, andHigh) = self.applyAndJustify(highA, highB)
-        ruleIndex["ANDH"] = andHigh
+        (newHigh, implyHigh) = self.applyAndJustify(highA, highB)
+        if implyHigh != resolver.tautologyId:
+            ruleIndex["IMT"] = implyHigh
             
-        (newLow, andLow) = self.applyAndJustify(lowA, lowB)
-        ruleIndex["ANDL"] = andLow
+        (newLow, implyLow) = self.applyAndJustify(lowA, lowB)
+        if implyLow != resolver.tautologyId:
+            ruleIndex["IMF"] = implyLow
 
         if newHigh == newLow:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
-            ruleIndex["WHU"] = newNode.inferTrueUp
-            ruleIndex["WLU"] = newNode.inferFalseUp
+            ruleIndex["WTU"] = newNode.inferTrueUp
+            ruleIndex["WFU"] = newNode.inferFalseUp
 
-        targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, newNode.id])
-        if targetClause == resolver.tautologyId:
-            justification, clauseList = resolver.tautologyId, []
+        variableIndex = { "x":splitVar.id,
+                          "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
+                          "v":nodeB.id, "v1":highB.id, "v0":lowB.id,
+                          "w":newNode.id, "w1":newHigh.id, "w0":newLow.id }
+
+        proof = self.andResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
+        clauseList = []
+        if proof == resolver.tautologyId:
+            justification = resolver.tautologyId
+            
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification, clauseList = self.andResolver.run(targetClause, ruleIndex, comment)
+            justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification,clauseList)
-        self.cacheJustifyAdded += 1
+        if justification != resolver.tautologyId:
+            self.cacheJustifyAdded += 1
+        else:
+            self.cacheNoJustifyAdded += 1
         return (newNode, justification)
 
     # Version that runs without generating justification
@@ -546,24 +558,31 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UTD"] = nodeA.inferTrueDown
+            ruleIndex["UFD"] = nodeA.inferFalseDown
         if highB != lowB:
-            ruleIndex["VHU"] = nodeB.inferTrueUp
-            ruleIndex["VLU"] = nodeB.inferFalseUp
+            ruleIndex["VTU"] = nodeB.inferTrueUp
+            ruleIndex["VFU"] = nodeB.inferFalseUp
 
         (checkHigh, implyHigh) = self.justifyImply(highA, highB)
         if implyHigh != resolver.tautologyId:
-            ruleIndex["IMH"] = implyHigh
+            ruleIndex["IMT"] = implyHigh
         (checkLow, implyLow) = self.justifyImply(lowA, lowB)
         if implyLow != resolver.tautologyId:
-            ruleIndex["IML"] = implyLow
+            ruleIndex["IMF"] = implyLow
+
+        variableIndex = { "x":splitVar.id,
+                          "u":nodeA.id, "u1":highA.id, "u0":lowA.id,
+                          "v":nodeB.id, "v1":highB.id, "v0":lowB.id }
 
         check = checkHigh and checkLow
         if check:
-            targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
-            comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-            justification, clauseList = self.implyResolver.run(targetClause, ruleIndex, comment)
+            proof = self.implyResolver.run(variableIndex, ruleNames = sorted(ruleIndex.keys()))
+            if proof == resolver.tautologyId:
+                justification, clauseList = resolver.tautologyId, []
+            else:
+                comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
+                justification, clauseList = self.prover.emitProof(proof, ruleIndex, comment)
         else:
             justification, clauseList = resolver.tautologyId, []
 
