@@ -106,6 +106,18 @@ class ScheduleWriter(Writer):
         self.show("a %d" % count)
         self.stackDepth -= count
 
+    def doStore(self, name):
+        self.show("s %s" % name)
+
+    def doRetrieve(self, name):
+        self.show("r %s" % name)
+
+    def doDelete(self, name):
+        self.show("d %s" % name)
+
+    def doEquality(self):
+        self.show("e")
+
     def doQuantify(self, vlist):
         if self.stackDepth == 0:
             print ("Warning: Cannot quantify.  Stack empty")
@@ -139,8 +151,8 @@ class OrderWriter(Writer):
         if self.expectedVariableCount != len(self.variableList):
 #            raise WriterException("Incorrect number of variables in ordering %d != %d" % (
 #                len(self.variableList), self.expectedVariableCount))
-            print("Warning: Incorrect number of variables in ordering %d != %d" % (
-                len(self.variableList), self.expectedVariableCount))
+            print("Warning: Incorrect number of variables in ordering")
+            print("  Expected %d.  Got %d" % (self.expectedVariableCount, len(self.variableList)))
 
         expected = range(1, self.expectedVariableCount+1)
         self.variableList.sort()
