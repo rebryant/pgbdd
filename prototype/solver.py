@@ -163,6 +163,12 @@ class Term:
         validation = self.manager.prover.createClause([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
         return Term(self.manager, newRoot, validation)
 
+    def equalityTest(self, other):
+        root1 = self.root
+        root2 = other.root
+        return root1 == root2
+                                
+
 class PermutationException(Exception):
 
     def __init__(self, value):
@@ -356,6 +362,9 @@ class Solver:
 
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
+    # Dictionary of terms stored for later reuse.  Track so that don't get GCed
+    storeTerms = {}
+    # Dictionary of Ids of terms that are stored for reuse
     unsat = False
     permuter = None
     prover = None
@@ -458,6 +467,13 @@ class Solver:
             self.prover.deleteClauses(clauseList)
         return self.termCount
 
+    # Allow temporary storage of Ids for reuse
+    def storeTerm(self, id):
+        self.storeTerms[id] = self.activeIds[id]
+
+    def unstoreTerm(self, id):
+        del self.storeTerms[id]
+
     def runNoSchedule(self):
         nid = 0
         while (len(self.activeIds) > 1):
@@ -473,6 +489,7 @@ class Solver:
         
     def runSchedule(self, scheduler):
         idStack = []
+        registerDict = {}
         lineCount = 0
         for line in scheduler:
             line = trim(line)
@@ -497,6 +514,50 @@ class Solver:
                         self.writer.write("Node %d.  Size = %d, Solutions = %d.%s\n" % (root.id, size, count, cstring))
                     else:
                         self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
+                continue
+            if cmd == 's':  # Pop top element into register
+                if len(fields) != 2:
+                    raise SolverException("Line #%d.  Invalid store command.  Must have 2 fields" % (lineCount))
+                name = fields[1]
+                id = idStack[-1]
+                term = self.activeIds[id]
+                registerDict[name] = (id, term)
+                self.storeTerm(id)
+                continue
+            if cmd == 'r':  # Retrieve element from register and push on top of stack; don't delete register
+                if len(fields) != 2:
+                    raise SolverException("Line #%d.  Invalid retrieve command.  Must have 2 fields" % (lineCount))
+                name = fields[1]
+                if name not in registerDict:
+                    msg = "Line #%d.  Invalid retrieve command.  Name %s unknown" % (lineCount, name)
+                    raise SolverException(msg)
+                id, term = registerDict[name]
+                idStack.append(id)
+                # Reactivate
+                self.activeIds[id] = term
+                continue
+            if cmd == 'd':  # Delete named register
+                if len(fields) != 2:
+                    raise SolverException("Line #%d.  Invalid delete command.  Must have 2 fields" % (lineCount))
+                name = fields[1]
+                if name not in registerDict:
+                    msg = "Line #%d.  Invalid delete command.  Name %s unknown" % (lineCount, name)
+                    raise SolverException(msg)
+                id, term = registerDict[name]
+                del registerDict[name]
+                self.unstoreTerm(id)
+                continue
+            if cmd == 'e':
+                # Equality test
+                if len(idStack) < 2:
+                    raise SolverException("Line #%d.  Need to items for implication test" % (lineCount))
+                term1 = self.activeIds[idStack[-1]]
+                term2 = self.activeIds[idStack[-2]]
+                idStack = idStack[:-2]
+                if term1.equalityTest(term2):
+                    self.writer.write("Equality test PASSED.  %d == %d\n" % (term1.root.id, term2.root.id))
+                else:
+                    self.writer.write("Equality test FAILED.  %d != %d\n" % (term1.root.id, term2.root.id))
                 continue
             try:
                 values = [int(v) for v in fields[1:]]
@@ -569,7 +630,7 @@ class Solver:
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
-        rootList = [t.root for t in self.activeIds.values()] 
+        rootList = [t.root for t in self.activeIds.values()] + [t.root for t in self.storeTerms.values()]
         return rootList
 
 def readPermutation(fname, writer = None):
