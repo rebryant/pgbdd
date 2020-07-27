@@ -339,7 +339,10 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
   gettimeofday(&finish_time, NULL);
   double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
       (start_time.tv_sec + 1e-6 * start_time.tv_usec);
-  rio_nprintf(rp_out, BLEN, "c Proof bytes = %zd.\n", rp_proof->byte_cnt);
+  if (rp_proof)
+      rio_nprintf(rp_out, BLEN, "c Proof bytes = %zd.\n", rp_proof->byte_cnt);
+  else
+      rio_nprintf(rp_out, BLEN, "c No proof bytes generated.\n");
   rio_nprintf(rp_out, BLEN, "c Added clauses = %lld.  Deleted clauses = %lld.  Max live clauses = %lld\n",
 	 added_clauses, deleted_clauses, max_live_clauses);
   rio_nprintf(rp_out, BLEN, "c verification time = %.2f secs\n", secs);
