@@ -17,3 +17,15 @@ q V_1 V_2 ... V_k
 i Docstring
         Print out BDD information about top element on stack
 
+e
+	Pop top two elements and compare for equality
+
+s name
+	Pop top stack element and store in named register.
+
+r name
+	Retrieve element from register and push onto top of stack
+
+d name
+        Delete named register
+	
