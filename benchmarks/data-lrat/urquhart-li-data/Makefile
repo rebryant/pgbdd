@@ -18,7 +18,7 @@ l: urquhart-li-$(M)-linear.data
 urquhart-li-$(M)-inputorder.data:
 	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)-inputorder.cnf | tee urquhart-li-$(M)-inputorder.data
 	$(SOLVER) -v $(VLEVEL) -i urquhart-li-$(M)-inputorder.cnf -b \
-		-o urquhart-li-$(M)-inputorder.$(EXTENSION) | tee -a urquhart-li-$(M)-inputorder.data
+		-o urquhart-li-$(M)-inputorder.$(EXTENSION) 2>&1 | tee -a urquhart-li-$(M)-inputorder.data
 	$(CHECKER) urquhart-li-$(M)-inputorder.cnf urquhart-li-$(M)-inputorder.$(EXTENSION) | tee -a urquhart-li-$(M)-inputorder.data
 	rm -f urquhart-li-$(M)-inputorder.$(EXTENSION)
 
@@ -26,14 +26,14 @@ urquhart-li-$(M)-randomorder.data:
 	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)_randomorder.cnf | tee urquhart-li-$(M)-randomorder.data
 	$(RANDOMIZER) urquhart-li-$(M)_randomorder.cnf $(SEED)
 	$(SOLVER) -v $(VLEVEL) -i urquhart-li-$(M)_randomorder.cnf -b -p urquhart-li-$(M)_randomorder.order \
-		-o urquhart-li-$(M)-randomorder.$(EXTENSION) | tee -a urquhart-li-$(M)-randomorder.data
+		-o urquhart-li-$(M)-randomorder.$(EXTENSION) 2>&1 | tee -a urquhart-li-$(M)-randomorder.data
 	$(CHECKER) urquhart-li-$(M)_randomorder.cnf urquhart-li-$(M)-randomorder.$(EXTENSION) | tee -a urquhart-li-$(M)-randomorder.data
 	rm -f urquhart-li-$(M)-randomorder.$(EXTENSION)
 
 urquhart-li-$(M)-linear.data:
 	$(GENERATOR) -m$(M) -p$(PCT) -furquhart-li-$(M)-linear.cnf | tee urquhart-li-$(M)-linear.data
 	$(SOLVER) -v $(VLEVEL) -i urquhart-li-$(M)-linear.cnf \
-		-o urquhart-li-$(M)-linear.$(EXTENSION) | tee -a urquhart-li-$(M)-linear.data
+		-o urquhart-li-$(M)-linear.$(EXTENSION) 2>&1 | tee -a urquhart-li-$(M)-linear.data
 	$(CHECKER) urquhart-li-$(M)-linear.cnf urquhart-li-$(M)-linear.$(EXTENSION) | tee -a urquhart-li-$(M)-linear.data
 	rm -f urquhart-li-$(M)-linear.$(EXTENSION)
 
