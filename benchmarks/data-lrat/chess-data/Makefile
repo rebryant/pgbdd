@@ -8,7 +8,6 @@ CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
 EXTENSION = lrat
 
-
 q: chess-$(N)-column.data
 
 nq: chess-$(N)-noquant.data
