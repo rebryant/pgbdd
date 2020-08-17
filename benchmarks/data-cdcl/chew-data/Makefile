@@ -8,14 +8,14 @@ GRABBER = ../../grab_clauses_cdcl.py
 CDCL=../../../../kissat/build/kissat
 DRAT=../../../../drat-trim/drat-trim
 
-c: chew-$(N)-cdcl.data
+c: chew-$(N)-$(SEED)-cdcl.data
 
-chew-$(N)-cdcl.data:
-	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-cdcl.data
-	mv formula.cnf chew-$(N)-cdcl.cnf
-	$(CDCL) --unsat --no-binary chew-$(N)-cdcl.cnf chew-$(N)-cdcl.drat | tee -a chew-$(N)-cdcl.data
-	$(DRAT) chew-$(N)-cdcl.cnf chew-$(N)-cdcl.drat | tee -a chew-$(N)-cdcl.data
-	rm -f chew-$(N)-cdcl.drat
+chew-$(N)-$(SEED)-cdcl.data:
+	$(GENERATOR) $(N)-$(SEED) $(SEED) | tee chew-$(N)-$(SEED)-cdcl.data
+	mv formula.cnf chew-$(N)-$(SEED)-cdcl.cnf
+	$(CDCL) --unsat --no-binary chew-$(N)-$(SEED)-cdcl.cnf chew-$(N)-$(SEED)-cdcl.drat | tee -a chew-$(N)-$(SEED)-cdcl.data
+	$(DRAT) chew-$(N)-$(SEED)-cdcl.cnf chew-$(N)-$(SEED)-cdcl.drat | tee -a chew-$(N)-$(SEED)-cdcl.data
+	rm -f chew-$(N)-$(SEED)-cdcl.drat
 
 data:
 	$(GRABBER) chew*-cdcl.data > chew-cdcl.csv
