@@ -75,7 +75,6 @@ chew-$(N)-noquant-pipe.data:
 		 | $(UPLOADER) -m $(PMODE) -H $(HOST) -c chew-$(N)-noquant-pipe.cnf | tee -a chew-$(N)-noquant-pipe.data
 
 data:
-	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
 	$(GRABBER) chew*-inputorder.data > chew-inputorder.csv
 	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-drat.csv
 	$(GRABBER) chew*-noquant.data > chew-noquant.csv
