@@ -336,6 +336,7 @@ class VResolver:
         else:
             id1 = self.prover.createClause(r1, a1, comment, isInput = False)
             id = self.prover.createClause(r, [id1] + a2, comment = None, isInput = False)
+            self.prover.proofCount += 1
             self.clauseCount += 1
             return id, [id1, id]
 
