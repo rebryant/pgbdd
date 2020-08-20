@@ -40,8 +40,8 @@ urquhart-li-$(M)-linear.data:
 
 data:
 	$(GRABBER) urquhart-li-*-randomorder.data > urquhart-li-randomorder.csv
-	$(GRABBER) urquhart-li-*-inputorder.data > urquhart-li-inputorder.csv
-	$(GRABBER) urquhart-li-*-linear.data > urquhart-li-linear.csv
+#	$(GRABBER) urquhart-li-*-inputorder.data > urquhart-li-inputorder.csv
+#	$(GRABBER) urquhart-li-*-linear.data > urquhart-li-linear.csv
 clean:
 	rm -f *~
 

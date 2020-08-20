@@ -46,7 +46,7 @@ chess-$(N)-bucket.data:
 	rm -f chess-$(N)-bucket.$(EXTENSION)
 
 data:
-	$(GRABBER) chess-???.data > chess-columnscan.csv
+	$(GRABBER) chess-*-column.data > chess-columnscan.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv
 	$(GRABBER) chess-*-noschedule.data > chess-noschedule.csv

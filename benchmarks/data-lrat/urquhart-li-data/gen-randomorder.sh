@@ -11,5 +11,5 @@ make ro M=16
 make ro M=20
 make ro M=22
 make ro M=24
-make ro M=28
+make ro M=26
 

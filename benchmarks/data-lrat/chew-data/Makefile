@@ -76,6 +76,7 @@ chew-$(N)-noquant-pipe.data:
 
 data:
 	$(GRABBER) chew*-inputorder.data > chew-inputorder.csv
+	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
 	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-drat.csv
 	$(GRABBER) chew*-noquant.data > chew-noquant.csv
 clean:
