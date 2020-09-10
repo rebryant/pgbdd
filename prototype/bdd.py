@@ -685,7 +685,7 @@ class Manager:
     def checkGC(self):
         newQuants = len(self.quantifiedVariableSet) - self.lastGC
         if newQuants > self.gcThreshold:
-            return self.collectGarbage([])
+            return self.collectGarbage()
         return []
 
 
@@ -738,8 +738,8 @@ class Manager:
 
     # Start garbage collection.
     # Provided with partial list of accessible roots
-    def collectGarbage(self, rootList):
-        frontier = rootList
+    def collectGarbage(self):
+        frontier = []
         if self.rootGenerator is not None:
             frontier += self.rootGenerator()
         frontier = [r for r in frontier if not r.isLeaf()]
