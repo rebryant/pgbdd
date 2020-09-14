@@ -1,6 +1,6 @@
 /************************************************************************************[lrat-check.c]
 Copyright (c) 2017-2020 Marijn Heule, Carnegie Mellon University
-Last edit: June 1, 2020
+Last edit: September 5, 2020
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -31,7 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define CLRAT		300
 
 void usage(char *name) {
-  printf("Usage: %s FILE1.cnf FILE2.lrat\n", name);
+  printf("Usage: %s FILE1.cnf FILE2.lrat [optional: FILE3.drat]\n", name);
   exit(0);
 }
 
@@ -40,7 +40,7 @@ long long deleted_clauses = 0;
 long long live_clauses = 0;
 long long max_live_clauses = 0;
 
-long long *mask, *intro, now;
+long long *mask, *intro, now, lastIndex;
 
 int *clsList, clsAlloc, clsLast;
 int *table, tableSize, tableAlloc, maskAlloc;
@@ -72,7 +72,6 @@ int checkRedundancy (int pivot, int start, int *hints, long long thisMask) {
     int flag = 0, *clause = table + clsList[res];
     while (*clause) {
       int clit = convertLit (*clause++);
-//      assert (clit < maskAlloc);
       if (clit == (pivot^1)) { flag = 1; continue; }
       if (mask[clit  ] >= thisMask) continue;       // lit is falsified
       if (mask[clit^1] >= thisMask) return SUCCESS; // blocked
@@ -84,11 +83,11 @@ int checkRedundancy (int pivot, int start, int *hints, long long thisMask) {
     int unit = 0, *clause = table + clsList[*(hints++)];
     while (*clause) {
       int clit = convertLit (*(clause++));
-//      assert (clit < maskAlloc);
       if (mask[clit] >= thisMask) continue; // lit is falsified
       if (unit != 0) return FAILED;
       unit = clit; }
     if (unit == 0) return SUCCESS;
+    if (mask[unit^1] == thisMask) printf ("c WARNING hint already satisfied in lemma with index %lli\n", lastIndex);
     mask[unit^1] = thisMask; }
 
   if (res == 0) return SUCCESS;
@@ -103,7 +102,6 @@ int checkClause (int* list, int size, int* hints) {
     if (clit >= maskAlloc) {
       int old = maskAlloc;
       maskAlloc = (clit * 3) >> 1;
-//      printf("c realloc mask to %i\n", maskAlloc);
       mask  = (long long *) realloc (mask,  sizeof (long long) * maskAlloc);
       intro = (long long *) realloc (intro, sizeof (long long) * maskAlloc);
       if (!mask || !intro) { printf ("c Memory allocation failure\n"); exit (1); }
@@ -114,9 +112,21 @@ int checkClause (int* list, int size, int* hints) {
   if (res  == FAILED) return FAILED;
   if (RATs == 0)      return SUCCESS;
 
+
   int start = intro[pivot ^ 1];
+  int flag  = 1;
+  while (start > 1 && flag) {
+    if (clsList[start] != DELETED) {
+      int *clause = table + clsList[start];
+      while (*clause) {
+        int clit = convertLit (*clause++);
+        if (clit == (pivot^1)) flag = 0; } }
+    if (start == clsLast) { start = 0; flag = 0; }
+    if (flag) start++; }
+
+  intro[pivot ^ 1] = start;
+
   if (start == 0) return SUCCESS;
-//  int start = 1;
   while (1) {
     hints++; now++; while (*hints > 0) hints++;
     if (*hints == 0) break;
@@ -132,7 +142,7 @@ int checkClause (int* list, int size, int* hints) {
 
   return SUCCESS; }
 
-void addClause (int index, int* literals, int size) {
+void addClause (int index, int* literals, int size, FILE* drat) {
   if (index >= clsAlloc) {
     int i = clsAlloc;
     clsAlloc = (index * 3) >> 1;
@@ -147,7 +157,9 @@ void addClause (int index, int* literals, int size) {
   int i; for (i = 0; i < size; i++) {
     int clit = convertLit (literals[i]);
     if (intro[clit] == 0) intro[clit] = index;
+    if (drat != NULL) fprintf (drat, "%i ", literals[i]);
     table[tableSize++] = literals[i]; }
+  if (drat != NULL) fprintf (drat, "0\n");
   table[tableSize++] = 0;
   clsLast = index;
   added_clauses++;
@@ -156,27 +168,31 @@ void addClause (int index, int* literals, int size) {
       max_live_clauses = live_clauses;
 }
 
-void deleteClauses (int* list) {
+void deleteClauses (int* list, FILE* drat) {
   while (*list) {
     int index = *list++;
     if (clsList[index] == DELETED) {
       printf ("c WARNING: clause %i is already deleted\n", index); }
-    clsList[index] = DELETED;
-    deleted_clauses++;
-    live_clauses--;
+    else {
+      if (drat) {
+        int* clause = table + clsList[index];
+        fprintf (drat, "d ");
+        while (*clause) fprintf (drat, "%i ", *clause++);
+        fprintf (drat, "0\n"); }
+      clsList[index] = DELETED;
+      deleted_clauses++;
+      live_clauses--; }
   }
 }
 
-static void addLit(int lit) {
-    if (litCount >= litAlloc) {
-	litAlloc = (litAlloc * 3) >> 1;
-	litList = (int*) realloc (litList, sizeof (int) * litAlloc);
-    }
-    litList[litCount++] = lit;
-}
+static void addLit (int lit) {
+  if (litCount >= litAlloc) {
+    litAlloc = (litAlloc * 3) >> 1;
+    litList = (int*) realloc (litList, sizeof (int) * litAlloc); }
+  litList[litCount++] = lit; }
 
-int parseLine (FILE* file, int mode) {
-  int lit, index, tmp;
+int parseLine (FILE* file, int mode, int line) {
+  int lit, tmp;
   litCount = 0;
   char c = 0;
   while (1) {
@@ -189,25 +205,27 @@ int parseLine (FILE* file, int mode) {
       tmp = fscanf (file, "%c", &c); } }
 
   if (mode == CNF) {
+    line++;
     while (1) {
       tmp = fscanf (file, " %i ", &lit);
       if (tmp == 0 || tmp == EOF) return 0;
       int clit = convertLit (lit);
       if (intro[clit] == 0)
-        intro[clit] = 1;
-      addLit(lit);
+        intro[clit] = line;
+      addLit (lit);
       if (lit == 0) return litCount; } }
 
   if (mode == LRAT) {
+    int index;
     int zeros = 2;
     tmp = fscanf (file, " %i ", &index);
     if (tmp == 0 || tmp == EOF) return 0;
-    addLit(index);
+    addLit (index);
 
     tmp = fscanf (file, " d %i ", &lit);
     if (tmp == 1) {
-      addLit((int) 'd');
-      addLit(lit);
+      addLit ((int) 'd');
+      addLit (lit);
       zeros--;
       if (lit   == 0) zeros--;
       if (zeros == 0) {
@@ -229,7 +247,7 @@ int parseLine (FILE* file, int mode) {
   return 0; }
 
 int main (int argc, char** argv) {
-  if (argc != 3)
+  if (argc < 3)
      usage(argv[0]);
   struct timeval start_time, finish_time;
   int return_code = 0;
@@ -241,8 +259,8 @@ int main (int argc, char** argv) {
   FILE* cnf   = fopen (argv[1], "r");
   if (!cnf) {
       printf("Couldn't open file '%s'\n", argv[1]);
-      exit(1);
-  }
+      exit(1); }
+
   for (;;) {
     fscanf (cnf, " p cnf %i %i ", &nVar, &nCls);
     if (nVar > 0) break;
@@ -269,32 +287,40 @@ int main (int argc, char** argv) {
 
   int index = 1;
   while (1) {
-    int size = parseLine (cnf, CNF);
+    int size = parseLine (cnf, CNF, index);
     if (size == 0) break;
-    addClause (index++, litList, size); }
+    addClause (index++, litList, size, NULL); }
   fclose (cnf);
 
   printf ("c parsed a formula with %i variables and %i clauses\n", nVar, nCls);
 
   FILE* proof = fopen (argv[2], "r");
   if (!proof) {
-      printf("Couldn't open file '%s'\n", argv[2]);
-      exit(1);
-  }
+    printf("c Couldn't open file '%s'\n", argv[2]);
+    exit(1); }
+
+  FILE* drat = NULL;
+  if (argc > 3) {
+    drat = fopen (argv[3], "w");
+    if (!drat) {
+      printf("c Couldn't open file '%s'\n", argv[3]);
+      exit(1); } }
+
   int mode = LRAT;
   while (1) {
-    int size = parseLine (proof, mode);
+    int size = parseLine (proof, mode, index);
     if (size == 0) break;
 
     if (getType (litList) == (int) 'd') {
-      deleteClauses (litList + 2); }
+      deleteClauses (litList + 2, drat); }
     else if (getType (litList) == (int) 'a') {
       int  index  = getIndex  (litList);
+      lastIndex = index;
       int  length = getLength (litList);
       int* hints  = getHints  (litList);
 
       if (checkClause (litList + 2, length, hints) == SUCCESS) {
-        addClause (index, litList + 2, length); }
+        addClause (index, litList + 2, length, drat); }
       else {
         printf("c failed to check clause: "); printClause (litList + 2);
         printf("c NOT VERIFIED\n");
@@ -308,6 +334,7 @@ int main (int argc, char** argv) {
       return_code = 1;
     }
   }
+
   gettimeofday(&finish_time, NULL);
   double secs = (finish_time.tv_sec + 1e-6 * finish_time.tv_usec) -
       (start_time.tv_sec + 1e-6 * start_time.tv_usec);
