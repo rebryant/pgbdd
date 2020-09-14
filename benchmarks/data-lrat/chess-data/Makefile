@@ -4,7 +4,7 @@ VLEVEL = 2
 
 GENERATOR = $(INTERP) ../../chess.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
-CHECKER = ../../../pcaas/lrat-check
+CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
 EXTENSION = lrat
 
