@@ -219,6 +219,7 @@ class VResolver:
     profiler = None
     # Should we just enumerate last few possibilities, 
     # or try to fully determine how to perform handle each chain?
+    # 2020-09-14: Must enumerate to ensure testing for shorter proofs
     enumerate = True
     
     def __init__(self, prover, rule1Names, rule2Names):
@@ -305,10 +306,17 @@ class VResolver:
     def buildChainSet(self, ruleNames, ruleIndex):
         clauseDict = self.prover.clauseDict
         chain = []
+        firstRule = False
+        checkFirst = True
         for n in ruleNames:
             if n in ruleIndex:
+                gotRule = False
                 if ruleIndex[n] != tautologyId:
+                    gotRule = True
                     chain.append(ruleIndex[n])
+                if checkFirst:
+                    firstRule = gotRule
+                    checkFirst = False
         if len(chain) == 0:
             msg = "No applicable rules in chain (rule index = %s)." % (self.showRules(ruleIndex))
             raise ResolveException(msg)
@@ -318,12 +326,13 @@ class VResolver:
         else:
             pair = chainResolve(chain, clauseDict)
             if pair is None:
-                id = self.filterClauses(chain, ruleIndex)
                 pairList = [(clauseDict[id], [id]) for id in chain]
-            else:
+            elif firstRule:
                 pairList = [pair]
+            else:
+                # Return source clauses so that resolver can look for shorter chains
+                pairList = [(clauseDict[id], [id]) for id in chain] + [pair]
         return pairList
-
     
     def generateProof(self, r, r1, a1, r2, a2, comment):
         self.antecedentCount += len(a1) + len(a2)
