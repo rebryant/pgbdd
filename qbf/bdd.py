@@ -225,6 +225,7 @@ class Manager:
     andResolver = None
     orResolver = None
     implyResolver = None
+    restrictResolver = None
     # GC support
     # Callback function from driver that will collect accessible roots for GC
     rootGenerator = None
@@ -260,6 +261,7 @@ class Manager:
         self.andResolver = resolver.AndResolver(prover)
         self.orResolver = resolver.OrResolver(prover)
         self.implyResolver = resolver.ImplyResolver(prover)
+        self.restrictResolver = resolver.RestrictResolver(prover)
         self.quantifiedVariableSet = set([])
         self.lastGC = 0
         self.cacheJustifyAdded = 0
@@ -319,7 +321,7 @@ class Manager:
                 if node.high != self.leaf0:
                     antecedents.append(node.inferTrueUp)
         antecedents.append(clauseId)
-        validation = self.prover.createClause([root.id], antecedents, "Validate clause %d entails BDD" % clauseId)
+        validation = self.prover.createClause([root.id], antecedents, "Validate clause %d entails BDD %d" % (clauseId, root.id))
         return root, validation
 
     # Construct BDD representation of clause
@@ -327,21 +329,22 @@ class Manager:
     def constructClauseReverse(self, clauseId, literalList):
         root = self.buildClause(literalList)
         lits = self.deconstructClause(root)
+        lits.reverse()
         # List antecedents in reverse order of resolution steps
         antecedents = []
         # TODO: Need to change logic here
         for node in lits:
             positive = node.high == self.leaf1
             if positive:
-                antecedents.append(node.inferTrueUp)
+                antecedents.append(node.inferTrueDown)
                 if node.low != self.leaf0:
-                    antecedents.append(node.inferFalseUp)
+                    antecedents.append(node.inferFalseDown)
             else:
-                antecedents.append(node.inferFalseUp)
+                antecedents.append(node.inferFalseDown)
                 if node.high != self.leaf0:
-                    antecedents.append(node.inferTrueUp)
-        antecedents.append(clauseId)
-        validation = self.prover.createClause([root.id], antecedents, "Validate BDD entails clause %d" % clauseId)
+                    antecedents.append(node.inferTrueDown)
+        antecedents.append(root.id)
+        validation = self.prover.createClause([clauseId], antecedents, "Validate BDD %d entails clause %d" % (root.id, clauseId))
         return root, validation
     
     def deconstructClause(self, clause):
@@ -812,13 +815,104 @@ class Manager:
         self.cacheNoJustifyAdded += 1
         return newNode
 
-    # Compute restriction on node.  Generate justification that (var,phase) & node  --> newNode
-    def downRestrict(self, node, variable, phase):
-        return None
+    # Compute restriction on node.
+    # Variable and phase indicated by literal node
+    # Generate justification that literal & node  --> newNode
+    # For up: Generate justification that literal & newNode --> node
+    def applyRestrictDown(self, u, literal):
+        if u.isLeaf():
+            return (u, resolver.tautologyId)
+        rvar = literal.variable
+        nvar = u.variable
+        phase1 = literal.high == self.leaf1
+        if rvar < nvar:
+            return (u, resolver.tautologyId)
+        elif rvar == nvar:
+            result = u.high if phase1 else u.low
+            just = u.inferHighDown if phase1 else u.inferLowDown
+            return (result, just)
+        
+        key = ("resdown", u.id, literal.id)
+        if key in self.operationCache:
+            return self.operationCache[key][:2]
 
-    # Compute restriction on node.  Generate justification that newNode & (var,phase) --> node
-    def upRestrict(self, node, variable, phase):
-        return None
+        ruleIndex = { }
+        uhigh = u.high
+        ruleIndex["UHX"] = u.inferHighDown
+        ulow = u.low
+        ruleIndex["ULX"] = u.inferLowDown
+
+        (vhigh, resHigh) = self.applyRestrictDown(uhigh, literal)
+        ruleIndex["RESH"] = resHigh
+        (vlow, resLow)   = self.applyRestrictDown(ulow, literal)
+        ruleIndex["RESL"] = resLow
+        
+        if vhigh == vlow:
+            v = vhigh
+        else:
+            v = self.findOrMake(nvar, vhigh, vlow)
+            ruleIndex["VHX"] = v.inferTrueUp
+            ruleIndex["VLX"] = v.inferFalseUp
+        
+        
+        targetClause = resolver.cleanClause([-rvar.id if phase1 else rvar.id, -u.id, v.id])
+        if targetClause == resolver.tautologyId:
+            justification, clauseList = resolver.tautologyId, []
+        else:
+            comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, u.label(), v.label())
+            justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+        self.operationCache[key] = (v, justification,clauseList)
+        self.cacheJustifyAdded += 1
+        return (v, justification)
+
+        # Compute restriction on node.
+    # Variable and phase indicated by literal node
+    # Generate justification that literal & newNode --> node
+    def applyRestrictUp(self, u, literal):
+        if u.isLeaf():
+            return (u, resolver.tautologyId)
+        rvar = literal.variable
+        nvar = u.variable
+        phase1 = literal.high == self.leaf1
+        if rvar < nvar:
+            return (u, resolver.tautologyId)
+        elif rvar == nvar:
+            result = u.high if phase1 else u.low
+            just = u.inferHighUp if phase1 else u.inferLowUp
+            return (result, just)
+        
+        key = ("resup", u.id, literal.id)
+        if key in self.operationCache:
+            return self.operationCache[key][:2]
+
+        ruleIndex = { }
+        uhigh = u.high
+        ruleIndex["UHX"] = u.inferHighUp
+        ulow = u.low
+        ruleIndex["ULX"] = u.inferLowUp
+
+        (vhigh, resHigh) = self.applyRestrictUp(uhigh, literal)
+        ruleIndex["RESH"] = resHigh
+        (vlow, resLow)   = self.applyRestrictUp(ulow, literal)
+        ruleIndex["RESL"] = resLow
+        
+        if vhigh == vlow:
+            v = vhigh
+        else:
+            v = self.findOrMake(nvar, vhigh, vlow)
+            ruleIndex["VHX"] = v.inferTrueDown
+            ruleIndex["VLX"] = v.inferFalseDown
+        
+        
+        targetClause = resolver.cleanClause([-rvar.id if phase1 else rvar.id, u.id, -v.id])
+        if targetClause == resolver.tautologyId:
+            justification, clauseList = resolver.tautologyId, []
+        else:
+            comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, v.label(), u.label())
+            justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+        self.operationCache[key] = (v, justification,clauseList)
+        self.cacheJustifyAdded += 1
+        return (v, justification)
 
     
     # Should a GC be triggered?
