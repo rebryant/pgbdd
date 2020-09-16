@@ -13,15 +13,12 @@ import stream
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-m t|b|p] [-p PERMUTE] [-s SCHEDULE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o file.qrat] [-p PERMUTE] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -b          Process terms via bucket elimination\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
-    sys.stderr.write("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)\n")
-    sys.stderr.write("  -m (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
+    sys.stderr.write("  -o pfile    Name of proof output file (QRAT format)")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
-    sys.stderr.write("  -s SCHEDULE Name of action schedule file\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
 # Verbosity levels
@@ -45,13 +42,15 @@ class CnfException(Exception):
     def __str__(self):
         return "CNF Exception: " + str(self.value)
 
-# Read CNF file.
+# Read QCNF file.
 # Save list of clauses, each is a list of literals (zero at end removed)
 # Also saves comment lines
 class CnfReader():
     file = None
     commentLines = []
     clauses = []
+    # Ordered.  List of variables.  Positive is existential, Negative is universal
+    varList = []
     nvar = 0
     verbLevel = 1
     
@@ -76,9 +75,13 @@ class CnfReader():
             raise ex
         
     def readCnf(self):
+        self.nvar = 0
+        # Dictionary of variables that have been declared.
+        # Maps from var to line number
+        foundDict = {}
         lineNumber = 0
         nclause = 0
-        self.nvar = 0
+        self.varList = []
         clauseCount = 0
         for line in self.file:
             lineNumber += 1
@@ -97,6 +100,24 @@ class CnfReader():
                     nclause = int(fields[2])
                 except Exception:
                     raise CnfException("Line %d.  Bad header line '%s'.  Invalid number of variables or clauses" % (lineNumber, line))
+            elif line[0] == 'a' or line[0] == 'e':
+                # Variable declaration
+                universal = line[0] == 'a'
+                try:
+                    vars = [int(s) for s in line.split()]
+                except:
+                    raise CnfException("Line %d.  Non-integer field" % lineNumber)
+                # Last one should be 0
+                if vars[-1] != 0:
+                    raise CnfException("Line %d.  Clause line should end with 0" % lineNumber)
+                vars = vars[:-1]
+                for v in vars:
+                    if v <= 0 or v > self.nvar:
+                        raise CnfException("Line %d.  Invalid variable %d" % (lineNumber, v))
+                    if v in foundDict:
+                        raise CnfException("Line %d.  Variable %d already declared on line %d" % (lineNumber, v, foundDict[v]))
+                    foundDict[v] = lineNumber
+                    self.varList.append(-v if universal else v)
             else:
                 if nclause == 0:
                     raise CnfException("Line %d.  No header line.  Not cnf" % (lineNumber))
@@ -121,6 +142,9 @@ class CnfReader():
                 clauseCount += 1
         if clauseCount != nclause:
             raise CnfException("Line %d: Got %d clauses.  Expected %d" % (lineNumber, clauseCount, nclause))
+        # Fill in undeclared variables
+        outerVars = [v for v in range(1, self.nvar+1) if v not in foundDict]
+        self.varList = outerVars + self.varList
 
 
 # Abstract representation of Boolean function
