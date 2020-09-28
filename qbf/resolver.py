@@ -13,7 +13,6 @@ tautologyId = 1000 * 1000 * 1000
 # Clean up clause.
 # Remove duplicates + false
 # Detect when tautology
-# Make sure that literal with highest-numbered variable stays at front
 # (by sorting in reverse order of literal number)
 def cleanClause(literalList):
     slist = sorted(literalList, key = lambda v: -abs(v))
@@ -219,6 +218,7 @@ class VResolver:
     profiler = None
     # Should we just enumerate last few possibilities, 
     # or try to fully determine how to perform handle each chain?
+    # 2020-09-14: Must enumerate to ensure testing for shorter proofs
     enumerate = True
     
     def __init__(self, prover, rule1Names, rule2Names):
@@ -305,10 +305,17 @@ class VResolver:
     def buildChainSet(self, ruleNames, ruleIndex):
         clauseDict = self.prover.clauseDict
         chain = []
+        firstRule = False
+        checkFirst = True
         for n in ruleNames:
             if n in ruleIndex:
+                gotRule = False
                 if ruleIndex[n] != tautologyId:
+                    gotRule = True
                     chain.append(ruleIndex[n])
+                if checkFirst:
+                    firstRule = gotRule
+                    checkFirst = False
         if len(chain) == 0:
             msg = "No applicable rules in chain (rule index = %s)." % (self.showRules(ruleIndex))
             raise ResolveException(msg)
@@ -318,12 +325,13 @@ class VResolver:
         else:
             pair = chainResolve(chain, clauseDict)
             if pair is None:
-                id = self.filterClauses(chain, ruleIndex)
                 pairList = [(clauseDict[id], [id]) for id in chain]
-            else:
+            elif firstRule:
                 pairList = [pair]
+            else:
+                # Return source clauses so that resolver can look for shorter chains
+                pairList = [(clauseDict[id], [id]) for id in chain] + [pair]
         return pairList
-
     
     def generateProof(self, r, r1, a1, r2, a2, comment):
         self.antecedentCount += len(a1) + len(a2)
@@ -409,7 +417,7 @@ class OrResolver(VResolver):
         self.profiler.prefix = "ORCHAIN"
 
     # Filter set of clauses to include only the one useful in single-clause resolution proof
-    # Guaranteed that have at least on clause
+    # Guaranteed that have at least one clause
     def filterClauses(self, idList, ruleIndex):
         # See if WHU or WLU is in list
         if "WHU" in ruleIndex:
@@ -474,6 +482,41 @@ class ImplyResolver(VResolver):
         if "ULD" in ruleIndex and "VLU" in ruleIndex:
             uid = ruleIndex["ULD"]
             vid = ruleIndex["VLU"]
+            if uid == idList[0] and vid == idList[1]:
+                uclause = clauseDict[uid]
+                vclause = clauseDict[vid]
+                if len(uclause) < len(vclause):
+                    return uid
+                else:
+                    return vid
+
+        msg = "No applicable rules in chain (rule index = %s)." % (self.showRules(ruleIndex))
+        raise ResolveException(msg)
+
+class RestrictResolver(VResolver):
+
+    def __init__(self, prover):
+        rule1Names = ["RESH", "UHX", "VHX"]
+        rule2Names = ["RESL", "ULX", "VLX"]
+        VResolver.__init__(self, prover, rule1Names, rule2Names)
+        self.profiler.prefix = "RESTRICTCHAIN"
+
+    # Filter set of clauses to include only those useful in single-clause resolution proof
+    def filterClauses(self, idList, ruleIndex):
+        clauseDict = self.prover.clauseDict
+        if "UHX" in ruleIndex and "VHX" in ruleIndex:
+            uid = ruleIndex["UHX"]
+            vid = ruleIndex["VHX"]
+            if uid == idList[0] and vid == idList[1]:
+                uclause = clauseDict[uid]
+                vclause = clauseDict[vid]
+                if len(uclause) < len(vclause):
+                    return uid
+                else:
+                    return vid
+        if "ULX" in ruleIndex and "VLX" in ruleIndex:
+            uid = ruleIndex["ULX"]
+            vid = ruleIndex["VLX"]
             if uid == idList[0] and vid == idList[1]:
                 uclause = clauseDict[uid]
                 vclause = clauseDict[vid]
