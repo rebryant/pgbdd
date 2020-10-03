@@ -13,11 +13,12 @@ import stream
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-v LEVEL] [-i CNF] [-o file.qrat] [-p PERMUTE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.qrat] [-p PERMUTE] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
+    sys.stderr.write("  -S          Generate satisfaction proof\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
-    sys.stderr.write("  -o pfile    Name of proof output file (QRAT format)")
+    sys.stderr.write("  -o pfile    Name of proof output file (QRAT format)\n")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
@@ -45,11 +46,12 @@ class CnfException(Exception):
 # Read QCNF file.
 # Save list of clauses, each is a list of literals (zero at end removed)
 # Also saves comment lines
-class CnfReader():
+class QcnfReader():
     file = None
     commentLines = []
     clauses = []
-    # Ordered.  List of variables.  Positive is existential, Negative is universal
+    # List of input variables.
+    # Each is triple of form (varNumber, qlevel, isExistential)
     varList = []
     nvar = 0
     verbLevel = 1
@@ -82,6 +84,7 @@ class CnfReader():
         lineNumber = 0
         nclause = 0
         self.varList = []
+        qlevel = 1
         clauseCount = 0
         for line in self.file:
             lineNumber += 1
@@ -102,7 +105,7 @@ class CnfReader():
                     raise CnfException("Line %d.  Bad header line '%s'.  Invalid number of variables or clauses" % (lineNumber, line))
             elif line[0] == 'a' or line[0] == 'e':
                 # Variable declaration
-                universal = line[0] == 'a'
+                isExistential = line[0] == 'a'
                 try:
                     vars = [int(s) for s in line.split()]
                 except:
@@ -117,7 +120,9 @@ class CnfReader():
                     if v in foundDict:
                         raise CnfException("Line %d.  Variable %d already declared on line %d" % (lineNumber, v, foundDict[v]))
                     foundDict[v] = lineNumber
-                    self.varList.append(-v if universal else v)
+                    self.varList.append((v, qlevel, isExistential))
+                # Prepare for next set of input variables
+                qlevel += 2
             else:
                 if nclause == 0:
                     raise CnfException("Line %d.  No header line.  Not cnf" % (lineNumber))
@@ -142,9 +147,14 @@ class CnfReader():
                 clauseCount += 1
         if clauseCount != nclause:
             raise CnfException("Line %d: Got %d clauses.  Expected %d" % (lineNumber, clauseCount, nclause))
-        # Fill in undeclared variables
+        # See if there are any undeclared variables
         outerVars = [v for v in range(1, self.nvar+1) if v not in foundDict]
-        self.varList = outerVars + self.varList
+        if len(outerVars) > 0:
+            # These must be added as existential variables in first quantifier block
+            ovarList = [(v, 1, True) for v in outerVars]
+            nvarList = [(v, qlevel+2, isExistential) for (v, qlevel, isExistential) in self.varList]
+            self.varList = ovarList + nvarList
+                        
 
 
 # Abstract representation of Boolean function
@@ -176,7 +186,7 @@ class Term:
         validation = self.manager.prover.createClause([newRoot.id], antecedents, comment)
         return Term(self.manager, newRoot, validation)
 
-    def quantify(self, literals, prover):
+    def equantify(self, literals, prover):
         antecedents = [self.validation]
         newRoot = self.manager.equant(self.root, literals)
         check, implication = self.manager.justifyImply(self.root, newRoot)
@@ -185,6 +195,24 @@ class Term:
         if implication != resolver.tautologyId:
             antecedents += [implication]
         validation = self.manager.prover.createClause([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
+        return Term(self.manager, newRoot, validation)
+
+    # Must split universal quantification into two operations per variable
+    def restrict(self, literal, prover):
+        antecedents = [self.validation]
+        newRoot, implication = self.manager.applyRestrictDown(self.root, literal)
+        if implication != resolver.tautologyId:
+            antecedents += [implication]
+        if newRoot == self.manager.leaf0:
+            comment = "Validation of Empty clause"
+        else:
+            comment = "Validation of %s" % newRoot.label()
+        var = literal.variable.id
+        if literal.high = self.manager.leaf1:
+            var = -var
+        rule1 = self.manager.prover.createClause([var, newRoot.id], antecedents, comment)
+        # Now apply universal reduction
+        validation = self.manager.prover.createClause([newRoot.id], [rule1], isUniversal=True)
         return Term(self.manager, newRoot, validation)
 
     def equalityTest(self, other):
@@ -274,27 +302,29 @@ class Prover:
     writer = None
     opened = False
     verbLevel = 1
-    doLrat = False
-    doBinary = False
     clauseDict = {}  # Mapping from clause ID to list of literals in clause
+    antecedentDict = {}  # Mapping from clause ID to list of antecedents
+    refutation = True
+    doQrat = True
 
-    def __init__(self, fname = None, writer = None, verbLevel = 1, doLrat = False, doBinary = False):
+    def __init__(self, fname = None, writer = None, refutation = True, verbLevel = 1):
         self.verbLevel = verbLevel
+        self.refutation = refutation
+        self.doQrat = True
         if fname is None:
             self.opened = False
             self.file = StdOutWriter()
         else:
             self.opened = True
             try:
-                self.file = open(fname, 'wb' if doBinary else 'w')
+                self.file = open(fname, 'w')
             except Exception:
                 raise ProverException("Could not open file '%s'" % fname)
         self.writer = sys.stderr if writer is None else writer
-        self.doLrat = doLrat
-        self.doBinary = doBinary
         self.clauseCount = 0
         self.proofCount = 0
         self.clauseDict = {}
+        self.antecedentDict = {}
 
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
@@ -303,10 +333,10 @@ class Prover:
         return self.opened
 
     def comment(self, comment):
-        if self.verbLevel > 1 and comment is not None and not self.doBinary:
+        if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
-    def createClause(self, result, antecedent, comment = None, isInput = False):
+    def createClause(self, result, antecedent, comment = None, isInput = False, isUniversal = False):
         self.comment(comment)
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
@@ -315,42 +345,42 @@ class Prover:
             result = []
         self.clauseCount += 1
         antecedent = list(antecedent)
-        if not self.doLrat:
-            antecedent.sort()
-        middle = [ord('a')] if self.doBinary else []
-        rest = result + [0] + antecedent + [0]
-        ilist = [self.clauseCount] + middle + rest
-        if self.doBinary:
-            if isInput and self.doLrat:
-                pass
-            else:
-                bytes = stream.CompressArray(ilist).bytes
-                self.file.write(bytes)
+        middle = ['u'] is isUniversal else []
+        if self.refutation and not self.doQrat:
+            rest = result + [0] + antecedent + [0]
         else:
-            slist = [str(i) for i in ilist]
-            istring = " ".join(slist)
-            if isInput and self.doLrat:
-                self.comment(istring)
-            else:
-                self.file.write(istring + '\n')
+            rest = result + [0]
+        ilist = [self.clauseCount] + middle + rest
+        slist = [str(i) for i in ilist]
+        istring = " ".join(slist)
+        if isInput:
+            self.comment(istring)
+        else:
+            self.file.write(istring + '\n')
         self.clauseDict[self.clauseCount] = result
+        self.antecedentDict[self.clauseCount] = antecedent
         return self.clauseCount
 
     def deleteClauses(self, clauseList):
-        for id in clauseList:
-            del self.clauseDict[id]
-        if not self.doLrat:
-            return
-        middle = [ord('d')] if self.doBinary else ['d']
-        rest = clauseList + [0]
-        ilist = [self.clauseCount] + middle + rest
-        if self.doBinary:
-            bytes = stream.CompressArray(ilist).bytes
-            self.file.write(bytes)
-        else:
+        if self.refutation:
+            for id in clauseList:
+                del self.clauseDict[id]
+            middle = ['d']
+            rest = clauseList + [0]
+            ilist = [self.clauseCount] + middle + rest
             slist = [str(i) for i in ilist]
             istring = " ".join(slist)
             self.file.write(istring + '\n')
+        else:
+            for id in clauseList:
+                middle = ['d']
+                rest = clauseList + [0] + self.antecedentDict[id] + [0]
+            ilist = [self.clauseCount] + middle + rest
+            slist = [str(i) for i in ilist]
+            istring = " ".join(slist)
+            self.file.write(istring + '\n')
+            del self.clauseDict[id]
+            del self.antecedentDict[id]
 
     def summarize(self):
         if self.verbLevel >= 1:
@@ -386,15 +416,14 @@ class Solver:
 
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
-    # Dictionary of terms stored for later reuse.  Track so that don't get GCed
-    storeTerms = {}
-    # Dictionary of Ids of terms that are stored for reuse
     unsat = False
     permuter = None
     prover = None
     writer = None
     # Turn on to have information about node include number of solutions
     countSolutions = True
+    # Mapping from quantifier levels to tuple (vars,isExistential)
+    quantMap = {}
 
     def __init__(self, fname = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
@@ -407,9 +436,18 @@ class Solver:
         except Exception as ex:
             self.writer.write("Aborted: %s\n" % str(ex))
             raise ex
+        #  mapping from each variable to (qlevel,isExistential)
+        qmap = { v : (qlevel, isExistential) for (v, qlevel, isExistential) in reader.varList }
+        # Construct quantifer level mapping
+        self.quantMap = {}
+        for (v,qlevel,isExistential) in reader.varList:
+            if qlevel in self.quantMap:
+                self.quantMap[qlevel][0].append(v)
+            else:
+                self.quantMap[qlevel] = ([v], isExistential)
         clauseCount = 0
-        for line in reader.commentLines:
-            self.prover.comment(line)
+#        for line in reader.commentLines:
+#            self.prover.comment(line)
         # Print input clauses
         for clause in reader.clauses:
             clauseCount += 1
@@ -432,7 +470,8 @@ class Solver:
         self.litMap = {}
         for level in range(1, reader.nvar+1):
             inputId = self.permuter.forward(level)
-            var = self.manager.newVariable(name = "input-%d" % inputId, id = inputId)
+            qlevel,isExistential = qmap[level]
+            var = self.manager.newVariable(qlevel, name = "input-%d" % inputId, id = inputId, existential = isExistential)
             t = self.manager.literal(var, 1)
             self.litMap[ inputId] = t
             e = self.manager.literal(var, 0)
@@ -474,16 +513,16 @@ class Solver:
             return -1
         return self.termCount
 
-    def quantifyTerm(self, id, varList):
+    def equantifyTerm(self, id, varList):
         term = self.activeIds[id]
+        del self.activeIds[id]
         litList = [self.litMap[v] for v in varList]
         clause = self.manager.buildClause(litList)
-        newTerm = term.quantify(clause, self.prover)
+        newTerm = term.equantify(clause, self.prover)
         self.termCount += 1
         vstring = " ".join(sorted([str(v) for v in varList]))
         comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
-        del self.activeIds[id]
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
@@ -491,29 +530,79 @@ class Solver:
             self.prover.deleteClauses(clauseList)
         return self.termCount
 
-    # Allow temporary storage of Ids for reuse
-    def storeTerm(self, id):
-        self.storeTerms[id] = self.activeIds[id]
+    def uquantifyTermInner(self, id, var):
+        term = self.activeIds[id]
+        del self.activeIds[id]
+        lit = self.litMap[var]
+        term1 = term.restrict(lit, self.prover))
+        self.termCount += 1
+        comment = "T%d (Node %s) Restrict1(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term1.root.label())
+        if term1.root == self.manager.leaf0:
+            if self.prover.fileOutput() and self.verbLevel >= 1:
+                self.writer.write("UNSAT\n")
+            self.unsat = True
+            self.manager.summarize()
+            return -1
+        nlit = self.litMap[-var]
+        term0 = term.restrict(nlit, self.prover)
+        self.termCount += 1
+        comment = "T%d (Node %s) Restrict0(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term0.root.label())
+        if term0.root == self.manager.leaf0:
+            if self.prover.fileOutput() and self.verbLevel >= 1:
+                self.writer.write("UNSAT\n")
+            self.unsat = True
+            self.manager.summarize()
+            return -1
+        # This could be a good time for garbage collection
+        clauseList = self.manager.checkGC()
+        if len(clauseList) > 0:
+            self.prover.deleteClauses(clauseList)
+        return self.termCount
 
-    def unstoreTerm(self, id):
-        del self.storeTerms[id]
+    def uquantifyTerm(self, id, varList):
+        nid = id
+        for v in varList:
+            nid = self.uquantifyTermInner(nid, v)
+            if nid < 0:
+                return nid
+        return nid
+
 
     def runNoSchedule(self):
-        nid = 0
+        # Start by conjuncting all clauses to get single BDD
+        id = 0
         while (len(self.activeIds) > 1):
             i, j = self.choosePair()
-            nid = self.combineTerms(i, j)
-            if nid < 0:
+            id = self.combineTerms(i, j)
+            if id < 0:
                 return
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
-        if self.verbLevel >= 1:
-            for s in self.manager.satisfyStrings(self.activeIds[nid].root, limit = 20):
-                self.writer.write("  " + s)
+        # Now handle all of the quantifications:
+        levels = sorted(self.quantMap.keys(), key = lambda x : -x)
+        for level in levels:
+            vars, isExistential = self.quantMap[level]
+            if len(vars) == 0:
+                continue
+            if self.verbLevel >= 2:
+                self.writer.write("Quantifying %s level %d.  Vars = %s" % ("existential" if isExistential else "universal", level, str(vars)))
+            if isExistential:
+                id = self.equantifyTerm(id, vars)
+            else:
+                id = self.uquantifyTerm(id, v)
+                if id < 0:
+                    return
         
     def runSchedule(self, scheduler):
         idStack = []
         lineCount = 0
+        # Make sure program runs from innermost quantifier to outermost
+        levels = sorted(self.quantMap.keys(), key = lambda x : -x)
+        curVars = []
+        while len(curVars) == 0:
+            curLevel = levels[0]
+            levels = levels[1:]
+            curVars, curExistential = self.quantMap[level]
         for line in scheduler:
             line = trim(line)
             lineCount += 1
@@ -564,14 +653,38 @@ class Solver:
                     raise SolverException("Line #%d.  Stack is empty" % (lineCount))
                 id = idStack[-1]
                 idStack = idStack[:-1]
-                nid = self.quantifyTerm(id, values)
+                # Figure out which variables are being quantified
+                while len(curVars) == 0:
+                    curLevel = levels[0]
+                    levels = levels[1:]
+                    curVars, curExistential = self.quantMap[level]
+                nVars = []
+                vcount = 0
+                for v in curVars:
+                    if v in values:
+                        vcount += 1
+                    else:
+                        nVars.append(v)
+                if len(values) != vcount:
+                    msg = "Line %d.  Attempting to quantify level %d variables %s, but current quantifier block has %s" % (lineCount, curLevel, str(values), str(curVars))
+                    raise SolverException(msg)
+                curVars = nVars
+                if self.verbLevel >= 2:
+                    self.writer.write("Quantifying %s level %d.  Vars = %s" % ("existential" if curExistential else "universal", curLevel, str(values)))
+                if curExistential:
+                    nid = self.equantifyTerm(id, values)
+                else:
+                    nid = self.uquantifyTerm(id, values)
+                    if nid < 0:
+                        # Hit unsat case
+                        return
                 idStack.append(nid)
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
         
     def placeInBucket(self, buckets, id):
         term = self.activeIds[id]
-        level = term.root.variable.level
+        level = term.root.variable.qlevel
         if level == bdd.Variable.leafLevel:
             buckets[0].append(id)
         else:
@@ -579,13 +692,13 @@ class Solver:
 
     # Bucket elimination
     def runBucketSchedule(self):
-        maxLevel = len(self.manager.variables)
-        buckets = { level : [] for level in range(0, maxLevel + 1) }
+        levels = sorted(self.quantMap.keys(), key = lambda x : -x)
+        buckets = { level : [] for level in levels }
         # Insert ids into lists according to top variable in BDD
         ids = sorted(self.activeIds.keys())
         for id in ids:
             self.placeInBucket(buckets, id)
-        for blevel in range(0, maxLevel + 1):
+        for blevel in levels:
             # Conjunct all terms in bucket
             while len(buckets[blevel]) > 1:
                 id1 = buckets[blevel][0]
@@ -600,16 +713,21 @@ class Solver:
             if blevel > 0 and len(buckets[blevel]) > 0:
                 id = buckets[blevel][0]
                 buckets[blevel] = []
-                var = self.manager.variables[blevel-1]
-                vid = var.id
-                newId = self.quantifyTerm(id, [vid])
+                vars, isExistential = self.quantMap[level]
+                if isExistential:
+                    newId = self.equantifyTerm(id, vars)
+                else:
+                    newId = self.uquantifyTerm(id, vars)
+                    if newId < 0:
+                        # Hit unsat case
+                        return
                 self.placeInBucket(buckets, newId)
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
-        rootList = [t.root for t in self.activeIds.values()] + [t.root for t in self.storeTerms.values()]
+        rootList = [t.root for t in self.activeIds.values()]
         return rootList
 
 def readPermutation(fname, writer = None):

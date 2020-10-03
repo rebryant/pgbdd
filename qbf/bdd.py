@@ -27,7 +27,7 @@ class DummyProver:
     def comment(self, comment):
         pass
 
-    def createClause(self, result, antecedent, comment = None):
+    def createClause(self, result, antecedent, comment = None, isUniversal = False):
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
             return result
@@ -44,6 +44,7 @@ class DummyProver:
 # Object that is part of quantification sequence.
 # Position defined by combination of qindex and qlevel
 # Also have quantifier type
+# Quantifier levels are odd for input variables and even for extension variables
 class Quantified:
     qindex = 0
     qlevel = 0
@@ -64,7 +65,7 @@ class Variable(Quantified):
     leafLevel = -1 # Special value
     id = None # Serves as identity of resolution variable
 
-    def __init__(self, level, name = None, id = None, existential = True):
+    def __init__(self, level, qlevel, name = None, id = None, existential = True):
         self.level = level
         if id is None:
             self.id = level
@@ -75,7 +76,7 @@ class Variable(Quantified):
         if name is None:
             name = "var-%d" % level
         self.name = str(name)
-        Quantified.__init__(self, id, id, existential)
+        Quantified.__init__(self, id, qlevel, existential)
 
     def __eq__(self, other):
         return self.level == other.level
@@ -128,7 +129,7 @@ class LeafNode(Node):
 
     def __init__(self, value):
         id = resolver.tautologyId if value == 1 else -resolver.tautologyId        
-        Node.__init__(self, id, Variable(Variable.leafLevel, "Leaf"))
+        Node.__init__(self, id, Variable(Variable.leafLevel, 0, "leaf-%d" % value))
         self.value = value
         self.inferValue = self.id
         Quantified.__init__(self, id, 0, False)
@@ -162,7 +163,9 @@ class VariableNode(Node):
         Node.__init__(self, id, variable)
         self.high = high
         self.low = low
-        qlevel = max(variable.qlevel, high.qlevel, low.qlevel)
+        # Extension variable must be at higher level than node variable
+        # and at least as high as children
+        qlevel = max(variable.qlevel+1, high.qlevel, low.qlevel)
         Quantified.__init__(self, id, qlevel, True)
         vid = self.variable.id
         hid = self.high.id
@@ -247,7 +250,6 @@ class Manager:
     gcCount = 0
 
     def __init__(self, prover = None, rootGenerator = None, nextNodeId = 0, verbLevel = 1):
-
         self.verbLevel = verbLevel
         self.prover = DummyProver() if prover is None else prover
         self.writer = self.prover.writer
@@ -274,9 +276,9 @@ class Manager:
         self.nodesRemoved = 0
         self.gcCount = 0
 
-    def newVariable(self, name, id = None):
+    def newVariable(self, qlevel, name, id = None, existential = False):
         level = len(self.variables) + 1
-        var = Variable(level, name, id)
+        var = Variable(level, qlevel, name, id, existential)
         self.variables.append(var)
         self.variableCount += 1
         return var
@@ -298,6 +300,10 @@ class Manager:
             return self.findOrMake(variable, self.leaf1, self.leaf0)
         else:
             return self.findOrMake(variable, self.leaf0, self.leaf1)
+
+    # Is a literal positive or negative
+    def isPositive(self, literal):
+        return literal.high == self.leaf1 and literal.low == self.leaf0
 
     def buildClause(self, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
