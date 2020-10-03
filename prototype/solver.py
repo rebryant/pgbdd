@@ -362,9 +362,6 @@ class Solver:
 
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
-    # Dictionary of terms stored for later reuse.  Track so that don't get GCed
-    storeTerms = {}
-    # Dictionary of Ids of terms that are stored for reuse
     unsat = False
     permuter = None
     prover = None
@@ -384,8 +381,8 @@ class Solver:
             self.writer.write("Aborted: %s\n" % str(ex))
             raise ex
         clauseCount = 0
-        for line in reader.commentLines:
-            self.prover.comment(line)
+#        for line in reader.commentLines:
+#            self.prover.comment(line)
         # Print input clauses
         for clause in reader.clauses:
             clauseCount += 1
@@ -466,13 +463,6 @@ class Solver:
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
         return self.termCount
-
-    # Allow temporary storage of Ids for reuse
-    def storeTerm(self, id):
-        self.storeTerms[id] = self.activeIds[id]
-
-    def unstoreTerm(self, id):
-        del self.storeTerms[id]
 
     def runNoSchedule(self):
         nid = 0
@@ -585,7 +575,7 @@ class Solver:
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
-        rootList = [t.root for t in self.activeIds.values()] + [t.root for t in self.storeTerms.values()]
+        rootList = [t.root for t in self.activeIds.values()]
         return rootList
 
 def readPermutation(fname, writer = None):
