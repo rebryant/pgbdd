@@ -31,7 +31,7 @@ def usage(name):
 # 5: Tree generation information
 
 def trim(s):
-    while len(s) > 0 and s[-1] in '\r\n':
+    while len(s) > 0 and s[-1] in ' \r\n\t':
         s = s[:-1]
     return s
 
@@ -105,9 +105,9 @@ class QcnfReader():
                     raise CnfException("Line %d.  Bad header line '%s'.  Invalid number of variables or clauses" % (lineNumber, line))
             elif line[0] == 'a' or line[0] == 'e':
                 # Variable declaration
-                isExistential = line[0] == 'a'
+                isExistential = line[0] == 'e'
                 try:
-                    vars = [int(s) for s in line.split()]
+                    vars = [int(s) for s in line[1:].split()]
                 except:
                     raise CnfException("Line %d.  Non-integer field" % lineNumber)
                 # Last one should be 0
@@ -208,7 +208,7 @@ class Term:
         else:
             comment = "Validation of %s" % newRoot.label()
         var = literal.variable.id
-        if literal.high = self.manager.leaf1:
+        if literal.high == self.manager.leaf1:
             var = -var
         rule1 = self.manager.prover.createClause([var, newRoot.id], antecedents, comment)
         # Now apply universal reduction
@@ -279,20 +279,6 @@ class ProverException(Exception):
         return "Prover Exception: " + str(self.value)
 
 
-# Hack to allow writing binary data to standard output
-class StdOutWriter:
-
-    def write(self, data):
-        if sys.version_info < (3,0):
-            sys.stdout.write(data)
-        elif type(data) is str:
-            sys.stdout.buffer.write(bytearray(data, 'ascii'))
-        else:
-            sys.stdout.buffer.write(data)
-
-    def close(self):
-        pass
-
 class Prover:
 
     inputClauseCount = 0
@@ -305,15 +291,15 @@ class Prover:
     clauseDict = {}  # Mapping from clause ID to list of literals in clause
     antecedentDict = {}  # Mapping from clause ID to list of antecedents
     refutation = True
-    doQrat = True
+    doQrat = False
 
     def __init__(self, fname = None, writer = None, refutation = True, verbLevel = 1):
         self.verbLevel = verbLevel
         self.refutation = refutation
-        self.doQrat = True
+        self.doQrat = False
         if fname is None:
             self.opened = False
-            self.file = StdOutWriter()
+            self.file = sys.stdout
         else:
             self.opened = True
             try:
@@ -345,11 +331,10 @@ class Prover:
             result = []
         self.clauseCount += 1
         antecedent = list(antecedent)
-        middle = ['u'] is isUniversal else []
+        middle = ['u'] if isUniversal else []
+        rest = result + [0]
         if self.refutation and not self.doQrat:
-            rest = result + [0] + antecedent + [0]
-        else:
-            rest = result + [0]
+            rest += antecedent + [0]
         ilist = [self.clauseCount] + middle + rest
         slist = [str(i) for i in ilist]
         istring = " ".join(slist)
@@ -432,7 +417,7 @@ class Solver:
         self.prover = prover
         self.writer = prover.writer
         try:
-            reader = CnfReader(fname, verbLevel = verbLevel)
+            reader = QcnfReader(fname, verbLevel = verbLevel)
         except Exception as ex:
             self.writer.write("Aborted: %s\n" % str(ex))
             raise ex
@@ -446,8 +431,6 @@ class Solver:
             else:
                 self.quantMap[qlevel] = ([v], isExistential)
         clauseCount = 0
-#        for line in reader.commentLines:
-#            self.prover.comment(line)
         # Print input clauses
         for clause in reader.clauses:
             clauseCount += 1
@@ -506,11 +489,12 @@ class Solver:
             self.writer.write(comment)
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
-            if self.prover.fileOutput() and self.verbLevel >= 1:
-                self.writer.write("UNSAT\n")
+            if self.verbLevel >= 1:
+                self.writer.write("Conjunction UNSAT\n")
             self.unsat = True
             self.manager.summarize()
             return -1
+#        print("Combining terms %d & %d --> term %d" % (id1, id2, self.termCount))
         return self.termCount
 
     def equantifyTerm(self, id, varList):
@@ -528,45 +512,42 @@ class Solver:
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
+#        print("Existentially quantifying term %d --> term %d" % (id, self.termCount))
         return self.termCount
 
-    def uquantifyTermInner(self, id, var):
+    def uquantifyTermSingle(self, id, var):
         term = self.activeIds[id]
         del self.activeIds[id]
         lit = self.litMap[var]
-        term1 = term.restrict(lit, self.prover))
+        term1 = term.restrict(lit, self.prover)
         self.termCount += 1
         comment = "T%d (Node %s) Restrict1(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term1.root.label())
         if term1.root == self.manager.leaf0:
-            if self.prover.fileOutput() and self.verbLevel >= 1:
-                self.writer.write("UNSAT\n")
+            if self.verbLevel >= 1:
+                self.writer.write("Positive cofactor UNSAT\n")
             self.unsat = True
             self.manager.summarize()
-            return -1
+            return -1, -1
+        self.activeIds[self.termCount] = term1
+        id1 = self.termCount
         nlit = self.litMap[-var]
         term0 = term.restrict(nlit, self.prover)
         self.termCount += 1
         comment = "T%d (Node %s) Restrict0(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term0.root.label())
         if term0.root == self.manager.leaf0:
-            if self.prover.fileOutput() and self.verbLevel >= 1:
-                self.writer.write("UNSAT\n")
+            if self.verbLevel >= 1:
+                self.writer.write("Negative cofactor UNSAT\n")
             self.unsat = True
             self.manager.summarize()
-            return -1
+            return -1, -1
+        self.activeIds[self.termCount] = term0
+        id0 = self.termCount
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
-        return self.termCount
-
-    def uquantifyTerm(self, id, varList):
-        nid = id
-        for v in varList:
-            nid = self.uquantifyTermInner(nid, v)
-            if nid < 0:
-                return nid
-        return nid
-
+#        print("Universally quantifying term %d --> terms %d,  %d" % (id, id1, id0))
+        return (id1, id0)
 
     def runNoSchedule(self):
         # Start by conjuncting all clauses to get single BDD
@@ -576,8 +557,6 @@ class Solver:
             id = self.combineTerms(i, j)
             if id < 0:
                 return
-        if self.verbLevel >= 0:
-            self.writer.write("SAT\n")
         # Now handle all of the quantifications:
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         for level in levels:
@@ -585,13 +564,17 @@ class Solver:
             if len(vars) == 0:
                 continue
             if self.verbLevel >= 2:
-                self.writer.write("Quantifying %s level %d.  Vars = %s" % ("existential" if isExistential else "universal", level, str(vars)))
+                self.writer.write("Quantifying %s level %d.  Vars = %s\n" % ("existential" if isExistential else "universal", level, str(vars)))
             if isExistential:
                 id = self.equantifyTerm(id, vars)
             else:
-                id = self.uquantifyTerm(id, v)
-                if id < 0:
-                    return
+                for v in vars:
+                    id1, id0 = self.uquantifyTermSingle(id, v)
+                    if id1 < 0 or id0 < 0:
+                        return
+                    id = self.combineTerms(id1, id0)
+                    if id < 0:
+                        return
         
     def runSchedule(self, scheduler):
         idStack = []
@@ -657,7 +640,7 @@ class Solver:
                 while len(curVars) == 0:
                     curLevel = levels[0]
                     levels = levels[1:]
-                    curVars, curExistential = self.quantMap[level]
+                    curVars, curExistential = self.quantMap[curLevel]
                 nVars = []
                 vcount = 0
                 for v in curVars:
@@ -674,54 +657,71 @@ class Solver:
                 if curExistential:
                     nid = self.equantifyTerm(id, values)
                 else:
-                    nid = self.uquantifyTerm(id, values)
-                    if nid < 0:
-                        # Hit unsat case
-                        return
-                idStack.append(nid)
+                    for v in values:
+                        id1, id0 = self.uquantifyTermSingle(id, v)
+                        if id1 < 0 or id0 < 0:
+                            # Hit unsat case
+                            return
+                        idStack.append(id1)
+                        idStack.append(id0)
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
         
     def placeInBucket(self, buckets, id):
         term = self.activeIds[id]
-        level = term.root.variable.qlevel
-        if level == bdd.Variable.leafLevel:
-            buckets[0].append(id)
-        else:
+        level = term.root.qlevel-1
+        if level > 0:
             buckets[level].append(id)
 
     # Bucket elimination
     def runBucketSchedule(self):
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         buckets = { level : [] for level in levels }
-        # Insert ids into lists according to top variable in BDD
+        # Insert ids into lists according quantification level
         ids = sorted(self.activeIds.keys())
         for id in ids:
             self.placeInBucket(buckets, id)
         for blevel in levels:
-            # Conjunct all terms in bucket
-            while len(buckets[blevel]) > 1:
-                id1 = buckets[blevel][0]
-                id2 = buckets[blevel][1]
-                buckets[blevel] = buckets[blevel][2:]
-                newId = self.combineTerms(id1, id2)
-                if newId < 0:
-                    # Hit unsat case
-                    return
-                self.placeInBucket(buckets, newId)
-            # Quantify top variable for this bucket
-            if blevel > 0 and len(buckets[blevel]) > 0:
-                id = buckets[blevel][0]
-                buckets[blevel] = []
-                vars, isExistential = self.quantMap[level]
-                if isExistential:
-                    newId = self.equantifyTerm(id, vars)
-                else:
-                    newId = self.uquantifyTerm(id, vars)
+            vars, isExistential = self.quantMap[blevel]
+            if isExistential:
+                # Conjunct all terms in bucket
+                while len(buckets[blevel]) > 1:
+                    id1 = buckets[blevel][0]
+                    id2 = buckets[blevel][1]
+                    buckets[blevel] = buckets[blevel][2:]
+                    newId = self.combineTerms(id1, id2)
                     if newId < 0:
                         # Hit unsat case
                         return
-                self.placeInBucket(buckets, newId)
+                    self.placeInBucket(buckets, newId)
+                # Quantify all variables for this bucket
+                if blevel > 0 and len(buckets[blevel]) > 0:
+                    id = buckets[blevel][0]
+                    buckets[blevel] = []
+                    newId = self.equantifyTerm(id, vars)
+                    self.placeInBucket(buckets, newId)
+            else:
+                # Takes new pass for each variable in quantifier block
+                for v in vars:
+                    # Conjunct all terms in bucket
+                    while len(buckets[blevel]) > 1:
+                        id1 = buckets[blevel][0]
+                        id2 = buckets[blevel][1]
+                        buckets[blevel] = buckets[blevel][2:]
+                        newId = self.combineTerms(id1, id2)
+                        if newId < 0:
+                            # Hit unsat case
+                            return
+                        self.placeInBucket(buckets, newId)
+                    if blevel > 0 and len(buckets[blevel]) > 0:
+                        id = buckets[blevel][0]
+                        buckets[blevel] = buckets[blevel][1:]
+                        id1, id0 = self.uquantifyTermSingle(id, v)
+                        if id1 < 0 or id0 < 0:                        
+                            # Hit unsat case
+                            return
+                        self.placeInBucket(buckets, id1)
+                        self.placeInBucket(buckets, id0)
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
 
@@ -789,38 +789,28 @@ def readScheduler(fname, writer = None):
 def run(name, args):
     cnfName = None
     proofName = None
-    doLrat = False
-    doBinary = False
     permuter = None
     doBucket = False
     scheduler = None
     verbLevel = 1
     logName = None
+    refutation = True
 
-    optlist, args = getopt.getopt(args, "hbv:i:o:m:p:s:L:")
+    optlist, args = getopt.getopt(args, "hbSv:i:o:m:p:s:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         if opt == '-b':
             doBucket = True
+        elif opt == '-S':
+            refutation = False
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
             cnfName = val
         elif opt == '-o':
             proofName = val
-            extension = proofName.split('.')[-1]
-            if extension == 'lrat' or extension == 'lratb':
-                doLrat = True
-                doBinary = extension[-1] == 'b'
-        elif opt == '-m':
-            proofName = None
-            if val == 'b':
-                doLrat = True
-                doBinary = True
-            elif val == 't':
-                doLrat = True
         elif opt == '-p':
             permuter = readPermutation(val)
             if permuter is None:
@@ -838,12 +828,16 @@ def run(name, args):
 
     writer = stream.Logger(logName)
 
+    if not refutation:
+        writer.write("Satisfaction not implemented\n")
+        return
+
     if doBucket and scheduler is not None:
         writer.write("Cannot have both bucket scheduling and defined scheduler\n")
         return
 
     try:
-        prover = Prover(proofName, writer = writer, verbLevel = verbLevel, doLrat = doLrat, doBinary = doBinary)
+        prover = Prover(proofName, writer = writer, verbLevel = verbLevel, refutation = refutation)
     except Exception as ex:
         writer.write("Couldn't create prover (%s)\n" % str(ex))
         return

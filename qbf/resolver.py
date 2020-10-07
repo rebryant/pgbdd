@@ -270,6 +270,14 @@ class VResolver:
                 self.tryCount += 1
                 if r is not None and testClauseEquality(r, targetClause):
                     return self.generateProof(r, r1, a1, r2, a2, comment)
+                if len(pairList1) == 1 and len(pairList2) == 1:
+                    if r is None:
+                        msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
+                        raise ResolveException(msg)
+                    if not testClauseEquality(r, targetClause):
+                        msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
+                        raise ResolveException(msg)
+                    
         msg = "Could not justify clause %s.  Tried %d combinations" % (showClause(targetClause), len(pairList1) * len(pairList2))
         raise ResolveException(msg)
 

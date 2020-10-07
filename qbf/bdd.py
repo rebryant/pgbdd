@@ -16,7 +16,6 @@ class BddException(Exception):
 # Place holder to allow program to run without proving anything
 class DummyProver:
 
-    doLrat = False
     clauseCount = 0
     writer = None
 
@@ -157,7 +156,7 @@ class VariableNode(Node):
     inferTrueUp = None
     inferFalseUp = None
     inferTrueDown = None
-    inferTrueDown = None
+    inferFalseDown = None
     
     def __init__(self, id, variable, high, low, prover):
         Node.__init__(self, id, variable)
@@ -174,11 +173,10 @@ class VariableNode(Node):
         self.inferTrueUp = prover.createClause([id, -vid, -hid], [], "ITE assertions for node %s" % self.label())
         self.inferFalseUp = prover.createClause([id, vid, -lid], [])
         antecedents = []
-        if prover.doLrat:
-            if self.inferTrueUp != resolver.tautologyId:
-                antecedents.append(-self.inferTrueUp)
-            if self.inferFalseUp != resolver.tautologyId:
-                antecedents.append(-self.inferFalseUp)
+        if self.inferTrueUp != resolver.tautologyId:
+            antecedents.append(-self.inferTrueUp)
+        if self.inferFalseUp != resolver.tautologyId:
+            antecedents.append(-self.inferFalseUp)
         self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents)
         self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents)
 
@@ -573,7 +571,10 @@ class Manager:
         low = node.low
         newHigh = self.applyNot(high)
         newLow = self.applyNot(low)
-        newNode = self.findOrMake(var, newHigh, newLow)
+        if newHigh == newLow:
+            newNode = newNode
+        else:
+            newNode = self.findOrMake(var, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
@@ -790,7 +791,12 @@ class Manager:
         newHigh = self.equant(node.high, clause, topLevel = False)
         newLow = self.equant(node.low, clause, topLevel = False)
         quant = node.variable == clause.variable
-        newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
+        if newHigh == newLow:
+            newNode = newHigh
+        elif quant:
+            newNode = self.applyOr(newHigh, newLow) 
+        else:
+            newNode = self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
@@ -816,7 +822,14 @@ class Manager:
         newHigh = self.uquant(node.high, clause, topLevel = False)
         newLow = self.uquant(node.low, clause, topLevel = False)
         quant = node.variable == clause.variable
-        newNode = self.applyAnd(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
+        
+        if newHigh == newLow:
+            newNode = newHigh
+        elif quant:
+            newNode = self.applyAnd(newHigh, newLow) 
+        else:
+            newNode = self.findOrMake(node.variable, newHigh, newLow)
+
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
@@ -835,7 +848,7 @@ class Manager:
             return (u, resolver.tautologyId)
         elif rvar == nvar:
             result = u.high if phase1 else u.low
-            just = u.inferHighDown if phase1 else u.inferLowDown
+            just = u.inferTrueDown if phase1 else u.inferFalseDown
             return (result, just)
         
         key = ("resdown", u.id, literal.id)
@@ -844,9 +857,9 @@ class Manager:
 
         ruleIndex = { }
         uhigh = u.high
-        ruleIndex["UHX"] = u.inferHighDown
+        ruleIndex["UHX"] = u.inferTrueDown
         ulow = u.low
-        ruleIndex["ULX"] = u.inferLowDown
+        ruleIndex["ULX"] = u.inferFalseDown
 
         (vhigh, resHigh) = self.applyRestrictDown(uhigh, literal)
         ruleIndex["RESH"] = resHigh
@@ -884,7 +897,7 @@ class Manager:
             return (u, resolver.tautologyId)
         elif rvar == nvar:
             result = u.high if phase1 else u.low
-            just = u.inferHighUp if phase1 else u.inferLowUp
+            just = u.inferTrueUp if phase1 else u.inferFalseUp
             return (result, just)
         
         key = ("resup", u.id, literal.id)
@@ -893,9 +906,9 @@ class Manager:
 
         ruleIndex = { }
         uhigh = u.high
-        ruleIndex["UHX"] = u.inferHighUp
+        ruleIndex["UHX"] = u.inferTrueUp
         ulow = u.low
-        ruleIndex["ULX"] = u.inferLowUp
+        ruleIndex["ULX"] = u.inferFalseUp
 
         (vhigh, resHigh) = self.applyRestrictUp(uhigh, literal)
         ruleIndex["RESH"] = resHigh
