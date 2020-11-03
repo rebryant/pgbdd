@@ -1,0 +1,17 @@
+c two 2-input xors
+c a: 1, b:2, c:3, axb: 4 out:5
+p cnf 5 8
+e 5 2 3 0
+a 1 0
+e 4 0
+c axb = a xor b
+-1 -2  -4 0
+-1  2  4 0
+ 1 -2  4 0
+ 1  2 -4 0
+c out = c xor axb
+-3 -4  -5 0
+-3  4  5 0
+ 3 -4  5 0
+ 3  4 -5 0
+

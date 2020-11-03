@@ -7,6 +7,6 @@ make c N=012
 make c N=014
 make c N=016
 make c N=018
-#make c N=020
-#make c N=022
+make c N=020
+make c N=022
 

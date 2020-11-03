@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS = -O0 -g -Wall
+CFLAGS = -O2 -g -Wall
 
-all: lrat-check translator lrat-server upload proof_b2t
+all: lrat-check translator lrat-server upload 
 
 stream.o: stream.c stream.h
 	$(CC) $(CFLAGS) -c stream.c

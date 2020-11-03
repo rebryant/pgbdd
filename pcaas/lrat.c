@@ -44,7 +44,7 @@ long long deleted_clauses = 0;
 long long live_clauses = 0;
 long long max_live_clauses = 0;
 
-long long *mask, *intro, now;
+long long *mask, *intro, now, lastIndex;
 
 int *clsList = NULL;
 int clsAlloc, clsLast;
@@ -100,21 +100,19 @@ int checkRedundancy (int pivot, int start, int *hints, long long thisMask) {
     if (flag == 0) return FAILED; }
 
   while (*hints > 0) {
-      if (clsList[*hints] == DELETED) {
-	rio_nprintf(rp_out, BLEN, "c ERROR: using DELETED clause\n");
-	rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n"); 
-	return FAILED;
-      }
-
-
+    if (clsList[*hints] == DELETED) {
+      rio_nprintf(rp_out, BLEN, "c ERROR: using DELETED clause\n");
+      rio_nprintf(rp_out, BLEN, "c NOT VERIFIED\n"); 
+      return FAILED;
+    }
     int unit = 0, *clause = table + clsList[*(hints++)];
     while (*clause) {
       int clit = convertLit (*(clause++));
-//      assert (clit < maskAlloc);
       if (mask[clit] >= thisMask) continue; // lit is falsified
       if (unit != 0) return FAILED;
       unit = clit; }
     if (unit == 0) return SUCCESS;
+    if (mask[unit^1] == thisMask) rio_nprintf(rp_out, BLEN, "c WARNING hint already satisfied in lemma with index %lli\n", lastIndex);
     mask[unit^1] = thisMask; }
 
   if (res == 0) return SUCCESS;
@@ -305,6 +303,8 @@ bool check_proof(rio_t *rp_cnf, rio_t *rp_proof, bool is_binary, rio_t *arg_rp_o
     if (type == (int) 'd') {
       deleteClauses (lits + 2); }
     else if (type == (int) 'a') {
+      int  index  = getIndex  (lits);
+      lastIndex = index;
       int  length = getLength (lits);
       int* hints  = getHints  (lits);
       if (checkClause (lits + 2, length, hints) == SUCCESS) {

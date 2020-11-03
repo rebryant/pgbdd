@@ -139,8 +139,10 @@ class ScheduleWriter(Writer):
 class OrderWriter(Writer):
     variableList = []
 
-    def __init__(self, count, froot, verbose = False):
-        Writer.__init__(self, count, froot, suffix = "order", verbose = verbose)
+    def __init__(self, count, froot, verbose = False, suffix = None):
+        if suffix is None:
+            suffix = "order"
+        Writer.__init__(self, count, froot, suffix = suffix, verbose = verbose)
         self.variableList = []
 
     def doOrder(self, vlist):
