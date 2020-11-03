@@ -210,9 +210,11 @@ class Term:
         var = literal.variable.id
         if literal.high == self.manager.leaf1:
             var = -var
-        rule1 = self.manager.prover.createClause([var, newRoot.id], antecedents, comment)
-        # Now apply universal reduction
-        validation = self.manager.prover.createClause([newRoot.id], [rule1], isUniversal=True)
+        rclause = [var, newRoot.id]
+        rule1 = self.manager.prover.createClause(rclause, antecedents, comment)
+        # Now apply universal reduction.  QRAT checker wants to get original clause
+        comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
+        validation = self.manager.prover.createClause(rclause, [rule1], comment=comment, isUniversal=True)
         return Term(self.manager, newRoot, validation)
 
     def equalityTest(self, other):
@@ -291,12 +293,12 @@ class Prover:
     clauseDict = {}  # Mapping from clause ID to list of literals in clause
     antecedentDict = {}  # Mapping from clause ID to list of antecedents
     refutation = True
-    doQrat = False
+    doQrat = True
 
     def __init__(self, fname = None, writer = None, refutation = True, verbLevel = 1):
         self.verbLevel = verbLevel
         self.refutation = refutation
-        self.doQrat = False
+        self.doQrat = verbLevel <= 1
         if fname is None:
             self.opened = False
             self.file = sys.stdout
@@ -335,7 +337,8 @@ class Prover:
         rest = result + [0]
         if self.refutation and not self.doQrat:
             rest += antecedent + [0]
-        ilist = [self.clauseCount] + middle + rest
+        ilist = [self.clauseCount] if not self.doQrat else []
+        ilist += middle + rest
         slist = [str(i) for i in ilist]
         istring = " ".join(slist)
         if isInput:
