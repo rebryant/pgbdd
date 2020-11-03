@@ -405,7 +405,8 @@ class ClauseManager:
         return (True, "")
 
     # Check that resolventList gives all resolvents from sourceList by resolution on var
-    def checkDavisPutnam(self, var, sourceList, resolventList):
+    def checkDavisPutnam(self, var, sourceList, resolventList, varDict):
+        (vlevel, isExistential) = varDict[var]
         plist = []
         nlist = []
         for id in sourceList:
@@ -414,6 +415,14 @@ class ClauseManager:
             clause = self.clauseDict[id]
             if clause is None:
                 return (False, "Clause #%d deleted" % id)
+            # Check all universal variables in clause
+            for clit in clause:
+                cvar = abs(clit)
+                if cvar not in varDict:
+                    return (False, "Unknown variable %d in clause #%d" % (cvar, id))
+                (clevel, cex) = varDict[cvar]
+                if not cex and clevel > vlevel:
+                    return (False, "Universal variable %d in clause for D-P reduction on %d" % (cvar, var))
             if var in clause:
                 plist.append(clause)
             elif -var in clause:
@@ -424,6 +433,7 @@ class ClauseManager:
             return (False, "Expecting %d clauses containing %d.  Found %d" % (len(plist), var, self.literalCountDict[var]))
         if len(nlist) != self.literalCountDict[-var]:
             return (False, "Expecting %d clauses containing -%d.  Found %d" % (len(nlist), var, self.literalCountDict[-var]))
+
 
         checkList = []
         for id in resolventList:
@@ -770,7 +780,7 @@ class SatisfactionProver(Prover):
         if len(rest) > 0:
             self.flagError("Extraneous values at end of line")
             return
-        (ok, msg) = self.cmgr.checkDavisPutnam(var, dlist, rlist)
+        (ok, msg) = self.cmgr.checkDavisPutnam(var, dlist, rlist, self.varDict)
         if not ok:
             self.flagError(msg)
             return
@@ -845,7 +855,7 @@ def run(name, args):
         return
     qreader = QcnfReader(qcnfName)
     if qreader.failed:
-        print("Error reading QCNF file: %s", qreader.errorMessage)
+        print("Error reading QCNF file: %s" % qreader.errorMessage)
         print("PROOF FAILED")
         return
     if refutation:
