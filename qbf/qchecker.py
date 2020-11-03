@@ -767,7 +767,7 @@ class SatisfactionProver(Prover):
             return
         (qlevel, isExistential) = self.varDict[var]
         if not isExistential:
-            self.flagError("Cannot have universal variable %d for D-P reduction" % var)
+            self.flagError("Cannot perform D-P reduction on universal variable %d" % var)
             return
         (dlist, rest, msg) = self.getIntegerList(rest[1:])
         if dlist is None:
