@@ -241,6 +241,7 @@ class Board:
             for r in range(n):
                 if (r,c,True) in self.idDict:
                     blist.append(self.idDict[(r,c,True)])
+            for r in range(n):
                 if (r,c,False) in self.idDict:
                     blist.append(self.idDict[(r,c,False)])
             self.bucketWriter.doOrder(blist)
