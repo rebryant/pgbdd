@@ -422,7 +422,7 @@ class ClauseManager:
                     return (False, "Unknown variable %d in clause #%d" % (cvar, id))
                 (clevel, cex) = varDict[cvar]
                 if not cex and clevel > vlevel:
-                    return (False, "Universal variable %d in clause for D-P reduction on %d" % (cvar, var))
+                    return (False, "Higher universal variable %d in clause for D-P reduction on %d" % (cvar, var))
             if var in clause:
                 plist.append(clause)
             elif -var in clause:
