@@ -624,8 +624,11 @@ class Manager:
 
         newHigh = self.equant(node.high, clause, topLevel = False)
         newLow = self.equant(node.low, clause, topLevel = False)
-        quant = node.variable == clause.variable
-        newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
+        if newHigh == newLow:
+            newNode = newHigh
+        else:
+            quant = node.variable == clause.variable
+            newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
