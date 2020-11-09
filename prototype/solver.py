@@ -86,12 +86,15 @@ class CnfReader():
             line = trim(line)
             if len(line) == 0:
                 continue
+            fields = line.split()
+            if len(fields) == 0:
+                continue
             elif line[0] == 'c':
                 if self.verbLevel > 1:
                     self.commentLines.append(line)
             elif line[0] == 'p':
                 fields = line[1:].split()
-                if fields[0] != 'cnf':
+                if len(fields) != 3 or fields[0] != 'cnf':
                     raise CnfException("Line %d.  Bad header line '%s'.  Not cnf" % (lineNumber, line))
                 try:
                     self.nvar = int(fields[1])
@@ -395,8 +398,6 @@ class Solver:
             self.writer.write("Aborted: %s\n" % str(ex))
             raise ex
         clauseCount = 0
-#        for line in reader.commentLines:
-#            self.prover.comment(line)
         # Print input clauses
         for clause in reader.clauses:
             clauseCount += 1
@@ -717,7 +718,7 @@ def run(name, args):
             return
         if opt == '-b':
             doBucket = True
-        if opt == '-B':
+        elif opt == '-B':
             bpermuter = readPermutation(val)
             if bpermuter is None:
                 return
