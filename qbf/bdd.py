@@ -169,16 +169,16 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        # id should be first literal in clause for some proof checkers
-        self.inferTrueUp = prover.createClause([id, -vid, -hid], [], "ITE assertions for node %s" % self.label())
-        self.inferFalseUp = prover.createClause([id, vid, -lid], [])
-        antecedents = []
+        prover.proveExtend(id, qlevel, "Define extension variable for node %s" % self.label())
+        blockers = []
+        self.inferTrueUp = prover.proveAddBlocked([id, -vid, -hid], blockers, "ITE assertions for node %s" % self.label())
+        self.inferFalseUp = prover.proveAddBlocked([id, vid, -lid], blockers)
         if self.inferTrueUp != resolver.tautologyId:
-            antecedents.append(-self.inferTrueUp)
+            blockers.append(-self.inferTrueUp)
         if self.inferFalseUp != resolver.tautologyId:
-            antecedents.append(-self.inferFalseUp)
-        self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents)
-        self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents)
+            blockers.append(-self.inferFalseUp)
+        self.inferTrueDown = prover.proveAddBlocked([-id, -vid, hid], blockers)
+        self.inferFalseDown = prover.proveAddBlocked([-id, vid, lid], blockers)
 
     def isLeaf(self):
         return False
@@ -325,7 +325,7 @@ class Manager:
                 if node.high != self.leaf0:
                     antecedents.append(node.inferTrueUp)
         antecedents.append(clauseId)
-        validation = self.prover.createClause([root.id], antecedents, "Validate clause %d entails BDD %d" % (clauseId, root.id))
+        validation = self.prover.proveAddResolution([root.id], antecedents, "Validate clause %d entails BDD %d" % (clauseId, root.id))
         return root, validation
 
     # Construct BDD representation of clause

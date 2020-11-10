@@ -13,12 +13,12 @@ import stream
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.qrat] [-p PERMUTE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-p PERMUTE] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -S          Generate satisfaction proof\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
-    sys.stderr.write("  -o pfile    Name of proof output file (QRAT format)\n")
+    sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
@@ -183,7 +183,7 @@ class Term:
             comment = "Validation of Empty clause"
         else:
             comment = "Validation of %s" % newRoot.label()
-        validation = self.manager.prover.createClause([newRoot.id], antecedents, comment)
+        validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
         return Term(self.manager, newRoot, validation)
 
     def equantify(self, literals, prover):
@@ -194,7 +194,7 @@ class Term:
             raise bdd.BddException("Implication failed %s -/-> %s" % (self.root.label(), newRoot.label()))
         if implication != resolver.tautologyId:
             antecedents += [implication]
-        validation = self.manager.prover.createClause([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
+        validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
         return Term(self.manager, newRoot, validation)
 
     # Must split universal quantification into two operations per variable
@@ -207,14 +207,17 @@ class Term:
             comment = "Validation of Empty clause"
         else:
             comment = "Validation of %s" % newRoot.label()
-        var = literal.variable.id
+        ulit = literal.variable.id
         if literal.high == self.manager.leaf1:
-            var = -var
-        rclause = [var, newRoot.id]
+            ulit = -ulit
+        rclause = [ulit, newRoot.id]
         rule1 = self.manager.prover.createClause(rclause, antecedents, comment)
-        # Now apply universal reduction.  QRAT checker wants to get original clause
+        # Now apply universal reduction.
         comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
-        validation = self.manager.prover.createClause(rclause, [rule1], comment=comment, isUniversal=True)
+        if self.manager.prover.doQrat:
+            validation = self.manager.prover.createClause(rclause, [rule1], comment=comment, isUniversal=True)
+        else:
+            validation = self.manager.prover.proveUniversal(ulit, rule1, comment)
         return Term(self.manager, newRoot, validation)
 
     def equalityTest(self, other):
@@ -298,7 +301,7 @@ class Prover:
     def __init__(self, fname = None, writer = None, refutation = True, verbLevel = 1):
         self.verbLevel = verbLevel
         self.refutation = refutation
-        self.doQrat = verbLevel <= 1
+        self.doQrat = True
         if fname is None:
             self.opened = False
             self.file = sys.stdout
@@ -308,6 +311,8 @@ class Prover:
                 self.file = open(fname, 'w')
             except Exception:
                 raise ProverException("Could not open file '%s'" % fname)
+            fields = fname.split('.')
+            self.doQrat = fields[-1] == 'qrat'
         self.writer = sys.stderr if writer is None else writer
         self.clauseCount = 0
         self.proofCount = 0
@@ -369,6 +374,67 @@ class Prover:
             self.file.write(istring + '\n')
             del self.clauseDict[id]
             del self.antecedentDict[id]
+
+    def generateStepQP(self, fields, addNumber = True, comment = None):
+        self.comment(comment)
+        if addNumber:
+            self.clauseCount += 1
+            fields = [str(self.clauseCount)] + fields
+        else:
+            fields = ['-'] + fields
+        self.file.write(' '.join(fields) + '\n')
+        return self.clauseCount
+    
+    def proveAddResolution(self, result, antecedent, comment = None):
+        if self.doQrat:
+            return self.createClause(result, antecedent, comment)
+        result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
+        if result == -resolver.tautologyId:
+            result = []
+        rfields = [str(r) for r in result]
+        afields = [str(a) for a in antecedent]
+        fields = ['ar'] + rfields + ['0'] + afields + ['0']
+        stepNumber = self.generateStepQP(fields, True, comment)
+        self.clauseDict[stepNumber] = result
+        self.antecedentDict[stepNumber] = antecedent
+        return stepNumber
+
+    def proveExtend(self, var, level, comment = None):
+        if self.doQrat:
+            # Don't need to declare extension variables
+            return
+        fields = ['x', str(var), str(level)]
+        self.generateStepQP(fields, False, comment)
+
+    def proveAddBlocked(self, clause, blockers, comment = None):
+        if self.doQrat:
+            return self.createClause(clause, blockers, comment)
+        result = resolver.cleanClause(clause)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
+        rfields = [str(r) for r in result]
+        bfields = [str(-abs(b)) for b in blockers]
+        fields = ['ab'] + rfields + ['0'] + bfields + ['0']
+        stepNumber = self.generateStepQP(fields, True, comment)
+        self.clauseDict[stepNumber] = result
+        return stepNumber
+
+    def proveUniversal(self, lit, oldId, comment = None):
+        fields = ['u', str(lit), str(oldId)]
+        stepNumber = self.generateStepQP(fields, True, comment)
+        oclause = self.clauseDict[oldId]
+        nclause = [l for l in oclause if l != lit]
+        self.clauseDict[stepNumber] = nclause
+        return stepNumber
+
+    def proveDelete(self, idList, comment = None):
+        ilist = [str(id) for id in idList]
+        fields = ['d'] + ilist + ['0']
+        self.generateStepQP(fields, False, comment)
 
     def summarize(self):
         if self.verbLevel >= 1:
@@ -483,7 +549,7 @@ class Solver:
         termB = self.activeIds[id2]
         newTerm = termA.combine(termB)
         self.termCount += 1
-        comment = "T%d (Node %s) & T%d (Node %s)--> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
+        comment = "T%d (Node %s) & T%d (Node %s) --> T%s (Node %s)\n" % (id1, termA.root.label(), id2, termB.root.label(),
                                                                       self.termCount, newTerm.root.label())
         self.prover.comment(comment)
         del self.activeIds[id1]
@@ -497,7 +563,6 @@ class Solver:
             self.unsat = True
             self.manager.summarize()
             return -1
-#        print("Combining terms %d & %d --> term %d" % (id1, id2, self.termCount))
         return self.termCount
 
     def equantifyTerm(self, id, varList):
@@ -515,7 +580,6 @@ class Solver:
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
-#        print("Existentially quantifying term %d --> term %d" % (id, self.termCount))
         return self.termCount
 
     def uquantifyTermSingle(self, id, var):
@@ -549,7 +613,6 @@ class Solver:
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
-#        print("Universally quantifying term %d --> terms %d,  %d" % (id, id1, id0))
         return (id1, id0)
 
     def runNoSchedule(self):
@@ -686,6 +749,7 @@ class Solver:
             self.placeInBucket(buckets, id)
         for blevel in levels:
             vars, isExistential = self.quantMap[blevel]
+            self.writer.write("Quantifying %s level %d.  Vars = %s\n" % ("existential" if isExistential else "universal", blevel, str(vars)))
             if isExistential:
                 # Conjunct all terms in bucket
                 while len(buckets[blevel]) > 1:

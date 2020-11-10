@@ -346,14 +346,14 @@ class VResolver:
         self.prover.proofCount += 1
         self.clauseCount += 1
         if len(a1) == 1:
-            id = self.prover.createClause(r, a1 + a2, comment, isInput = False)
+            id = self.prover.proveAddResolution(r, a1 + a2, comment)
             return id, [id]
         elif len(a2) == 1:
-            id = self.prover.createClause(r, a2 + a1, comment, isInput = False)
+            id = self.prover.proveAddResolution(r, a2 + a1, comment)
             return id, [id]
         else:
-            id1 = self.prover.createClause(r1, a1, comment, isInput = False)
-            id = self.prover.createClause(r, [id1] + a2, comment = None, isInput = False)
+            id1 = self.prover.proveAddResolution(r1, a1, comment)
+            id = self.prover.proveAddResolution(r, [id1] + a2, comment = None)
             self.clauseCount += 1
             return id, [id1, id]
 

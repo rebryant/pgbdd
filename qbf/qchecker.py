@@ -21,6 +21,9 @@ def usage(name):
 # C[Id]: Clause with given Id
 # Var(Lit): Variable for specified literal
 
+# Quantification levels:
+#   Input variable i is put at quantification level 2i-1.
+#   This provides room to insert extension variables at even-numbered levels
 
 ### Refutation proofs
 
@@ -253,7 +256,7 @@ class QcnfReader():
                     foundDict[v] = lineNumber
                     self.varList.append((v, qlevel, isExistential))
                 # Prepare for next set of input variables
-                qlevel += 1
+                qlevel += 2
             else:
                 if nclause == 0:
                     self.fail("Line %d.  No header line.  Not cnf" % (lineNumber))
