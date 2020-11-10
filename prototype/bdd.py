@@ -156,9 +156,9 @@ class VariableNode(Node):
             mld = "ITE assertion for node %s: LD" % self.label()
         else:
             mhu = "ITE assertions for node %s"  % self.label()
-            mlu = ""
-            mhd = ""
-            mld = ""
+            mlu = None
+            mhd = None
+            mld = None
             
         self.inferTrueUp = prover.createClause([id, -vid, -hid], [], mhu)
         self.inferFalseUp = prover.createClause([id, vid, -lid], [], mlu)
