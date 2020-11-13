@@ -55,6 +55,8 @@ class QcnfReader():
     # Each is triple of form (varNumber, qlevel, isExistential)
     varList = []
     nvar = 0
+    # Were any of the quantifier blocks stretched into multiple levels
+    stretched = False
     
     def __init__(self, fname = None, permuter = None, stretchExistential = False, stretchUniversal = False):
         if fname is None:
@@ -79,6 +81,7 @@ class QcnfReader():
     # Only use odd levels to keep room for extension variables at even levels
     def readCnf(self, permuter = None, stretchExistential = False, stretchUniversal = False):
         self.nvar = 0
+        self.stretched = False
         # Dictionary of variables that have been declared.
         # Maps from var to line number
         foundDict = {}
@@ -123,10 +126,10 @@ class QcnfReader():
                     foundDict[v] = lineNumber
                 # Now add them, either as a group, or sequentially
                 if isExistential and stretchExistential or (not isExistential and stretchUniversal):
+                    if len(vars) > 1:
+                        self.stretched = True
                     if permuter is not None:
                         vars = permuter.sortList(vars) 
-                    else:
-                        vars.sort()
                     for v in vars:
                         self.varList.append((v, qlevel, isExistential))
                         qlevel += 2
@@ -460,6 +463,19 @@ class Prover:
         fields = ['d'] + ilist + ['0']
         self.generateStepQP(fields, False, comment)
 
+    # Declare variable levels when not default
+    def generateLevels(self, varList):
+        levelDict = {}
+        for (v, l, e) in varList:
+            if l in levelDict:
+                levelDict[l].append(v)
+            else:
+                levelDict[l] = [v]
+        levels = sorted(levelDict.keys())
+        for l in levels:
+            fields = ['-', 'l', str(l)] + [str(v) for v in levelDict[l]] + ['0']
+            self.file.write(' '.join(fields) + '\n')
+
     def summarize(self):
         if self.verbLevel >= 1:
             self.writer.write("Total Clauses: %d\n" % self.clauseCount)
@@ -725,6 +741,7 @@ class Solver:
         rootList = [t.root for t in self.activeIds.values()]
         return rootList
 
+
 def readPermutation(fname, writer = None):
     valueList = []
     permutedList = []
@@ -824,6 +841,8 @@ def run(name, args):
         writer.write("Aborted: %s\n" % str(ex))
         return
     
+    if reader.stretched:
+        prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
     if doBucket:

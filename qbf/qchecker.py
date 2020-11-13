@@ -477,12 +477,18 @@ class Prover:
     # List of input variables.
     # Mapping from variable number to (qlevel, isExistential)
     varDict = {}
+    # Version of varDict created after shift variables
+    shiftedVarDict = {}
     failed = False
+    # Levels for variables.  Each is mapping from level to list of variables in that level
+    initialLevels = {}
+    shiftedLevels = {}
 
     def __init__(self, qreader):
         self.lineNumber = 0
         self.cmgr = ClauseManager()
         self.varDict = { v : (q, e) for (v, q, e) in qreader.varList }
+        self.shiftedVarDict = {}
         self.failed = False
         for clause in qreader.clauses:
             nclause = cleanClause(clause)
@@ -499,6 +505,8 @@ class Prover:
         self.failed = True
 
     def prove(self, fname):
+        foundLevels = False
+        doneLevels = False
         if self.failed:
             self.failProof("Problem with QCNF file")
             return
@@ -523,6 +531,20 @@ class Prover:
             cmd = fields[1]
             rest = fields[2:]
             # Dispatch on command
+            # Level command requires special consideration, since it only occurs at beginning of file
+            if cmd == 'l':
+                if doneLevels:
+                    self.flagError("Cannot declare level after any other command")
+                    break
+                if not foundLevels:
+                    foundLevels = True
+                self.doLevel(rest)
+                continue
+            elif foundLevels:
+                if not self.checkLevels():
+                    break
+                self.varDict = self.shiftedVarDict
+                doneLevels = True
             if cmd == 'a':
                 self.doAdd(id, rest)
             elif cmd == 'ab':
@@ -543,12 +565,33 @@ class Prover:
                 self.invalidCommand(cmd)
             if self.failed:
                 break
-            print("Processed proof line #%d '%s'" % (self.lineNumber, trim(line)))
+#            print("Processed proof line #%d '%s'" % (self.lineNumber, trim(line)))
         pfile.close()
         self.checkProof()
             
     def invalidCommand(self, cmd):
         self.flagError("Invalid command '%s' in proof" % cmd)
+
+    def doLevel(self, rest):
+        if len(rest) < 3:
+            self.flagError("Expected level, variable(s), and terminating zero")
+            return
+        try:
+            ifields = [int(r) for r in rest]
+        except:
+            self.flagError("Expected integer level and variable(s)")
+            return
+        if ifields[-1] != 0:
+            self.flagError("Expected expected terminating zero")
+            return
+        level = ifields[0]
+        vars = ifields[1:-1]
+        for v in vars:
+            if v not in self.varDict:
+                self.flagError("Invalid variable: %d" % v)
+                return
+            (q, e) = self.varDict[v]
+            self.shiftedVarDict[v] = (level, e)
 
     def doAdd(self, id, rest):
         self.invalidCommand('a')
@@ -597,6 +640,79 @@ class Prover:
                 self.flagError("Variable %d already declared" % var)
                 return
             self.varDict[var] = (level, True)
+
+    # Check to make sure two lists are equal.  Return (in1-not-in2,in2-not-in1)
+    def diffLists(self, ls1, ls2):
+        ls1 = sorted(ls1)
+        ls2 = sorted(ls2)
+        ls1not2 = []
+        ls2not1 = []
+        while len(ls1) > 0 and len(ls2) > 0:
+            v1 = ls1[0]
+            v2 = ls2[0]
+            ls1 = ls1[1:]
+            ls2 = ls2[1:]
+            if v1 == v2:
+                continue
+            ls1not2.append(v1)
+            ls2not1.append(v2)
+        if len(ls1) > 0:
+            ls1not2 = ls1not2 + ls1
+        if len(ls2) > 0:
+            ls2not1 = ls2not1 + ls2
+        return (ls1not2, ls2not1)
+    
+
+    # Make sure shifted variables compatible with original
+    def checkLevels(self):
+        ilevels = []
+        ivarList = {}
+
+        ilist = self.varDict.keys()
+        slist = self.shiftedVarDict.keys()
+        (inots, snoti) = self.diffLists(ilist, slist)
+        if len(inots) > 0:
+            self.flagError("Mismatch.  Shifted versions of variables not declared: %s" % str(inots))
+            return False
+        if len(snoti) > 0:
+            self.flagError("Mismatch.  Invalid variables given shifted levels: %s" % str(snoti))
+            return False
+
+        for v in self.varDict.keys():
+            (level, e) = self.varDict[v]
+            if level not in ilevels:
+                ilevels.append(level)
+                ivarList[level] = [v]
+            else:
+                ivarList[level].append(v)
+        ilevels.sort()
+
+        slevels = []
+        svarList = {}
+        for v in self.shiftedVarDict.keys():
+            (level, e) = self.shiftedVarDict[v]
+            if level not in slevels:
+                slevels.append(level)
+                svarList[level] = [v]
+            else:
+                svarList[level].append(v)
+        slevels.sort()
+            
+        sindex = 0
+        for ilevel in ilevels:
+            ivars = ivarList[ilevel]
+            svars = []
+            while len(svars) < len(ivars):
+                svars = svars + svarList[slevels[sindex]]
+                sindex += 1
+            (inots, snoti) = self.diffLists(ivars, svars)
+            if len(inots) > 0:
+                self.flagError("Mismatch.  Input level %d.  Shifted versions of variables not declared: %s" % (ilevel, str(inots)))
+                return False
+            if len(snoti) > 0:
+                self.flagError("Mismatch.  Input level %d.  Invalid variables given shifted levels: %s" % (ilevel, str(snoti)))
+                return False
+        return True
 
     def failProof(self, reason):
         self.failed = True
