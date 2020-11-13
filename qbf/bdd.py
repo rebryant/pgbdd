@@ -325,7 +325,7 @@ class Manager:
                 if node.high != self.leaf0:
                     antecedents.append(node.inferTrueUp)
         antecedents.append(clauseId)
-        validation = self.prover.proveAddResolution([root.id], antecedents, "Validate clause %d entails BDD %d" % (clauseId, root.id))
+        validation = self.prover.proveAddResolution([root.id], antecedents, "Validate clause %d entails node N%d" % (clauseId, root.id))
         return root, validation
 
     # Construct BDD representation of clause
@@ -348,7 +348,7 @@ class Manager:
                 if node.high != self.leaf0:
                     antecedents.append(node.inferTrueDown)
         antecedents.append(root.id)
-        validation = self.prover.createClause([clauseId], antecedents, "Validate BDD %d entails clause %d" % (root.id, clauseId))
+        validation = self.prover.createClause([clauseId], antecedents, "Validate node N%d entails clause %d" % (root.id, clauseId))
         return root, validation
     
     def deconstructClause(self, clause):

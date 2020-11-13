@@ -21,19 +21,23 @@ def usage(name):
 # C[Id]: Clause with given Id
 # Var(Lit): Variable for specified literal
 
-# Quantification levels:
-#   Input variable i is put at quantification level 2i-1.
-#   This provides room to insert extension variables at even-numbered levels
+### All proof types
+
+# - l Level Var+ 0
+#    Shift input variables to specified level
+#    All shifts must occur before any other command type
+#    Check that resulting ordering of input variables is a refinement of the initial ordering
+#    A minimal shift would be to move each variable at level l to 2l-1 to make room for existential variables
+
+# - x Level Var+ 0
+#    Introduce extension variable(s) at specified quantification level
+#    Make sure each Var is not already defined, and that only existential variables are at this level
 
 ### Refutation proofs
 
 # Id ar Lit* 0 Id+ 0
 #    Add clause C[Id] = [Lit*] by resolution.
 #    Must check that antecedents resolve to clause
-
-# - x Var Level
-#    Introduce extension variable Var at quant level Level
-#    Must make sure Var not already defined
 
 # Id ab Lit+ 0 -Id* 0
 #    Add blocked clause C[Id] = [Lit+].  Blocking literal L must be first
@@ -56,10 +60,6 @@ def usage(name):
 
 # Id a Lit* 0 
 #    Add clause C[Id] = [Lit*].
-
-# - x Var Level
-#    Introduce extension variable Var at quant level Level
-#    Must make sure Var not already defined
 
 # - dr Id Id+ 0
 #    Delete clause C[Id] by resolution.
@@ -543,7 +543,7 @@ class Prover:
                 self.invalidCommand(cmd)
             if self.failed:
                 break
-            print("Processed proof line '%s'" % trim(line))
+            print("Processed proof line #%d '%s'" % (self.lineNumber, trim(line)))
         pfile.close()
         self.checkProof()
             
@@ -572,19 +572,31 @@ class Prover:
         self.invalidCommand('u')
 
     def doExtend(self, rest):
-        if len(rest) != 2:
-            self.flagError("Expected variable and level")
+        if len(rest) < 3:
+            self.flagError("Expected level and variable(s)")
             return
         try:
-            var = int(rest[0])
-            level = int(rest[1])
+            level = int(rest[0])
         except:
-            self.flagError("Expecting variable and level as two numbers")
+            self.flagError("Expecting level as number")
             return
-        if var in self.varDict:
-            self.flagError("Variable %d already declared" % var)
+        try:
+            zero = int(rest[-1])
+        except:
+            self.flagError("Expecting terminating zero")
             return
-        self.varDict[var] = (level, True)
+        if zero != 0:
+            self.flagError("Expecting terminating zero")            
+        for vs in rest[1:-1]:
+            try:
+                var = int(vs)
+            except:
+                self.flagError("Can't parse '%s' as variable" % vs)
+                return
+            if var in self.varDict:
+                self.flagError("Variable %d already declared" % var)
+                return
+            self.varDict[var] = (level, True)
 
     def failProof(self, reason):
         self.failed = True
@@ -710,7 +722,7 @@ class RefutationProver(Prover):
                 return
             (qlevel, isExistential) = self.varDict[cvar]
             if isExistential and qlevel > vlevel:
-                self.flagError("Existential literal %d is too high in quantification order" % lit)
+                self.flagError("Existential literal %d is too high (%d) in quantification order compared to universal literal %d (%d)" % (clit, qlevel, ulit, vlevel))
                 return
             nclause.append(clit)
         (ok, msg) = self.cmgr.addClause(nclause, id)

@@ -13,12 +13,13 @@ import stream
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-p PERMUTE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p PERMUTE] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -S          Generate satisfaction proof\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
+    sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
@@ -44,20 +45,18 @@ class CnfException(Exception):
         return "CNF Exception: " + str(self.value)
 
 # Read QCNF file.
+# Save variables as list of tuples with form (varNumber, qlevel, isExistential)
 # Save list of clauses, each is a list of literals (zero at end removed)
 # Also saves comment lines
 class QcnfReader():
     file = None
-    commentLines = []
     clauses = []
     # List of input variables.
     # Each is triple of form (varNumber, qlevel, isExistential)
     varList = []
     nvar = 0
-    verbLevel = 1
     
-    def __init__(self, fname = None, verbLevel = 1):
-        self.verbLevel = verbLevel
+    def __init__(self, fname = None, permuter = None, stretchExistential = False, stretchUniversal = False):
         if fname is None:
             opened = False
             self.file = sys.stdin
@@ -68,15 +67,17 @@ class QcnfReader():
             except Exception:
                 raise CnfException("Could not open file '%s'" % fname)
         self.clauses = []
-        self.commentLines = []
         try:
-            self.readCnf()
+            self.readCnf(permuter, stretchExistential, stretchUniversal)
         except Exception as ex:
             if opened:
                 self.file.close()
             raise ex
         
-    def readCnf(self):
+    # Read QCNF file.  Optionally, have split quantifier blocks into ones with single
+    # variables.
+    # Only use odd levels to keep room for extension variables at even levels
+    def readCnf(self, permuter = None, stretchExistential = False, stretchUniversal = False):
         self.nvar = 0
         # Dictionary of variables that have been declared.
         # Maps from var to line number
@@ -92,8 +93,7 @@ class QcnfReader():
             if len(line) == 0:
                 continue
             elif line[0] == 'c':
-                if self.verbLevel > 1:
-                    self.commentLines.append(line)
+                continue
             elif line[0] == 'p':
                 fields = line[1:].split()
                 if fields[0] != 'cnf':
@@ -114,15 +114,27 @@ class QcnfReader():
                 if vars[-1] != 0:
                     raise CnfException("Line %d.  Clause line should end with 0" % lineNumber)
                 vars = vars[:-1]
+                # First make sure all vars are legitimate
                 for v in vars:
                     if v <= 0 or v > self.nvar:
                         raise CnfException("Line %d.  Invalid variable %d" % (lineNumber, v))
                     if v in foundDict:
                         raise CnfException("Line %d.  Variable %d already declared on line %d" % (lineNumber, v, foundDict[v]))
                     foundDict[v] = lineNumber
-                    self.varList.append((v, qlevel, isExistential))
-                # Prepare for next set of input variables
-                qlevel += 2
+                # Now add them, either as a group, or sequentially
+                if isExistential and stretchExistential or (not isExistential and stretchUniversal):
+                    if permuter is not None:
+                        vars = permuter.sortList(vars) 
+                    else:
+                        vars.sort()
+                    for v in vars:
+                        self.varList.append((v, qlevel, isExistential))
+                        qlevel += 2
+                else:
+                    for v in vars:
+                        self.varList.append((v, qlevel, isExistential))
+                    # Prepare for next set of input variables
+                    qlevel += 2
             else:
                 if nclause == 0:
                     raise CnfException("Line %d.  No header line.  Not cnf" % (lineNumber))
@@ -154,8 +166,18 @@ class QcnfReader():
             ovarList = [(v, 1, True) for v in outerVars]
             nvarList = [(v, qlevel+2, isExistential) for (v, qlevel, isExistential) in self.varList]
             self.varList = ovarList + nvarList
-                        
+        # Debugging info:
 
+        vdict = {q+1 : [] for q in range(qlevel)}
+        tdict = {q : False for q in range(qlevel)}
+        for (v, q, e) in self.varList:
+            vdict[q].append(v)
+            tdict[q] = e
+        print("Input variables:")
+        for i in range(qlevel):
+            q = i+1
+            if len(vdict[q]) > 0:
+                print("Level %d.  %s.  Vars = %s" % (q, "Existential" if tdict[q] else "Universal", str(vdict[q])))
 
 # Abstract representation of Boolean function
 class Term:
@@ -211,20 +233,16 @@ class Term:
         if literal.high == self.manager.leaf1:
             ulit = -ulit
         rclause = [ulit, newRoot.id]
-        rule1 = self.manager.prover.createClause(rclause, antecedents, comment)
         # Now apply universal reduction.
         comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
         if self.manager.prover.doQrat:
-            validation = self.manager.prover.createClause(rclause, [rule1], comment=comment, isUniversal=True)
+            rule1 = self.manager.prover.createClause(rclause, antecedents, comment)
+            validation = self.manager.prover.createClause(rclause, [rule1], comment=None, isUniversal=True)
         else:
-            validation = self.manager.prover.proveUniversal(ulit, rule1, comment)
+            rule1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
+            validation = self.manager.prover.proveUniversal(ulit, rule1, None)
         return Term(self.manager, newRoot, validation)
 
-    def equalityTest(self, other):
-        root1 = self.root
-        root2 = other.root
-        return root1 == root2
-                                
 
 class PermutationException(Exception):
 
@@ -267,6 +285,15 @@ class Permuter:
             raise PermutationException("Value %s not in permutation" % (str(v)))
         return self.forwardMap[v]
 
+    def permLess(self, v1, v2):
+        pv1 = self.reverse(v1)
+        pv2 = self.reverse(v2)
+        return pv1 < pv2
+
+    def sortList(self, ls):
+        return sorted(ls, key = lambda x: self.reverse(x))
+
+
     def reverse(self, v):
         if v not in self.reverseMap:
             raise PermutationException("Value %s not in permutation range" % (str(v)))
@@ -301,7 +328,7 @@ class Prover:
     def __init__(self, fname = None, writer = None, refutation = True, verbLevel = 1):
         self.verbLevel = verbLevel
         self.refutation = refutation
-        self.doQrat = True
+        self.doQrat = False
         if fname is None:
             self.opened = False
             self.file = sys.stdout
@@ -321,9 +348,6 @@ class Prover:
 
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
-
-    def fileOutput(self):
-        return self.opened
 
     def comment(self, comment):
         if self.verbLevel > 1 and comment is not None:
@@ -406,7 +430,7 @@ class Prover:
         if self.doQrat:
             # Don't need to declare extension variables
             return
-        fields = ['x', str(var), str(level)]
+        fields = ['x', str(level), str(var), '0']
         self.generateStepQP(fields, False, comment)
 
     def proveAddBlocked(self, clause, blockers, comment = None):
@@ -479,17 +503,12 @@ class Solver:
     # Mapping from quantifier levels to tuple (vars,isExistential)
     quantMap = {}
 
-    def __init__(self, fname = None, prover = None, permuter = None, verbLevel = 1):
+    def __init__(self, reader = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
         if prover is None:
             prover = Prover(verbLevel = verbLevel)
         self.prover = prover
         self.writer = prover.writer
-        try:
-            reader = QcnfReader(fname, verbLevel = verbLevel)
-        except Exception as ex:
-            self.writer.write("Aborted: %s\n" % str(ex))
-            raise ex
         #  mapping from each variable to (qlevel,isExistential)
         qmap = { v : (qlevel, isExistential) for (v, qlevel, isExistential) in reader.varList }
         # Construct quantifer level mapping
@@ -549,12 +568,12 @@ class Solver:
         termB = self.activeIds[id2]
         newTerm = termA.combine(termB)
         self.termCount += 1
-        comment = "T%d (Node %s) & T%d (Node %s) --> T%s (Node %s)\n" % (id1, termA.root.label(), id2, termB.root.label(),
+        comment = "T%d (Node %s) & T%d (Node %s) --> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
                                                                       self.termCount, newTerm.root.label())
         self.prover.comment(comment)
         del self.activeIds[id1]
         del self.activeIds[id2]
-        if self.prover.fileOutput() and self.verbLevel >= 3:
+        if self.prover.opened and self.verbLevel >= 3:
             self.writer.write(comment)
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
@@ -641,97 +660,6 @@ class Solver:
                     id = self.combineTerms(id1, id0)
                     if id < 0:
                         return
-        
-    def runSchedule(self, scheduler):
-        idStack = []
-        lineCount = 0
-        # Make sure program runs from innermost quantifier to outermost
-        levels = sorted(self.quantMap.keys(), key = lambda x : -x)
-        curVars = []
-        while len(curVars) == 0:
-            curLevel = levels[0]
-            levels = levels[1:]
-            curVars, curExistential = self.quantMap[level]
-        for line in scheduler:
-            line = trim(line)
-            lineCount += 1
-            fields = line.split()
-            if len(fields) == 0:
-                continue
-            cmd = fields[0]
-            if cmd == '#':
-                continue
-            if cmd == 'i':  # Information request
-                if len(idStack) == 0:
-                    raise SolverException("Line #%d.  Nothing on stack" % lineCount)
-                # Use rest of string as documentation
-                line = trim(line)
-                cstring = line[1:] if  len(line) >= 1 else ""
-                root =  self.activeIds[idStack[-1]].root
-                size = self.manager.getSize(root)
-                if self.verbLevel >= 1:
-                    if self.countSolutions:
-                        count = self.manager.satisfyCount(root)
-                        self.writer.write("Node %d.  Size = %d, Solutions = %d.%s\n" % (root.id, size, count, cstring))
-                    else:
-                        self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
-                continue
-            try:
-                values = [int(v) for v in fields[1:]]
-            except:
-                raise SolverException("Line #%d.  Invalid field '%s'" % (lineCount, line))
-            if cmd == 'c':  # Put listed clauses onto stack
-                idStack += values
-            elif cmd == 'a':  # Pop n+1 clauses from stack.  Form their conjunction.  Push result back on stack
-                count = values[0]
-                if count+1 > len(idStack):
-                    raise SolverException("Line #%d.  Invalid conjunction count %d.  Only have %d on stack" %
-                                          (lineCount, count, len(idStack)))
-                for i in range(count):
-                    id1 = idStack[-1]
-                    id2 = idStack[-2]
-                    idStack = idStack[:-2]
-                    nid = self.combineTerms(id1, id2)
-                    if nid < 0:
-                        # Hit unsat case
-                        return
-                    else:
-                        idStack.append(nid)
-            elif cmd == 'q':
-                if len(idStack) < 1:
-                    raise SolverException("Line #%d.  Stack is empty" % (lineCount))
-                id = idStack[-1]
-                idStack = idStack[:-1]
-                # Figure out which variables are being quantified
-                while len(curVars) == 0:
-                    curLevel = levels[0]
-                    levels = levels[1:]
-                    curVars, curExistential = self.quantMap[curLevel]
-                nVars = []
-                vcount = 0
-                for v in curVars:
-                    if v in values:
-                        vcount += 1
-                    else:
-                        nVars.append(v)
-                if len(values) != vcount:
-                    msg = "Line %d.  Attempting to quantify level %d variables %s, but current quantifier block has %s" % (lineCount, curLevel, str(values), str(curVars))
-                    raise SolverException(msg)
-                curVars = nVars
-                if self.verbLevel >= 2:
-                    self.writer.write("Quantifying %s level %d.  Vars = %s" % ("existential" if curExistential else "universal", curLevel, str(values)))
-                if curExistential:
-                    nid = self.equantifyTerm(id, values)
-                else:
-                    for v in values:
-                        id1, id0 = self.uquantifyTermSingle(id, v)
-                        if id1 < 0 or id0 < 0:
-                            # Hit unsat case
-                            return
-                        idStack.append(id1)
-                        idStack.append(id0)
-            else:
-                raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
         
     def placeInBucket(self, buckets, id):
         term = self.activeIds[id]
@@ -833,43 +761,27 @@ def readPermutation(fname, writer = None):
         return None
     return permuter
         
-def readScheduler(fname, writer = None):
-    lineCount = 0
-    actionList = []
-    if writer is None:
-        writer = sys.stderr
-    try:
-        infile = open(fname, 'r')
-    except:
-        writer.write("Could not open schedule file '%s'\n" % fname)
-        return None
-    for line in infile:
-        lineCount += 1
-        fields = line.split()
-        if len(fields) == 0:
-            continue
-        if fields[0][0] == '#':
-            continue
-        actionList.append(line)
-    return actionList
-
 def run(name, args):
     cnfName = None
     proofName = None
     permuter = None
+    bpermuter = None
     doBucket = False
-    scheduler = None
     verbLevel = 1
     logName = None
     refutation = True
 
-    optlist, args = getopt.getopt(args, "hbSv:i:o:m:p:s:L:")
+    optlist, args = getopt.getopt(args, "hbB:Sv:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         if opt == '-b':
             doBucket = True
+        elif opt == '-B':
+            bpermuter = readPermutation(val)
+            if bpermuter is None:
+                return
         elif opt == '-S':
             refutation = False
         elif opt == '-v':
@@ -881,10 +793,6 @@ def run(name, args):
         elif opt == '-p':
             permuter = readPermutation(val)
             if permuter is None:
-                return
-        elif opt == '-s':
-            scheduler = readScheduler(val)
-            if scheduler is None:
                 return
         elif opt == '-L':
             logName = val
@@ -899,10 +807,6 @@ def run(name, args):
         writer.write("Satisfaction not implemented\n")
         return
 
-    if doBucket and scheduler is not None:
-        writer.write("Cannot have both bucket scheduling and defined scheduler\n")
-        return
-
     try:
         prover = Prover(proofName, writer = writer, verbLevel = verbLevel, refutation = refutation)
     except Exception as ex:
@@ -910,11 +814,20 @@ def run(name, args):
         return
 
     start = datetime.datetime.now()
-    solver = Solver(cnfName, prover = prover, permuter = permuter, verbLevel = verbLevel)
+
+    stretchExistential = not refutation
+    stretchUniversal = refutation
+
+    try:
+        reader = QcnfReader(cnfName, bpermuter, stretchExistential, stretchUniversal)
+    except Exception as ex:
+        writer.write("Aborted: %s\n" % str(ex))
+        return
+    
+
+    solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
     if doBucket:
         solver.runBucketSchedule()
-    elif scheduler is not None:
-        solver.runSchedule(scheduler)
     else:
         solver.runNoSchedule()
 
