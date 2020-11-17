@@ -1,0 +1,62 @@
+INTERP = python3
+T = 3
+VLEVEL = 1
+
+GENERATOR = ../../kbf/gen-hardKB.py
+VGENERATOR = ../../kbf/gen-hardKB-vorder.py
+QGENERATOR = ../../kbf/gen-hardKB-qorder.py
+REVERSER = ../../reverse.py
+SOLVER = $(INTERP) ../../../qbf/qsolver.py
+CHECKER = ../../../qbf/qchecker.py
+GRABBER = ../../../benchmarks/grab_clauses.py
+EXTENSION = qproof
+
+vo: kbf-$(T)-vo.data
+rvo: kbf-$(T)-rvo.data
+qo: kbf-$(T)-qo.data
+rqo: kbf-$(T)-rqo.data
+
+kbf-$(T)-vo.data:
+	$(GENERATOR) $(T) > kbf-$(T).qcnf 
+	$(VGENERATOR) $(T) > kbf-$(T)-v.order 
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-v.order \
+		-o kbf-$(T)-vo.$(EXTENSION) | tee kbf-$(T)-vo.data
+	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-vo.$(EXTENSION) | tee -a kbf-$(T)-vo.data
+	rm -f kbf-$(T)-vo.$(EXTENSION)
+
+kbf-$(T)-rvo.data:
+	$(GENERATOR) $(T) > kbf-$(T).qcnf 
+	$(VGENERATOR) $(T) | $(REVERSER) > kbf-$(T)-rv.order 
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-rv.order \
+		-o kbf-$(T)-rvo.$(EXTENSION) | tee kbf-$(T)-rvo.data
+	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-rvo.$(EXTENSION) | tee -a kbf-$(T)-rvo.data
+	rm -f kbf-$(T)-rvo.$(EXTENSION)
+
+kbf-$(T)-qo.data:
+	$(GENERATOR) $(T) > kbf-$(T).qcnf 
+	$(QGENERATOR) $(T) > kbf-$(T)-q.order 
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-q.order \
+		-o kbf-$(T)-qo.$(EXTENSION) | tee kbf-$(T)-qo.data
+	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-qo.$(EXTENSION) | tee -a kbf-$(T)-qo.data
+	rm -f kbf-$(T)-qo.$(EXTENSION)
+
+kbf-$(T)-rqo.data:
+	$(GENERATOR) $(T) > kbf-$(T).qcnf 
+	$(QGENERATOR) $(T) | $(REVERSER) > kbf-$(T)-rq.order 
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-rq.order \
+		-o kbf-$(T)-rqo.$(EXTENSION) | tee kbf-$(T)-rqo.data
+	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-rqo.$(EXTENSION) | tee -a kbf-$(T)-rqo.data
+	rm -f kbf-$(T)-rqo.$(EXTENSION)
+
+
+data:
+	$(GRABBER) kbf-*-vo.data > kbf-vo.csv
+	$(GRABBER) kbf-*-rvo.data > kbf-rvo.csv
+	$(GRABBER) kbf-*-qo.data > kbf-qo.csv
+	$(GRABBER) kbf-*-rqo.data > kbf-rqo.csv
+
+clean:
+	rm -f *~
+
+superclean: clean
+	rm -f *.qcnf *.qrat *.qproof *.data *.order
