@@ -226,9 +226,9 @@ class Term:
     def restrict(self, literal, prover):
         antecedents = [self.validation]
         newRoot, implication = self.manager.applyRestrictDown(self.root, literal)
-        if newRoot == self.root:
+#        if newRoot == self.root:
 #            print("  Restriction returned argument node N%d" % newRoot.id)
-            return Term(self.manager, newRoot, self.validation)
+#            return Term(self.manager, newRoot, self.validation)
         if implication != resolver.tautologyId:
             antecedents += [implication]
         if newRoot == self.manager.leaf0:

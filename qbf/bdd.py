@@ -894,8 +894,9 @@ class Manager:
                 justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
             except resolver.ResolveException:
                 targetClause = resolver.cleanClause([-u.id, v.id])
-                comment = "Justification that %s ==> %s" % (u.label(), v.label())
+                comment = "Degenerate restriction.  Justification that %s ==> %s" % (u.label(), v.label())
                 justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+                print("Degenerate restriction.  Justification that %s ==> %s is %s" % (u.label(), v.label(), str(justification)))
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
