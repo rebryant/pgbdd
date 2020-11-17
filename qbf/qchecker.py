@@ -3,6 +3,7 @@
 # Home-brewed checker for QBF proofs.
 import sys
 import getopt
+import datetime
 
 def usage(name):
     print("Usage: %s [-S] -i FILE.qcnf -p FILE.qproof" % name)
@@ -552,7 +553,7 @@ class Prover:
             elif cmd == 'ar':
                 self.doAddResolution(id, rest)
             elif cmd == 'd':
-                self.doDelete(id, rest)
+                self.doDelete(rest)
             elif cmd == 'dd':
                 self.doDeleteDavisPutnam(rest)
             elif cmd == 'dr':
@@ -848,7 +849,7 @@ class RefutationProver(Prover):
 
     def doDelete(self, rest):
         (idList, rest, msg) = self.getIntegerList(rest)
-        if clause is None:
+        if idList is None:
             self.flagError(msg)
             return
         if len(rest) > 0:
@@ -984,6 +985,7 @@ def run(name, args):
     if proofName is None:
         print("Need proof file name")
         return
+    start = datetime.datetime.now()
     qreader = QcnfReader(qcnfName)
     if qreader.failed:
         print("Error reading QCNF file: %s" % qreader.errorMessage)
@@ -994,6 +996,10 @@ def run(name, args):
     else:
         prover = SatisfactionProver(qreader)
     prover.prove(proofName)
+    delta = datetime.datetime.now() - start
+    seconds = delta.seconds + 1e-6 * delta.microseconds
+    print("Elapsed time for check: %.2f seconds" % seconds)
+
     
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

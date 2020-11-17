@@ -176,11 +176,11 @@ class QcnfReader():
         for (v, q, e) in self.varList:
             vdict[q].append(v)
             tdict[q] = e
-        print("Input variables:")
-        for i in range(qlevel):
-            q = i+1
-            if len(vdict[q]) > 0:
-                print("Level %d.  %s.  Vars = %s" % (q, "Existential" if tdict[q] else "Universal", str(vdict[q])))
+#        print("Input variables:")
+#        for i in range(qlevel):
+#            q = i+1
+#            if len(vdict[q]) > 0:
+#                print("Level %d.  %s.  Vars = %s" % (q, "Existential" if tdict[q] else "Universal", str(vdict[q])))
 
 # Abstract representation of Boolean function
 class Term:
@@ -226,6 +226,9 @@ class Term:
     def restrict(self, literal, prover):
         antecedents = [self.validation]
         newRoot, implication = self.manager.applyRestrictDown(self.root, literal)
+        if newRoot == self.root:
+#            print("  Restriction returned argument node N%d" % newRoot.id)
+            return Term(self.manager, newRoot, self.validation)
         if implication != resolver.tautologyId:
             antecedents += [implication]
         if newRoot == self.manager.leaf0:
@@ -555,9 +558,9 @@ class Solver:
         self.permuter = permuter
         # Construct literal map
         self.litMap = {}
-        for level in range(1, reader.nvar+1):
-            inputId = self.permuter.forward(level)
-            qlevel,isExistential = qmap[level]
+        for vlevel in range(1, reader.nvar+1):
+            inputId = self.permuter.forward(vlevel)
+            qlevel,isExistential = qmap[inputId]
             var = self.manager.newVariable(qlevel, name = "input-%d" % inputId, id = inputId, existential = isExistential)
             t = self.manager.literal(var, 1)
             self.litMap[ inputId] = t
@@ -582,15 +585,20 @@ class Solver:
     def combineTerms(self, id1, id2):
         termA = self.activeIds[id1]
         termB = self.activeIds[id2]
-        newTerm = termA.combine(termB)
         self.termCount += 1
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) & T%d (Node %s) --> T%d" % (id1, termA.root.label(), id2, termB.root.label(), self.termCount))
+        newTerm = termA.combine(termB)
         comment = "T%d (Node %s) & T%d (Node %s) --> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
                                                                       self.termCount, newTerm.root.label())
         self.prover.comment(comment)
+        if self.verbLevel >= 3:
+            print("  T%d (Node N%d, QL=%d) support = %s" % (self.termCount, newTerm.root.id, newTerm.root.qlevel, self.manager.getSupportIds(newTerm.root)))
+
         del self.activeIds[id1]
         del self.activeIds[id2]
         if self.prover.opened and self.verbLevel >= 3:
-            self.writer.write(comment)
+            self.writer.write(comment + '\n')
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
             if self.verbLevel >= 1:
@@ -605,9 +613,11 @@ class Solver:
         del self.activeIds[id]
         litList = [self.litMap[v] for v in varList]
         clause = self.manager.buildClause(litList)
-        newTerm = term.equantify(clause, self.prover)
         self.termCount += 1
         vstring = " ".join(sorted([str(v) for v in varList]))
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount))
+        newTerm = term.equantify(clause, self.prover)
         comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
         self.activeIds[self.termCount] = newTerm
@@ -621,8 +631,10 @@ class Solver:
         term = self.activeIds[id]
         del self.activeIds[id]
         lit = self.litMap[var]
-        term1 = term.restrict(lit, self.prover)
         self.termCount += 1
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) Restrict1(%s) --> T%d" % (id, term.root.label(), str(var), self.termCount))
+        term1 = term.restrict(lit, self.prover)
         comment = "T%d (Node %s) Restrict1(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term1.root.label())
         if term1.root == self.manager.leaf0:
             if self.verbLevel >= 1:
@@ -633,8 +645,10 @@ class Solver:
         self.activeIds[self.termCount] = term1
         id1 = self.termCount
         nlit = self.litMap[-var]
-        term0 = term.restrict(nlit, self.prover)
         self.termCount += 1
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) Restrict0(%s) --> T%d" % (id, term.root.label(), str(var), self.termCount))
+        term0 = term.restrict(nlit, self.prover)
         comment = "T%d (Node %s) Restrict0(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term0.root.label())
         if term0.root == self.manager.leaf0:
             if self.verbLevel >= 1:
@@ -664,7 +678,7 @@ class Solver:
             vars, isExistential = self.quantMap[level]
             if len(vars) == 0:
                 continue
-            if self.verbLevel >= 2:
+            if self.verbLevel >= 3:
                 self.writer.write("Quantifying %s level %d.  Vars = %s\n" % ("existential" if isExistential else "universal", level, str(vars)))
             if isExistential:
                 id = self.equantifyTerm(id, vars)
@@ -693,7 +707,7 @@ class Solver:
             self.placeInBucket(buckets, id)
         for blevel in levels:
             vars, isExistential = self.quantMap[blevel]
-            self.writer.write("Quantifying %s level %d.  Vars = %s\n" % ("existential" if isExistential else "universal", blevel, str(vars)))
+            self.writer.write("Quantifying %s level %d.  Vars = %s.  Bucket size = %d\n" % ("existential" if isExistential else "universal", blevel, str(vars), len(buckets[blevel])))
             if isExistential:
                 # Conjunct all terms in bucket
                 while len(buckets[blevel]) > 1:

@@ -169,7 +169,9 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        prover.proveExtend(id, qlevel, "Define extension variable for node %s" % self.label())
+        hname = "ONE" if hid == resolver.tautologyId else "ZERO" if hid == -resolver.tautologyId else "N%d" % hid
+        lname = "ONE" if lid == resolver.tautologyId else "ZERO" if lid == -resolver.tautologyId else "N%d" % lid
+        prover.proveExtend(id, qlevel, "Define extension variable for node %s = ITE(%d, %s, %s).  Qlevel=%d" % (self.label(), vid, hname, lname, self.qlevel))
         blockers = []
         self.inferTrueUp = prover.proveAddBlocked([id, -vid, -hid], blockers, "ITE assertions for node %s" % self.label())
         self.inferFalseUp = prover.proveAddBlocked([id, vid, -lid], blockers)
@@ -381,6 +383,15 @@ class Manager:
                 vlist.append(v)
         lits = [self.literal(v, 1) for v in  vlist]
         return self.buildClause(lits)
+
+    def getSupportIds(self, node):
+        varDict = self.buildInformation(node, lambda n: n.variable.id, {})
+        fullList = sorted(varDict.values())
+        ilist = []
+        for id in fullList:
+            if (len(ilist) == 0 or ilist[-1] != id) and id > 0:
+                ilist.append(id)
+        return ilist
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
@@ -836,8 +847,8 @@ class Manager:
 
     # Compute restriction on node.
     # Variable and phase indicated by literal node
-    # Generate justification that literal & node  --> newNode
-    # For up: Generate justification that literal & newNode --> node
+    # Generate justification that (literal &) node  --> newNode
+    # For up: Generate justification that (literal &) newNode --> node
     def applyRestrictDown(self, u, literal):
         if u.isLeaf():
             return (u, resolver.tautologyId)
@@ -878,8 +889,13 @@ class Manager:
         if targetClause == resolver.tautologyId:
             justification, clauseList = resolver.tautologyId, []
         else:
-            comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, u.label(), v.label())
-            justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            try:
+                comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, u.label(), v.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            except resolver.ResolveException:
+                targetClause = resolver.cleanClause([-u.id, v.id])
+                comment = "Justification that %s ==> %s" % (u.label(), v.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
@@ -1023,6 +1039,8 @@ class Manager:
             self.andResolver.summarize()
             self.writer.write("Results from Implication Testing Operations:\n")
             self.implyResolver.summarize()
+            self.writer.write("Results from Restriction Operations:\n")
+            self.restrictResolver.summarize()
         if self.verbLevel >= 1:
             self.writer.write("Results from proof generation\n")
             self.prover.summarize()

@@ -17,7 +17,7 @@ class Logger:
                 self.outFile = None
 
     def write(self, text):
-        sys.stderr.write(text)
+        sys.stdout.write(text)
         if self.outFile is not None:
             self.outFile.write(text)
 

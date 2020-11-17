@@ -198,7 +198,6 @@ class Profiler:
     def summarize(self):
         if self.prover.verbLevel <= 1:
             return
-        total = sum(self.signatureDict.values())
         self.prover.writer.write("Chain resolution signatures:\n")
         sigList = sorted(self.signatureDict.keys())
         for sig in sigList:
@@ -270,13 +269,26 @@ class VResolver:
                 self.tryCount += 1
                 if r is not None and testClauseEquality(r, targetClause):
                     return self.generateProof(r, r1, a1, r2, a2, comment)
-                if len(pairList1) == 1 and len(pairList2) == 1:
-                    if r is None:
-                        msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
-                        raise ResolveException(msg)
-                    if not testClauseEquality(r, targetClause):
-                        msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
-                        raise ResolveException(msg)
+
+#                if len(pairList1) == 1 and len(pairList2) == 1:
+#                    if r is None:
+#                        msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
+#                        raise ResolveException(msg)
+#                    if not testClauseEquality(r, targetClause):
+#                        msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
+#                        raise ResolveException(msg)
+                
+        if self.prover.verbLevel >= 3:
+            if comment is not None:
+                print("Failing: " + comment)
+            print("Trying to generate target clause %s" % showClause(targetClause))
+            print("%d candidate clauses:" % len(ruleIndex))
+            for k in ruleIndex.keys():
+                v = ruleIndex[k]
+                if v == tautologyId:
+                    print("%s: %s: TAUTOLOGY" % (str(k), str(v)))
+                else:
+                    print("%s: %s: %s" % (str(k), str(v), showClause(self.prover.clauseDict[v])))
                     
         msg = "Could not justify clause %s.  Tried %d combinations" % (showClause(targetClause), len(pairList1) * len(pairList2))
         raise ResolveException(msg)
@@ -360,6 +372,7 @@ class VResolver:
 
     def summarize(self):
         if self.prover.verbLevel >= 1 and self.runCount > 0:
+            self.prover.writer.write("  %d proofs generated\n" % self.runCount)
             antecedentAvg = float(self.antecedentCount) / float(self.runCount)
             clauseAvg = float(self.clauseCount) / float(self.runCount)
             tryAvg = float(self.tryCount) / float(self.runCount)
