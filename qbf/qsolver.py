@@ -10,7 +10,7 @@ import resolver
 import stream
 
 # Increase maximum recursion depth
-sys.setrecursionlimit(10 * sys.getrecursionlimit())
+sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
     sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p PERMUTE] [-L logfile]\n" % name)
