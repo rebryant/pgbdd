@@ -325,7 +325,7 @@ class ClauseManager:
             return (False, "Cannot add clause %s" % showClause(clause))
         newId = len(self.clauseDict)+1
         if id is not None and id != newId:
-            return (False, "Invalid clause Id.  Was expecting %d but got %s" % (len(newId), id))
+            return (False, "Invalid clause Id.  Was expecting %d but got %s" % (newId, id))
         self.clauseDict[newId] = clause
         if len(clause) == 0:
             self.addedEmpty = True
