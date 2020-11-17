@@ -161,8 +161,21 @@ def resolveClauses(clause1, clause2):
             result.append(l2)
     return result
 
+
 # Clause comparison.  Assumes both have been processed by cleanClause
 def testClauseEquality(clause1, clause2):
+    if clause1 is None or clause2 is None:
+        return False
+    if len(clause1) != len(clause2):
+        return False
+    for l1, l2 in zip(clause1, clause2):
+        if l1 != l2:
+            return False
+    return True
+
+
+# Clause comparison.  Assumes both have been processed by cleanClause
+def testClauseEqualityOld(clause1, clause2):
     if clause1 is None or clause2 is None:
         return False
     if len(clause1) != len(clause2):
@@ -648,21 +661,25 @@ class Prover:
         ls2 = sorted(ls2)
         ls1not2 = []
         ls2not1 = []
-        while len(ls1) > 0 and len(ls2) > 0:
-            v1 = ls1[0]
-            v2 = ls2[0]
-            ls1 = ls1[1:]
-            ls2 = ls2[1:]
+        idx1 = 0
+        idx2 = 0
+        while idx1 < len(ls1) and idx2 < len(ls2):
+            v1 = ls1[idx1]
+            v2 = ls2[idx2]
             if v1 == v2:
-                continue
-            ls1not2.append(v1)
-            ls2not1.append(v2)
-        if len(ls1) > 0:
-            ls1not2 = ls1not2 + ls1
-        if len(ls2) > 0:
-            ls2not1 = ls2not1 + ls2
+                idx1 += 1
+                idx2 += 1
+            elif v1 < v2:
+                ls1not2.append(v1)
+                idx1 += 1
+            else:
+                ls2not1.append(v2)
+                idx2 += 1
+        while idx1 < len(ls1):
+            ls1not2.append(ls1[idx1])
+        while idx2 < len(ls2):
+            ls2not1.append(ls2[idx2])
         return (ls1not2, ls2not1)
-    
 
     # Make sure shifted variables compatible with original
     def checkLevels(self):
@@ -731,6 +748,27 @@ class Prover:
     # Get integers until encounter 0.
     # return (list of integers, rest of input list, message)
     def getIntegerList(self, slist):
+        ilist = []
+        msg = ""
+        count = 0
+        for sval in slist:
+            try:
+                val = int(sval)
+            except:
+                return (None, slist[count:], "'%s' not valid integer" % sval)
+            if val == 0:
+                return(ilist, slist[count+1:], msg)
+            else:
+                ilist.append(val)
+                count += 1
+        # Didn't get terminating zero
+        return (None, slist, "Terminating zero not found")
+
+
+    # This version gets poor performance.  Speculate problem with repeated slicing
+    # Get integers until encounter 0.
+    # return (list of integers, rest of input list, message)
+    def getIntegerListPoor(self, slist):
         ilist = []
         msg = ""
         while len(slist) > 0:
