@@ -658,11 +658,13 @@ class Solver:
             return -1, -1
         self.activeIds[self.termCount] = term0
         id0 = self.termCount
+        newId = self.combineTerms(id0, id1)
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
-        return (id1, id0)
+        return newId
+
 
     def runNoSchedule(self):
         # Start by conjuncting all clauses to get single BDD
@@ -684,27 +686,24 @@ class Solver:
                 id = self.equantifyTerm(id, vars)
             else:
                 for v in vars:
-                    id1, id0 = self.uquantifyTermSingle(id, v)
-                    if id1 < 0 or id0 < 0:
-                        return
-                    id = self.combineTerms(id1, id0)
+                    id = self.uquantifyTermSingle(id, v)
                     if id < 0:
                         return
         
-    def placeInBucket(self, buckets, id):
+    def placeInQuantBucket(self, buckets, id):
         term = self.activeIds[id]
         level = term.root.qlevel-1
         if level > 0:
             buckets[level].append(id)
 
-    # Bucket elimination
-    def runBucketSchedule(self):
+    # Bucket elimination based on quantification levels
+    def runQuantBucket(self):
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         buckets = { level : [] for level in levels }
         # Insert ids into lists according quantification level
         ids = sorted(self.activeIds.keys())
         for id in ids:
-            self.placeInBucket(buckets, id)
+            self.placeInQuantBucket(buckets, id)
         for blevel in levels:
             vars, isExistential = self.quantMap[blevel]
             self.writer.write("Quantifying %s level %d.  Vars = %s.  Bucket size = %d\n" % ("existential" if isExistential else "universal", blevel, str(vars), len(buckets[blevel])))
@@ -718,13 +717,13 @@ class Solver:
                     if newId < 0:
                         # Hit unsat case
                         return
-                    self.placeInBucket(buckets, newId)
+                    self.placeInQuantBucket(buckets, newId)
                 # Quantify all variables for this bucket
                 if blevel > 0 and len(buckets[blevel]) > 0:
                     id = buckets[blevel][0]
                     buckets[blevel] = []
                     newId = self.equantifyTerm(id, vars)
-                    self.placeInBucket(buckets, newId)
+                    self.placeInQuantBucket(buckets, newId)
             else:
                 # Takes new pass for each variable in quantifier block
                 for v in vars:
@@ -741,12 +740,11 @@ class Solver:
                     if blevel > 0 and len(buckets[blevel]) > 0:
                         id = buckets[blevel][0]
                         buckets[blevel] = buckets[blevel][1:]
-                        id1, id0 = self.uquantifyTermSingle(id, v)
-                        if id1 < 0 or id0 < 0:                        
+                        id = self.uquantifyTermSingle(id, v)
+                        if id < 0:
                             # Hit unsat case
                             return
-                        self.placeInBucket(buckets, id1)
-                        self.placeInBucket(buckets, id0)
+                        self.placeInBucket(buckets, id)
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
 
@@ -860,7 +858,7 @@ def run(name, args):
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
     if doBucket:
-        solver.runBucketSchedule()
+        solver.runQuantBucket()
     else:
         solver.runNoSchedule()
 
