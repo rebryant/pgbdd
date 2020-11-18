@@ -187,16 +187,21 @@ class Term:
 
     manager = None
     root = None
-#    support = None    # Variables in support represented by clause (omitted)
+    support = None    # Variables in support represented by list
     size = 0
     validation = None # Clause id providing validation
 
     def __init__(self, manager, root, validation):
         self.manager = manager
         self.root = root
-#        self.support = self.manager.getSupport(root)
         self.size = self.manager.getSize(root)
+        self.support = None
         self.validation = validation
+
+    def getSupport(self):
+        if self.support is None:
+            self.support = self.manager.getSupportIds(self.root)
+        return self.support
 
     # Generate conjunction of two terms
     def combine(self, other):
@@ -681,7 +686,8 @@ class Solver:
             if len(vars) == 0:
                 continue
             if self.verbLevel >= 3:
-                self.writer.write("Quantifying %s level %d.  Vars = %s\n" % ("existential" if isExistential else "universal", level, str(vars)))
+                self.writer.write("Quantifying %s level %d.  Vars = %s\n" % 
+                                  ("existential" if isExistential else "universal", level, str(vars)))
             if isExistential:
                 id = self.equantifyTerm(id, vars)
             else:
@@ -706,7 +712,9 @@ class Solver:
             self.placeInQuantBucket(buckets, id)
         for blevel in levels:
             vars, isExistential = self.quantMap[blevel]
-            self.writer.write("Quantifying %s level %d.  Vars = %s.  Bucket size = %d\n" % ("existential" if isExistential else "universal", blevel, str(vars), len(buckets[blevel])))
+            if self.verbLevel >= 3:
+                self.writer.write("Quantifying %s level %d.  Vars = %s.  Bucket size = %d\n" %
+                                  ("existential" if isExistential else "universal", blevel, str(vars), len(buckets[blevel])))
             if isExistential:
                 # Conjunct all terms in bucket
                 while len(buckets[blevel]) > 1:
@@ -725,26 +733,16 @@ class Solver:
                     newId = self.equantifyTerm(id, vars)
                     self.placeInQuantBucket(buckets, newId)
             else:
-                # Takes new pass for each variable in quantifier block
-                for v in vars:
-                    # Conjunct all terms in bucket
-                    while len(buckets[blevel]) > 1:
-                        id1 = buckets[blevel][0]
-                        id2 = buckets[blevel][1]
-                        buckets[blevel] = buckets[blevel][2:]
-                        newId = self.combineTerms(id1, id2)
-                        if newId < 0:
-                            # Hit unsat case
-                            return
-                        self.placeInBucket(buckets, newId)
-                    if blevel > 0 and len(buckets[blevel]) > 0:
-                        id = buckets[blevel][0]
-                        buckets[blevel] = buckets[blevel][1:]
-                        id = self.uquantifyTermSingle(id, v)
-                        if id < 0:
-                            # Hit unsat case
-                            return
-                        self.placeInBucket(buckets, id)
+                # Require vars to be single variable
+                if len(vars) > 1:
+                    raise SolverException("Must serialize universal quantifiers")
+                v = vars[0]
+                for id in buckets[blevel]:
+                    newId = self.uquantifyTermSingle(id, v)
+                    if newId < 0:
+                        # Unsat
+                        return
+                    self.placeInQuantBucket(buckets, newId)
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
 
