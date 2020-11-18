@@ -19,7 +19,7 @@ rqo: kbf-$(T)-rqo.data
 kbf-$(T)-vo.data:
 	$(GENERATOR) $(T) > kbf-$(T).qcnf 
 	$(VGENERATOR) $(T) > kbf-$(T)-v.order 
-	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-v.order \
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-v.order -b \
 		-o kbf-$(T)-vo.$(EXTENSION) | tee kbf-$(T)-vo.data
 	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-vo.$(EXTENSION) | tee -a kbf-$(T)-vo.data
 	rm -f kbf-$(T)-vo.$(EXTENSION)
@@ -27,7 +27,7 @@ kbf-$(T)-vo.data:
 kbf-$(T)-rvo.data:
 	$(GENERATOR) $(T) > kbf-$(T).qcnf 
 	$(VGENERATOR) $(T) | $(REVERSER) > kbf-$(T)-rv.order 
-	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-rv.order \
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-rv.order -b \
 		-o kbf-$(T)-rvo.$(EXTENSION) | tee kbf-$(T)-rvo.data
 	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-rvo.$(EXTENSION) | tee -a kbf-$(T)-rvo.data
 	rm -f kbf-$(T)-rvo.$(EXTENSION)
@@ -35,7 +35,7 @@ kbf-$(T)-rvo.data:
 kbf-$(T)-qo.data:
 	$(GENERATOR) $(T) > kbf-$(T).qcnf 
 	$(QGENERATOR) $(T) > kbf-$(T)-q.order 
-	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-q.order \
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-q.order -b \
 		-o kbf-$(T)-qo.$(EXTENSION) | tee kbf-$(T)-qo.data
 	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-qo.$(EXTENSION) | tee -a kbf-$(T)-qo.data
 	rm -f kbf-$(T)-qo.$(EXTENSION)
@@ -43,7 +43,7 @@ kbf-$(T)-qo.data:
 kbf-$(T)-rqo.data:
 	$(GENERATOR) $(T) > kbf-$(T).qcnf 
 	$(QGENERATOR) $(T) | $(REVERSER) > kbf-$(T)-rq.order 
-	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-rq.order \
+	$(SOLVER) -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-rq.order -b \
 		-o kbf-$(T)-rqo.$(EXTENSION) | tee kbf-$(T)-rqo.data
 	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-rqo.$(EXTENSION) | tee -a kbf-$(T)-rqo.data
 	rm -f kbf-$(T)-rqo.$(EXTENSION)
