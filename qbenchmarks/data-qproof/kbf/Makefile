@@ -61,9 +61,9 @@ kbf-$(T)-ran-$(SEED).data:
 
 
 data:
-	$(GRABBER) kbf-*-vo.data > kbf-vo.csv
+#	$(GRABBER) kbf-*-vo.data > kbf-vo.csv
 	$(GRABBER) kbf-*-rvo.data > kbf-rvo.csv
-	$(GRABBER) kbf-*-qo.data > kbf-qo.csv
+#	$(GRABBER) kbf-*-qo.data > kbf-qo.csv
 	$(GRABBER) kbf-*-rqo.data > kbf-rqo.csv
 	$(GRABBER) kbf-*-ran-*.data > kbf-ran.csv
 
