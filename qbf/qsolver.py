@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Simple, proof-generating SAT solver based on BDDs
+# Simple, proof-generating QBF solver based on BDDs
 
 import sys
 import getopt
@@ -15,9 +15,9 @@ import permutation
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-S][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p PERMUTE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-m (s|r)] [-B BPERM] [-p PERMUTE] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -S          Generate satisfaction proof\n")
+    sys.stderr.write("  -m MODE     Set proof mode (s = satisfaction, r = refutation)\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
@@ -83,9 +83,6 @@ class Term:
     def restrict(self, literal, prover):
         antecedents = [self.validation]
         newRoot, implication = self.manager.applyRestrictDown(self.root, literal)
-#        if newRoot == self.root:
-#            print("  Restriction returned argument node N%d" % newRoot.id)
-#            return Term(self.manager, newRoot, self.validation)
         if implication != resolver.tautologyId:
             antecedents += [implication]
         if newRoot == self.manager.leaf0:
@@ -119,6 +116,8 @@ class ProverException(Exception):
 
 class Prover:
 
+    (noProof, refProof, satProof) = list(range(3))
+
     inputClauseCount = 0
     clauseCount = 0
     proofCount = 0
@@ -128,12 +127,15 @@ class Prover:
     verbLevel = 1
     clauseDict = {}  # Mapping from clause ID to list of literals in clause
     antecedentDict = {}  # Mapping from clause ID to list of antecedents
-    refutation = True
+    mode = None
     doQrat = True
 
-    def __init__(self, fname = None, writer = None, refutation = True, verbLevel = 1):
+    def __init__(self, fname = None, writer = None, mode = None, verbLevel = 1):
+        if mode is None:
+            self.mode = self.noProof
+        else:
+            self.mode = mode
         self.verbLevel = verbLevel
-        self.refutation = refutation
         self.doQrat = False
         if fname is None:
             self.opened = False
@@ -170,7 +172,7 @@ class Prover:
         antecedent = list(antecedent)
         middle = ['u'] if isUniversal else []
         rest = result + [0]
-        if self.refutation and not self.doQrat:
+        if self.mode == self.refProof and not self.doQrat:
             rest += antecedent + [0]
         ilist = [self.clauseCount] if not self.doQrat else []
         ilist += middle + rest
@@ -185,7 +187,7 @@ class Prover:
         return self.clauseCount
 
     def deleteClauses(self, clauseList):
-        if self.refutation:
+        if self.mode == self.refProof:
             for id in clauseList:
                 del self.clauseDict[id]
             middle = ['d']
@@ -591,9 +593,9 @@ def run(name, args):
     doBucket = False
     verbLevel = 1
     logName = None
-    refutation = True
+    mode = Prover.noProof
 
-    optlist, args = getopt.getopt(args, "hbB:Sv:i:o:m:p:L:")
+    optlist, args = getopt.getopt(args, "hbB:m:v:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -604,8 +606,15 @@ def run(name, args):
             bpermuter = readPermutation(val)
             if bpermuter is None:
                 return
-        elif opt == '-S':
-            refutation = False
+        elif opt == '-m':
+            if val == 's':
+                mode = Prover.satProof
+            elif val == 'r':
+                mode = Prover.refProof
+            else:
+                sys.stderr.write("Unknown proof mode '%s'\n" % val)
+                usage(name)
+                return
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -625,20 +634,20 @@ def run(name, args):
 
     writer = stream.Logger(logName)
 
-    if not refutation:
+    if mode == Prover.satProof:
         writer.write("Satisfaction not implemented\n")
         return
 
     try:
-        prover = Prover(proofName, writer = writer, verbLevel = verbLevel, refutation = refutation)
+        prover = Prover(proofName, writer = writer, verbLevel = verbLevel, mode = mode)
     except Exception as ex:
         writer.write("Couldn't create prover (%s)\n" % str(ex))
         return
 
     start = datetime.datetime.now()
 
-    stretchExistential = not refutation
-    stretchUniversal = refutation
+    stretchExistential = mode == Prover.satProof
+    stretchUniversal = mode == Prover.refProof
 
     try:
         reader = qreader.QcnfReader(cnfName, bpermuter, stretchExistential, stretchUniversal)
