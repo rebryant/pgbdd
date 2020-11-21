@@ -42,13 +42,18 @@ class Term:
     support = None    # Variables in support represented by list
     size = 0
     validation = None # Clause id providing validation
+    mode = None # What is type of proof is being generated
 
-    def __init__(self, manager, root, validation):
+    def __init__(self, manager, root, validation, mode = None):
         self.manager = manager
         self.root = root
         self.size = self.manager.getSize(root)
         self.support = None
         self.validation = validation
+        if mode is None:
+            self.mode = Prover.noProof
+        else:
+            self.mode = mode
 
     def getSupport(self):
         if self.support is None:
@@ -57,30 +62,57 @@ class Term:
 
     # Generate conjunction of two terms
     def combine(self, other):
-        antecedents = [self.validation, other.validation]
-        newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
-        if implication != resolver.tautologyId:
-            antecedents += [implication]
-        if newRoot == self.manager.leaf0:
-            comment = "Validation of Empty clause"
+        if self.mode == Prover.refProof:
+            antecedents = [self.validation, other.validation]
+            newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            if newRoot == self.manager.leaf0:
+                comment = "Validation of Empty clause"
+            else:
+                comment = "Validation of %s" % newRoot.label()
+            validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
+        elif self.mode == Prover.satProof:
+            newRoot = self.manager.applyAnd(self.root, other.root)
+            implA = self.manager.justifyImply(newRoot, self.root)
+            implB = self.manager.justifyImply(newRoot, other.root)
+            comment = "Assertion of %s, and deletion of arguments %s and %s" % (newRoot.label(), self.label(), other.label())
+            validation = self.prover.proveAdd([newRoot.id], comment)
+            self.prover.proveDeleteResolution(self.id, [validation, implA])
+            self.prover.proveDeleteResolution(other.id, [validation, implB])
         else:
-            comment = "Validation of %s" % newRoot.label()
-        validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
-        return Term(self.manager, newRoot, validation)
+            newRoot = self.manager.applyAnd(self.root, other.root)
+            validation = None
+        return Term(self.manager, newRoot, validation, mode = self.mode)
 
     def equantify(self, literals, prover):
-        antecedents = [self.validation]
         newRoot = self.manager.equant(self.root, literals)
-        check, implication = self.manager.justifyImply(self.root, newRoot)
-        if not check:
-            raise bdd.BddException("Implication failed %s -/-> %s" % (self.root.label(), newRoot.label()))
-        if implication != resolver.tautologyId:
-            antecedents += [implication]
-        validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
-        return Term(self.manager, newRoot, validation)
+        validation = None
+        if self.mode == Prover.refProof:
+            antecedents = [self.validation]
+            check, implication = self.manager.justifyImply(self.root, newRoot)
+            if not check:
+                raise bdd.BddException("Implication failed %s -/-> %s" % (self.root.label(), newRoot.label()))
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
+        return Term(self.manager, newRoot, validation, mode = self.mode)
 
-    # Must split universal quantification into two operations per variable
-    def restrict(self, literal, prover):
+    def uquantify(self, literals, prover):
+        newRoot = self.manager.uquant(self.root, literals)
+        validation = None
+        if self.mode == Prover.satProof:
+            antecedents = [newRoot.id]
+            check, implication = self.manager.justifyImply(newRoot, self.root)
+            if not check:
+                raise bdd.BddException("Implication failed %s -/-> %s" % (newRoot.label(), self.root.label()))
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            validation = self.manager.prover.proveDeleteResolution(self.id, antecedents, "Deletion of %s " % self.label())
+        return Term(self.manager, newRoot, validation, mode = self.mode)
+
+    # Refutation proof: Split universal quantification into two operations per variable
+    def restrictRefutation(self, literal, prover):
         antecedents = [self.validation]
         newRoot, implication = self.manager.applyRestrictDown(self.root, literal)
         if implication != resolver.tautologyId:
@@ -101,9 +133,46 @@ class Term:
         else:
             rule1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
             validation = self.manager.prover.proveUniversal(ulit, rule1, None)
-        return Term(self.manager, newRoot, validation)
+        return Term(self.manager, newRoot, validation, mode = self.mode)
 
+    def equantifySatisfaction(self, lit, nlit, prover):
+        lname = str(lit.variable)
+        root1, implication1 = self.manager.applyRestrictUp(self.root, lit)
+        litid = lit.variable.id
+        rclause = [-litid, root1.id]
+        comment = "Assert %s --> %s" % (lname, root1.label())
+        shannon1 = self.manager.prover.proveAdd(rclause, comment)
+        antecedents1 = [shannon1, implication1]
+        up1 = self.prover.proveAdd([-litid, self.id], antecedents, None)
 
+        root0, implication0 = self.manager.applyRestrictUp(self,root, nlit)
+        rclause = [litid, root0.id]
+        comment = "Assert -%s --> %s" % (lname, root0.label())
+        shannon0 = self.manager.prover.proveAdd(rclause, comment)
+        antecedents0 = [shannon0, implication0]
+        up0 = self.prover.proveAdd([litid, self.id], antecedents, None)
+        
+        antecedents = [up1, up0]
+        comment = "Deletion of %s during existential quantfication" % self.label()
+        self.prover.deleteResolution(self.validation, antecedents, comment)
+        comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
+        distid = self.prover.proveAdd([root1.id, root0.id], comment = comment)
+        self.prover.collect(lit.variable.qlevel)
+        comment = "Davis Putnam reduction of variable %s" % lname
+        self.prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
+        newRoot, justifyOr = self.manager.applyOrJustify(root1, root0)
+        antecedents = []
+        if justifyOr != resolver.tautologyId:
+            antecents.append(justifyOr)
+        if newRoot == self.manager.leaf1:
+            validation = resolver.tautologyId
+        else:
+            validation = self.manager.prover.proveAdd([newRoot])
+            antecedents.append(validation)
+        comment = "Remove intermediate disjunction"
+        self.prover.proveDeleteResolution(distid, antecedents, comment)
+        return Term(self.manager, newRoot, validation, mode = self.mode)
+                                                      
         
 class ProverException(Exception):
 
@@ -117,6 +186,7 @@ class ProverException(Exception):
 class Prover:
 
     (noProof, refProof, satProof) = list(range(3))
+    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof"]
 
     inputClauseCount = 0
     clauseCount = 0
@@ -166,8 +236,6 @@ class Prover:
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
             return result
-        if result == -resolver.tautologyId:
-            result = []
         self.clauseCount += 1
         antecedent = list(antecedent)
         middle = ['u'] if isUniversal else []
@@ -216,23 +284,21 @@ class Prover:
             fields = ['-'] + fields
         self.file.write(' '.join(fields) + '\n')
         return self.clauseCount
-    
-    def proveAddResolution(self, result, antecedent, comment = None):
-        if self.doQrat:
-            return self.createClause(result, antecedent, comment)
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            self.comment(comment)
-            return result
-        if result == -resolver.tautologyId:
-            result = []
-        rfields = [str(r) for r in result]
-        afields = [str(a) for a in antecedent]
-        fields = ['ar'] + rfields + ['0'] + afields + ['0']
-        stepNumber = self.generateStepQP(fields, True, comment)
-        self.clauseDict[stepNumber] = result
-        self.antecedentDict[stepNumber] = antecedent
-        return stepNumber
+
+    ## Refutation and satisfaction steps
+
+    # Declare variable levels when not default
+    def generateLevels(self, varList):
+        levelDict = {}
+        for (v, l, e) in varList:
+            if l in levelDict:
+                levelDict[l].append(v)
+            else:
+                levelDict[l] = [v]
+        levels = sorted(levelDict.keys())
+        for l in levels:
+            fields = ['-', 'l', str(l)] + [str(v) for v in levelDict[l]] + ['0']
+            self.file.write(' '.join(fields) + '\n')
 
     def proveExtend(self, var, level, comment = None):
         if self.doQrat:
@@ -240,6 +306,23 @@ class Prover:
             return
         fields = ['x', str(level), str(var), '0']
         self.generateStepQP(fields, False, comment)
+
+    ## Refutation steps
+
+    def proveAddResolution(self, result, antecedent, comment = None):
+        if self.doQrat:
+            return self.createClause(result, antecedent, comment)
+        result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
+        rfields = [str(r) for r in result]
+        afields = [str(a) for a in antecedent]
+        fields = ['ar'] + rfields + ['0'] + afields + ['0']
+        stepNumber = self.generateStepQP(fields, True, comment)
+        self.clauseDict[stepNumber] = result
+        self.antecedentDict[stepNumber] = antecedent
+        return stepNumber
 
     def proveAddBlocked(self, clause, blockers, comment = None):
         if self.doQrat:
@@ -268,18 +351,38 @@ class Prover:
         fields = ['d'] + ilist + ['0']
         self.generateStepQP(fields, False, comment)
 
-    # Declare variable levels when not default
-    def generateLevels(self, varList):
-        levelDict = {}
-        for (v, l, e) in varList:
-            if l in levelDict:
-                levelDict[l].append(v)
-            else:
-                levelDict[l] = [v]
-        levels = sorted(levelDict.keys())
-        for l in levels:
-            fields = ['-', 'l', str(l)] + [str(v) for v in levelDict[l]] + ['0']
-            self.file.write(' '.join(fields) + '\n')
+    ## Satisfaction steps
+
+                                
+    def proveAdd(self, result, antecedent, comment = None):
+        if self.doQrat:
+            return self.createClause(result, comment)
+        result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
+        rfields = [str(r) for r in result]
+        fields = ['a'] + rfields + ['0'] 
+        stepNumber = self.generateStepQP(fields, True, comment)
+        self.clauseDict[stepNumber] = result
+        self.antecedentDict[stepNumber] = antecedent
+        return stepNumber
+
+    def proveDeleteResolution(self, id, antecedent = None, comment = None):
+        if self.doQrat:
+            return self.proveDelete([id], comment)
+        if antecedent is None:
+            antecedent = self.antecedentDict[id]
+        afields = [str(a) for a in antecedent]
+        fields = ['dr', str(id)] + afields + ['0']
+        self.generateStepQP(fields, False, comment)
+
+    def proveDeleteDavisPutnam(self, var, deleteIdList, causeIdList, comment = None):
+        dlist = [str(id) for id in deleteIdList]
+        clist = [stri(id) for id in causeIdList]
+        fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
+        self.generateStepQP(fields, False, comment)
+                                            
 
     def summarize(self):
         if self.verbLevel >= 1:
@@ -375,7 +478,7 @@ class Solver:
             self.termCount += 1
             litList = [self.litMap[v] for v in clause]
             root, validation = self.manager.constructClause(self.termCount, litList)
-            term = Term(self.manager, root, validation)
+            term = Term(self.manager, root, validation, mode = prover.mode)
             self.activeIds[self.termCount] = term
         self.unsat = False
 
@@ -436,7 +539,7 @@ class Solver:
         self.termCount += 1
         if self.verbLevel >= 3:
             print("Computing T%d (Node %s) Restrict1(%s) --> T%d" % (id, term.root.label(), str(var), self.termCount))
-        term1 = term.restrict(lit, self.prover)
+        term1 = term.restrictRefutation(lit, self.prover)
         comment = "T%d (Node %s) Restrict1(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term1.root.label())
         if term1.root == self.manager.leaf0:
             if self.verbLevel >= 1:
@@ -450,7 +553,7 @@ class Solver:
         self.termCount += 1
         if self.verbLevel >= 3:
             print("Computing T%d (Node %s) Restrict0(%s) --> T%d" % (id, term.root.label(), str(var), self.termCount))
-        term0 = term.restrict(nlit, self.prover)
+        term0 = term.restrictRefutation(nlit, self.prover)
         comment = "T%d (Node %s) Restrict0(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term0.root.label())
         if term0.root == self.manager.leaf0:
             if self.verbLevel >= 1:
