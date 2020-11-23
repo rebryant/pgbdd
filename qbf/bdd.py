@@ -13,33 +13,6 @@ class BddException(Exception):
     def __str__(self):
         return "BDD Exception: " + str(self.value)
 
-# Place holder to allow program to run without proving anything
-class DummyProver:
-
-    clauseCount = 0
-    writer = None
-
-    def __init__(self, fname = None):
-        self.clauseCount = 0
-        self.writer = sys.stderr
-
-    def comment(self, comment):
-        pass
-
-    def createClause(self, result, antecedent, comment = None, isUniversal = False):
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            return result
-        self.clauseCount += 1
-        return self.clauseCount
-
-    def emitProof(self, proof, ruleIndex, comment = None):
-        self.clauseCount += 1
-        return self.clauseCount
-
-    def fileOutput(self):
-        return False
-
 # Object that is part of quantification sequence.
 # Position defined by combination of qindex and qlevel
 # Also have quantifier type
@@ -229,6 +202,8 @@ class Manager:
     orResolver = None
     implyResolver = None
     restrictResolver = None
+    # Mapping from Id to qlevel
+    idToQlevel = {}
     # GC support
     # Callback function from driver that will collect accessible roots for GC
     rootGenerator = None
@@ -236,7 +211,8 @@ class Manager:
     lastGC = 0
     # How many variables should be quantified to trigger GC?
     gcThreshold = 10
-    # Dictionary mapping variables to their IDs
+    # Dictionary mapping variables to their IDs.
+    # Used to determine when to trigger GC
     quantifiedVariableSet = None
     # Statistics
     cacheJustifyAdded = 0
@@ -264,6 +240,7 @@ class Manager:
         self.orResolver = resolver.OrResolver(prover)
         self.implyResolver = resolver.ImplyResolver(prover)
         self.restrictResolver = resolver.RestrictResolver(prover)
+        self.idToQlevel = {}
         self.quantifiedVariableSet = set([])
         self.lastGC = 0
         self.cacheJustifyAdded = 0
@@ -281,6 +258,7 @@ class Manager:
         var = Variable(level, qlevel, name, id, existential)
         self.variables.append(var)
         self.variableCount += 1
+        self.idToQlevel[id] = qlevel
         return var
         
     def findOrMake(self, variable, high, low):
@@ -289,6 +267,7 @@ class Manager:
             return self.uniqueTable[key]
         else:
             node = VariableNode(self.nextNodeId, variable, high, low, self.prover)
+            self.idToQlevel[node.id] = node.qlevel
             self.nextNodeId += 1
             self.uniqueTable[key] = node
             self.nodeCount += 1
@@ -338,19 +317,14 @@ class Manager:
         lits.reverse()
         # List antecedents in reverse order of resolution steps
         antecedents = []
-        # TODO: Need to change logic here
         for node in lits:
             positive = node.high == self.leaf1
             if positive:
-                antecedents.append(node.inferTrueDown)
-                if node.low != self.leaf0:
-                    antecedents.append(node.inferFalseDown)
-            else:
                 antecedents.append(node.inferFalseDown)
-                if node.high != self.leaf0:
-                    antecedents.append(node.inferTrueDown)
+            else:
+                antecedents.append(node.inferTrueDown)
         antecedents.append(root.id)
-        validation = self.prover.createClause([clauseId], antecedents, "Validate node N%d entails clause %d" % (root.id, clauseId))
+        validation = self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
         return root, validation
     
     def deconstructClause(self, clause):
@@ -893,9 +867,14 @@ class Manager:
                 comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, u.label(), v.label())
                 justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
             except resolver.ResolveException:
+#                print("Degeneracy encountered.  Couldn't prove '%s'" % comment)
+#                print("Clauses available:")
+#                for k in ruleIndex.keys():
+#                    print("  %s: %s" % (k, str(ruleIndex[k])))
                 targetClause = resolver.cleanClause([-u.id, v.id])
                 comment = "Degenerate restriction.  Justification that %s ==> %s" % (u.label(), v.label())
                 justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+#                print("Degeneracy resolved.  Proved '%s'" % comment)
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
@@ -943,8 +922,20 @@ class Manager:
         if targetClause == resolver.tautologyId:
             justification, clauseList = resolver.tautologyId, []
         else:
-            comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, v.label(), u.label())
-            justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            try:
+                comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, v.label(), u.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            except resolver.ResolveException:
+#                print("Degeneracy encountered.  Couldn't prove '%s'" % comment)
+#                print("Clauses available:")
+#                for k in ruleIndex.keys():
+#                    print("  %s: %s" % (k, str(ruleIndex[k])))
+                targetClause = resolver.cleanClause([u.id, -v.id])
+                comment = "Degenerate restriction.  Justification that %s ==> %s" % (v.label(), u.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+                # Record this for use by the prover
+                self.prover.restrictDegeneracies.add(justification)
+#                print("Degeneracy resolved.  Proved '%s'" % comment)
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
