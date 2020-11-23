@@ -53,6 +53,7 @@ def usage(name):
 #      C[Id] = C[Id'] - { Lit }
 #    Must check that Var(Lit) is greater than Var(Lit') for any Lit'
 #      in C[Id']
+#    OK if Lit is not in clause
 
 # - d Id+ 0
 #    Delete clauses.  Must make sure they are live
