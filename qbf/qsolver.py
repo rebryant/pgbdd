@@ -102,7 +102,9 @@ class Term:
         newRoot, implication = self.manager.applyRestrictDown(self.root, literal)
         if implication != resolver.tautologyId:
             antecedents += [implication]
-        if newRoot == self.manager.leaf0:
+        if newRoot == self.manager.leaf1:
+            return None
+        elif newRoot == self.manager.leaf0:
             comment = "Validation of Empty clause"
         else:
             comment = "Validation of %s" % newRoot.label()
@@ -345,34 +347,41 @@ class Solver:
         term = self.activeIds[id]
         del self.activeIds[id]
         lit = self.litMap[var]
-        self.termCount += 1
         if self.verbLevel >= 3:
-            print("Computing T%d (Node %s) Restrict1(%s) --> T%d" % (id, term.root.label(), str(var), self.termCount))
+            print("Computing T%d (Node %s) Restrict1(%s)" % (id, term.root.label(), str(var)))
         term1 = term.restrictRefutation(lit, self.prover)
-        comment = "T%d (Node %s) Restrict1(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term1.root.label())
-        if term1.root == self.manager.leaf0:
-            if self.verbLevel >= 1:
-                self.writer.write("Positive cofactor FALSE\n")
-            self.outcome = False
-            self.manager.summarize()
-            return -1
-        self.activeIds[self.termCount] = term1
-        id1 = self.termCount
+        if term1 is not None:
+            if term1.root == self.manager.leaf0:
+                if self.verbLevel >= 1:
+                    self.writer.write("Positive cofactor FALSE\n")
+                self.outcome = False
+                self.manager.summarize()
+                return -1
+            self.termCount += 1
+            id1 = self.termCount
+            self.activeIds[id1] = term1
+
         nlit = self.litMap[-var]
-        self.termCount += 1
         if self.verbLevel >= 3:
-            print("Computing T%d (Node %s) Restrict0(%s) --> T%d" % (id, term.root.label(), str(var), self.termCount))
+            print("Computing T%d (Node %s) Restrict0(%s)" % (id, term.root.label(), str(var)))
         term0 = term.restrictRefutation(nlit, self.prover)
-        comment = "T%d (Node %s) Restrict0(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term0.root.label())
-        if term0.root == self.manager.leaf0:
-            if self.verbLevel >= 1:
-                self.writer.write("Negative cofactor FALSE\n")
-            self.outcome = False
-            self.manager.summarize()
-            return -1
-        self.activeIds[self.termCount] = term0
-        id0 = self.termCount
-        newId = self.combineTerms(id0, id1)
+        if term0 is not None:
+            if term0.root == self.manager.leaf0:
+                if self.verbLevel >= 1:
+                    self.writer.write("Negative cofactor FALSE\n")
+                self.outcome = False
+                self.manager.summarize()
+                return -1
+            self.termCount += 1
+            id0 = self.termCount
+            self.activeIds[id0] = term0
+
+        if term1 is None:
+            newId = id0
+        elif term0 is None:
+            newId = id1
+        else:
+            newId = self.combineTerms(id1, id0)
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
@@ -482,6 +491,8 @@ class Solver:
                 self.writer.write("ERROR: Formula is TRUE\n")
             else:
                 self.writer.write("Formula TRUE\n")
+                self.manager.summarize()
+
 
         
     def placeInQuantBucket(self, buckets, id):
@@ -558,6 +569,7 @@ class Solver:
                 # Make sure all clauses cleared aways
                 self.prover.qcollect(1)
                 self.writer.write("Formula TRUE\n")
+                self.manager.summarize()
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):

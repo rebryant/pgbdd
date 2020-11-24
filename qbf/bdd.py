@@ -519,7 +519,7 @@ class Manager:
             nodeA, nodeB = nodeB, nodeA
         key = ("andnj", nodeA.id, nodeB.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][0]
 
         # Mapping from variable names to variable numbers
         splitVar = min(nodeA.variable, nodeB.variable)
@@ -536,7 +536,7 @@ class Manager:
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
 
-        self.operationCache[key] = newNode
+        self.operationCache[key] = (newNode, resolver.tautologyId, [])
         return newNode
 
     def applyNot(self, node):
