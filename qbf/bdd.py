@@ -320,8 +320,9 @@ class Manager:
                 antecedents.append(node.inferFalseDown)
             else:
                 antecedents.append(node.inferTrueDown)
-        antecedents.append(root.id)
-        validation = self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
+        validation = self.prover.proveAdd([root.id], "Assert unit clause for N%d" % root.id)
+        antecedents.append(validation)
+        self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
         return root, validation
     
     def deconstructClause(self, clause):

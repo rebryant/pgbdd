@@ -248,7 +248,8 @@ class Prover:
         afields = [str(a) for a in antecedent]
         fields = ['dr', str(id)] + afields + ['0']
         self.generateStepQP(fields, False, comment)
-        del self.clauseDict[id]
+        if id in self.clauseDict:
+            del self.clauseDict[id]
         if id in self.antecedentDict:
             del self.antecedentDict[id]
 
@@ -264,8 +265,10 @@ class Prover:
 
     def qcollect(self, qlevel):
         # Delete all clauses for qlevels >= qlevel
-        qmax = max(self.qlevelClauses.keys())
-        for q in range(qlevel, qmax+1):
+        qlevels = sorted(self.qlevelClauses.keys(), key=lambda q:-q)
+        for q in qlevels:
+            if q < qlevel:
+                break
             if q in self.qlevelClauses:
                 idList = self.qlevelClauses[q]
                 idList.reverse()
@@ -274,13 +277,16 @@ class Prover:
                     if id in self.antecedentDict:
                         self.proveDeleteResolution(id, self.antecedentDict[id], comment)
                         comment = None
+                self.qlevelClauses[q] = []
             if q in self.qlevelEvars:
                 evarList = self.qlevelEvars[q].keys()
+                evarList.sort(key = lambda i : -i)
                 comment = "Deleting defining clauses for extension variables with qlevel %d" % q
                 for evar in evarList:
                     dlist = self.qlevelEvars[q][evar]
                     self.proveDeleteDavisPutnam(evar, dlist, [], comment)
                     comment = None
+                self.qlevelEvars[q] = {}
 
 
 
