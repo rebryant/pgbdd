@@ -517,6 +517,7 @@ class Prover:
     # Levels for variables.  Each is mapping from level to list of variables in that level
     initialLevels = {}
     shiftedLevels = {}
+    ruleCounters = {}
 
     def __init__(self, qreader):
         self.lineNumber = 0
@@ -524,6 +525,7 @@ class Prover:
         self.varDict = { v : (q, e) for (v, q, e) in qreader.varList }
         self.shiftedVarDict = {}
         self.failed = False
+        self.ruleCounters = {'a' : 0, 'ab' : 0, 'ar' : 0, 'd' : 0, 'dr' : 0, 'dd' : 0, 'l' : 0, 'u' : 0, 'x' : 0 }
         for clause in qreader.clauses:
             nclause = cleanClause(clause)
             if not regularClause(nclause):
@@ -563,6 +565,10 @@ class Prover:
                 self.flagError("No command present")
                 break
             cmd = fields[1]
+            if cmd not in self.ruleCounters:
+                self.invalidCommand(cmd)
+                break
+            self.ruleCounters[cmd] += 1
             rest = fields[2:]
             # Dispatch on command
             # Level command requires special consideration, since it only occurs at beginning of file
@@ -764,7 +770,20 @@ class Prover:
 
     def checkProof(self):
         self.failProof("This prover can't prove anything")
+        self.summarize()
             
+    def summarize(self):
+        clist = sorted(self.ruleCounters.keys())
+        tcount = 0
+        print("Command occurences:")
+        for cmd in clist:
+            count = self.ruleCounters[cmd]
+            if count > 0:
+                tcount += count
+                print("    %2s   : %d" % (cmd, count))
+        print("    TOTAL: %d" % (tcount))
+        
+
     # Get integers until encounter 0.
     # return (list of integers, rest of input list, message)
     def getIntegerList(self, slist):
@@ -926,6 +945,7 @@ class RefutationProver(Prover):
             self.passProof()
         else:
             self.failProof("Have not added empty clause")
+        self.summarize()
 
 class SatisfactionProver(Prover):
 
@@ -1019,6 +1039,7 @@ class SatisfactionProver(Prover):
         else:
             msg = "There are still %d live clauses: %s" % (self.cmgr.liveClauseCount, str(list(self.cmgr.liveClauseSet)))
             self.failProof(msg)
+        self.summarize()
 
 def run(name, args):
     qcnfName = None
