@@ -1,3 +1,5 @@
+import sys
+
 class PermutationException(Exception):
 
     def __init__(self, value):
@@ -55,3 +57,39 @@ class Permuter:
     
     def __len__(self):
         return len(self.forwardMap)
+
+def readPermutation(fname, writer = None):
+    valueList = []
+    permutedList = []
+    vcount = 0
+    lineCount = 0
+    if writer is None:
+        writer = sys.stderr
+    try:
+        infile = open(fname, 'r')
+    except:
+        writer.write("Could not open permutation file '%s'\n" % fname)
+        return None
+    for line in infile:
+        lineCount += 1
+        fields = line.split()
+        if len(fields) == 0:
+            continue
+        if fields[0][0] == '#':
+            continue
+        try:
+            values = [int(v) for v in fields]
+        except Exception:
+                writer.write("Line #%d.  Invalid list of variables '%s'\n" % (lineCount, line))
+                return None
+        for v in values:
+            vcount += 1
+            valueList.append(vcount)
+            permutedList.append(v)
+    infile.close()
+    try:
+        permuter = Permuter(valueList, permutedList)
+    except Exception as ex:
+        writer.write("Invalid permutation: %s\n" % str(ex))
+        return None
+    return permuter

@@ -142,42 +142,70 @@ class Term:
         litid = lit.variable.id
 
         root1, implication1 = self.manager.applyRestrictUp(self.root, lit)
-        rclause = [-litid, root1.id]
-        comment = "Assert %s --> %s" % (lname, root1.label())
-        shannon1 = self.manager.prover.proveAdd(rclause, comment)
-        antecedents1 = [shannon1, implication1]
-        up1 = self.prover.proveAddResolution([-litid, self.id], antecedents, None)
+        if root1 == self.manager.leaf1:
+            # Implication will be [-lit, self.root.id]
+            up1 = implication
+            shannon1 = None
+        elif root1 == self.manager.leaf0:
+            rclause = [-litid]
+            comment = "Assert !%s" % (lname)
+            shannon1 = self.manager.prover.proveAdd(rclause, comment)
+            up1 = shannon1
+        else:
+            rclause = [-litid, root1.id]
+            comment = "Assert %s --> %s" % (lname, root1.label())
+            shannon1 = self.manager.prover.proveAdd(rclause, comment)
+            antecedents1 = [shannon1, implication1]
+            up1 = self.prover.proveAddResolution([-litid, self.id], antecedents, None)
 
         root0, implication0 = self.manager.applyRestrictUp(self,root, nlit)
-        rclause = [litid, root0.id]
-        comment = "Assert -%s --> %s" % (lname, root0.label())
-        shannon0 = self.manager.prover.proveAdd(rclause, comment)
-        antecedents0 = [shannon0, implication0]
-        up0 = self.prover.proveAddResolution([litid, self.id], antecedents, None)
+        if root1 == self.manager.leaf1:
+            up0 = implication
+            shannon0 = None
+        elif root1 == self.manager.leaf0:
+            rclause = [litid]
+            comment = "Assert %s" % (lname)
+            shannon0 = self.manager.prover.proveAdd(rclause, comment)
+            up0 = shannon0
+        else:
+            rclause = [litid, root0.id]
+            comment = "Assert -%s --> %s" % (lname, root0.label())
+            shannon0 = self.manager.prover.proveAdd(rclause, comment)
+            antecedents0 = [shannon0, implication0]
+            up0 = self.prover.proveAddResolution([litid, self.id], antecedents, None)
         
         antecedents = [up1, up0]
         comment = "Deletion of %s during existential quantfication" % self.label()
         self.prover.deleteResolution(self.validation, antecedents, comment)
-        comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
-        distid = self.prover.proveAdd([root1.id, root0.id], comment = comment)
-        self.prover.collect(lit.variable.qlevel)
-        comment = "Davis Putnam reduction of variable %s" % lname
-        self.prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
-        newRoot, justifyOr = self.manager.applyOrJustify(root1, root0)
-        antecedents = []
-        if justifyOr != resolver.tautologyId:
-            antecents.append(justifyOr)
-        if newRoot == self.manager.leaf1:
-            validation = resolver.tautologyId
-        else:
-            validation = self.manager.prover.proveAdd([newRoot])
-            antecedents.append(validation)
-        comment = "Remove intermediate disjunction"
-        self.prover.proveDeleteResolution(distid, antecedents, comment)
-        return Term(self.manager, newRoot, validation, mode = self.mode)
-                                                      
-        
+        self.prover.qcollect(lit.variable.qlevel)
 
+        comment = "Davis Putnam reduction of variable %s" % lname
+        if root1 == self.manager.leaf1:
+            newRoot = root0
+            self.prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
+            validation = self.manager.prover.proveAdd([newRoot])
+        elif root0 == self.manager.leaf1:
+            newRoot = root1
+            self.prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
+            validation = self.manager.prover.proveAdd([newRoot])
+        else:            
+            comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
+            distid = self.prover.proveAdd([root1.id, root0.id], comment = comment)
+            self.prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
+            newRoot, justifyOr = self.manager.applyOrJustify(root1, root0)
+            antecedents = []
+            if justifyOr != resolver.tautologyId:
+                antecedents.append(justifyOr)
+            if newRoot != self.manager.leaf1:
+                validation = self.manager.prover.proveAdd([newRoot])
+                antecedents.append(validation)
+            comment = "Remove intermediate disjunction"
+            self.prover.proveDeleteResolution(distid, antecedents, comment)
+
+        if newRoot == self.manager.leaf1:
+            return None
+
+        return Term(self.manager, newRoot, validation, mode = self.mode)
 
 
 class SolverException(Exception):
@@ -200,12 +228,11 @@ class Solver:
 
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
-    unsat = False
+    # Have found formula to be True, False, or Unknown (None)
+    outcome = None
     permuter = None
     prover = None
     writer = None
-    # Turn on to have information about node include number of solutions
-    countSolutions = True
     # Mapping from quantifier levels to tuple (vars,isExistential)
     quantMap = {}
 
@@ -262,7 +289,7 @@ class Solver:
             root, validation = self.manager.constructClause(self.termCount, litList)
             term = Term(self.manager, root, validation, mode = prover.mode)
             self.activeIds[self.termCount] = term
-        self.unsat = False
+        self.outcome = None
 
     # Simplistic version of scheduling
     def choosePair(self):
@@ -289,12 +316,13 @@ class Solver:
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
             if self.verbLevel >= 1:
-                self.writer.write("Conjunction UNSAT\n")
-            self.unsat = True
+                self.writer.write("Formula FALSE\n")
+            self.outcome = False
             self.manager.summarize()
             return -1
         return self.termCount
 
+    # Used in refutation proofs
     def equantifyTerm(self, id, varList):
         term = self.activeIds[id]
         del self.activeIds[id]
@@ -314,6 +342,7 @@ class Solver:
             self.prover.deleteClauses(clauseList)
         return self.termCount
 
+    # Used in refutation proofs
     def uquantifyTermSingle(self, id, var):
         term = self.activeIds[id]
         del self.activeIds[id]
@@ -325,10 +354,10 @@ class Solver:
         comment = "T%d (Node %s) Restrict1(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term1.root.label())
         if term1.root == self.manager.leaf0:
             if self.verbLevel >= 1:
-                self.writer.write("Positive cofactor UNSAT\n")
-            self.unsat = True
+                self.writer.write("Positive cofactor FALSE\n")
+            self.outcome = False
             self.manager.summarize()
-            return -1, -1
+            return -1
         self.activeIds[self.termCount] = term1
         id1 = self.termCount
         nlit = self.litMap[-var]
@@ -339,10 +368,10 @@ class Solver:
         comment = "T%d (Node %s) Restrict0(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, term0.root.label())
         if term0.root == self.manager.leaf0:
             if self.verbLevel >= 1:
-                self.writer.write("Negative cofactor UNSAT\n")
-            self.unsat = True
+                self.writer.write("Negative cofactor FALSE\n")
+            self.outcome = False
             self.manager.summarize()
-            return -1, -1
+            return -1
         self.activeIds[self.termCount] = term0
         id0 = self.termCount
         newId = self.combineTerms(id0, id1)
@@ -352,6 +381,54 @@ class Solver:
             self.prover.deleteClauses(clauseList)
         return newId
 
+    # Used in satisfaction proofs
+    def equantifyTermSingle(self, id, var):
+        term = self.activeIds[id]
+        del self.activeIds[id]
+        lit = self.litMap[var]
+        nlit = self.litMap[-var]
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) Equant(%s)" % (id, term.root.label(), str(var)))
+        newTerm = term.equantifySatisfaction(lit, nlit, self.prover)
+        newId = -1
+        if newTerm is None:
+            if self.verbLevel >= 3:
+                print("T%d (Node %s) Equant(%s) --> ONE" % (id, term.root.label(), str(var)))
+        else:
+            self.termCount += 1
+            if self.verbLevel >= 3:
+                print("T%d (Node %s) Equant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label))
+            self.activeIds[self.termCount] = newTerm
+            newId = self.termCount
+        # This could be a good time for garbage collection
+        self.manager.checkGC(generateClauses = False)
+        return newId
+
+
+
+    # Used in satisfaction proofs
+    def uquantifyTerm(self, id, varList):
+        term = self.activeIds[id]
+        del self.activeIds[id]
+        litList = [self.litMap[v] for v in varList]
+        clause = self.manager.buildClause(litList)
+        vstring = " ".join(sorted([str(v) for v in varList]))
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) UQuant(%s)" % (id, term.root.label(), vstring))
+        newTerm = term.uquantify(clause, self.prover)
+        if newTerm.root == self.manager.leaf0:
+            if self.verbLevel >= 1:
+                self.writer.write("Formula FALSE\n")
+            self.outcome = False
+            self.manager.summarize()
+            return -1
+        self.termCount += 1
+        comment = "T%d (Node %s) UQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
+        self.prover.comment(comment)
+        self.activeIds[self.termCount] = newTerm
+        # This could be a good time for garbage collection
+        self.manager.checkGC(generateClauses = False)
+        return self.termCount
 
     def runNoSchedule(self):
         # Start by conjuncting all clauses to get single BDD
@@ -370,13 +447,39 @@ class Solver:
             if self.verbLevel >= 3:
                 self.writer.write("Quantifying %s level %d.  Vars = %s\n" % 
                                   ("existential" if isExistential else "universal", level, str(vars)))
-            if isExistential:
-                id = self.equantifyTerm(id, vars)
-            else:
-                for v in vars:
+            if self.prover.mode == proof.ProverMode.refProof:
+                if isExistential:
+                    id = self.equantifyTerm(id, vars)
+                else:
+                    # Must have single variable at this level
+                    v = vars[0]
                     id = self.uquantifyTermSingle(id, v)
                     if id < 0:
                         return
+            else:
+                if isExistential:
+                    # Must have single variable as this level
+                    v = vars[0]
+                    id = self.equantifyTermSingle(id, v)
+                    if id < 0:
+                        # Have generated Leaf1.  Any further quantification will not change things
+                        if self.verbLevel >= 1:
+                            self.writer.write("Formula TRUE\n")
+                        return
+                else:
+                    id = self.uquantifyTerm(id, vars)
+                    if id < 0:
+                        return
+
+        # Get here only haven't hit 0
+        if self.verbLevel > 0:
+            if self.prover.mode == proof.ProverMode.refProof:
+                self.writer.write("ERROR: Formula is TRUE\n")
+            else:
+                # Make sure all clauses cleared away
+                self.prover.qcollect(1)
+                self.writer.write("Formula TRUE\n")
+
         
     def placeInQuantBucket(self, buckets, id):
         term = self.activeIds[id]
@@ -405,28 +508,53 @@ class Solver:
                     buckets[blevel] = buckets[blevel][2:]
                     newId = self.combineTerms(id1, id2)
                     if newId < 0:
-                        # Hit unsat case
+                        # Hit False case
                         return
                     self.placeInQuantBucket(buckets, newId)
-                # Quantify all variables for this bucket
                 if blevel > 0 and len(buckets[blevel]) > 0:
                     id = buckets[blevel][0]
                     buckets[blevel] = []
-                    newId = self.equantifyTerm(id, vars)
-                    self.placeInQuantBucket(buckets, newId)
+                    if self.prover.mode == proof.ProverMode.refProof:
+                        newId = self.equantifyTerm(id, vars)
+                        self.placeInQuantBucket(buckets, newId)
+                    else:
+                        # Satisfaction
+                        if len(vars) > 1:
+                            raise SolverException("Must serialize existential quantifiers")
+                        var = vars[0]
+                        newId = self.equantifyTermSingle(id, var)
+                        if newId >= 0:
+                            self.placeInQuantBucket(buckets, newId)
             else:
-                # Require vars to be single variable
-                if len(vars) > 1:
-                    raise SolverException("Must serialize universal quantifiers")
-                v = vars[0]
-                for id in buckets[blevel]:
-                    newId = self.uquantifyTermSingle(id, v)
-                    if newId < 0:
-                        # Unsat
-                        return
-                    self.placeInQuantBucket(buckets, newId)
+                if self.prover.mode == proof.ProverMode.refProof:
+                    # Require vars to be single variable
+                    if len(vars) > 1:
+                        raise SolverException("Must serialize universal quantifiers")
+                    v = vars[0]
+                    for id in buckets[blevel]:
+                        newId = self.uquantifyTermSingle(id, v)
+                        if newId < 0:
+                            # Formula is False
+                            return
+                        self.placeInQuantBucket(buckets, newId)
+                else:
+                    # Satisfaction
+                    for id in buckets[blevel]:
+                        newId = self.uquantifyTerm(id, vars)
+                        if newId < 0:
+                            # Formula is False
+                            if self.verbLevel >= 0:
+                                self.writer.write("ERROR: Formula is FALSE")
+                                return
+                        self.placeInQuantBucket(buckets, newId)
+
         if self.verbLevel >= 0:
-            self.writer.write("SAT\n")
+            if self.prover.mode == proof.ProverMode.refProof:
+                self.writer.write("ERROR: Formula is TRUE\n")
+            else:
+                # Make sure all clauses cleared aways
+                self.prover.qcollect(1)
+                self.writer.write("Formula TRUE\n")
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
@@ -434,42 +562,7 @@ class Solver:
         return rootList
 
 
-def readPermutation(fname, writer = None):
-    valueList = []
-    permutedList = []
-    vcount = 0
-    lineCount = 0
-    if writer is None:
-        writer = sys.stderr
-    try:
-        infile = open(fname, 'r')
-    except:
-        writer.write("Could not open permutation file '%s'\n" % fname)
-        return None
-    for line in infile:
-        lineCount += 1
-        fields = line.split()
-        if len(fields) == 0:
-            continue
-        if fields[0][0] == '#':
-            continue
-        try:
-            values = [int(v) for v in fields]
-        except Exception:
-                writer.write("Line #%d.  Invalid list of variables '%s'\n" % (lineCount, line))
-                return None
-        for v in values:
-            vcount += 1
-            valueList.append(vcount)
-            permutedList.append(v)
-    infile.close()
-    try:
-        permuter = permutation.Permuter(valueList, permutedList)
-    except Exception as ex:
-        writer.write("Invalid permutation: %s\n" % str(ex))
-        return None
-    return permuter
-        
+      
 def run(name, args):
     cnfName = None
     proofName = None
@@ -488,7 +581,7 @@ def run(name, args):
         if opt == '-b':
             doBucket = True
         elif opt == '-B':
-            bpermuter = readPermutation(val)
+            bpermuter = permutation.readPermutation(val)
             if bpermuter is None:
                 return
         elif opt == '-m':
@@ -507,7 +600,7 @@ def run(name, args):
         elif opt == '-o':
             proofName = val
         elif opt == '-p':
-            permuter = readPermutation(val)
+            permuter = permutation.readPermutation(val)
             if permuter is None:
                 return
         elif opt == '-L':

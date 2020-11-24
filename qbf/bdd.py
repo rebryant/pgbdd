@@ -942,10 +942,10 @@ class Manager:
 
     
     # Should a GC be triggered?
-    def checkGC(self):
+    def checkGC(self, generateClauses = True):
         newQuants = len(self.quantifiedVariableSet) - self.lastGC
         if newQuants > self.gcThreshold:
-            return self.collectGarbage()
+            return self.collectGarbage(generateClauses)
         return []
 
 
@@ -965,7 +965,7 @@ class Manager:
                 frontier.append(node.low)
         return markedSet
 
-    def cleanCache(self, markedSet):
+    def cleanCache(self, markedSet, generateClauses):
         clauseList = []
         markedIds = set([node.id for node in markedSet])
         klist = list(self.operationCache.keys())
@@ -975,22 +975,24 @@ class Manager:
             for id in k[1:]:
                 kill = kill or id not in markedIds
             if kill:
-                clist = self.operationCache[k][2]
-                clauseList += clist
+                if generateClauses:
+                    clist = self.operationCache[k][2]
+                    clauseList += clist
                 self.cacheRemoved += 1
                 del self.operationCache[k]
         return clauseList
         
-    def cleanNodes(self, markedSet):
+    def cleanNodes(self, markedSet, generateClauses):
         clauseList = []
         klist = list(self.uniqueTable.keys())
         for k in klist:
             node = self.uniqueTable[k]
             # If node is marked, then its children will be, too
             if node not in markedSet:
-                clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
-                clist = [c for c in clist if abs(c) != resolver.tautologyId]
-                clauseList += clist
+                if generateClauses:
+                    clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
+                    clist = [c for c in clist if abs(c) != resolver.tautologyId]
+                    clauseList += clist
                 self.nodesRemoved += 1
                 del self.uniqueTable[k]
         return clauseList
@@ -998,15 +1000,15 @@ class Manager:
 
     # Start garbage collection.
     # Provided with partial list of accessible roots
-    def collectGarbage(self):
+    def collectGarbage(self, generateClauses):
         frontier = []
         if self.rootGenerator is not None:
             frontier += self.rootGenerator()
         frontier = [r for r in frontier if not r.isLeaf()]
         # Marking phase
         markedSet = self.doMarking(frontier)
-        clauseList = self.cleanCache(markedSet)
-        clauseList += self.cleanNodes(markedSet)
+        clauseList = self.cleanCache(markedSet, generateClauses)
+        clauseList += self.cleanNodes(markedSet, generateClauses)
         # Turn off trigger for garbage collection
         self.lastGC = len(self.quantifiedVariableSet)
         self.gcCount += 1

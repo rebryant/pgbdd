@@ -30,10 +30,13 @@ class Prover:
     mode = None
     doQrat = True
     ### Support for satisfaction proofs
-    # Map from qlevel to added clauses
+    # Map from qlevel to added resolution clauses
     qlevelClauses = {}
-    # Map from qlevel to added nodes
-    qlevelNodes = {}
+    # Map from qlevel to extension variables.  For each level, have dictionary
+    # mapping variable Ids to list of defining clauses
+    qlevelEvars = {}
+    # Mapping from variable Id to level
+    evarQlevels = {}
     # Restrict justifications that encounter degenerate case
     restrictDegeneracies = set([])
     
@@ -60,7 +63,8 @@ class Prover:
         self.clauseCount = 0
         self.proofCount = 0
         self.qlevelClauses = {}
-        self.qlevelNodes = {}
+        self.qlevelEvars = {}
+        self.evarQlevels = {}
         self.restrictDegeneracies = set([])
 
 
@@ -145,7 +149,10 @@ class Prover:
             # Don't need to declare extension variables
             return
         fields = ['x', str(level), str(var), '0']
-        self.qlevelNodes[var] = level
+        if level not in self.qlevelEvars:
+            self.qlevelEvars[level] = {}
+        self.qlevelEvars[level][var] = []
+        self.evarQlevels[var] = level
         self.generateStepQP(fields, False, comment)
 
     ## Refutation and satisfaction steps, but with different actions
@@ -190,10 +197,13 @@ class Prover:
             fields += bfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
+        var = abs(clause[0])
+        # Record blocking clause
+        qlevel = self.evarQlevels[var]
+        self.qlevelEvars[qlevel][var].append(stepNumber)
         return stepNumber
 
     ## Refutation-only steps
-
 
     def proveUniversal(self, lit, oldId, comment = None):
         fields = ['u', str(lit), str(oldId)]
@@ -235,7 +245,7 @@ class Prover:
         afields = [str(a) for a in antecedent]
         fields = ['dr', str(id)] + afields + ['0']
         self.generateStepQP(fields, False, comment)
-        self.clauseDict[id] = None
+        del self.clauseDict[id]
         if id in self.antecedentDict:
             del self.antecedentDict[id]
 
@@ -245,9 +255,28 @@ class Prover:
         fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
         self.generateStepQP(fields, False, comment)
         for id in deleteIdList:
-            self.clauseDict[id] = None
+            del self.clauseDict[id]
             if id in self.antecedentDict:
                 del self.antecedentDict[id]
+
+    def qcollect(self, qlevel):
+        # Delete all clauses for qlevels >= qlevel
+        qmax = max(self.qlevelClauses.keys())
+        for q in range(qlevel, qmax+1):
+            idList = self.qlevelClauses[q]
+            idList.reverse()
+            comment = "Deleting resolution clauses with qlevel %d" % q
+            for id in idList:
+                self.proveDeleteResolution(id, self.antecedentDict[id], comment)
+                comment = None
+            evarList = self.qlevelEvars[q].keys()
+            comment = "Deleting defining clauses for extension variables with qlevel %d" % q
+            for evar in evarList:
+                dlist = self.qlevelEvars[q][evar]
+                self.proveDeleteDavisPutnam(self, evar, dllist, [], comment)
+                comment = None
+
+
 
     def summarize(self):
         if self.verbLevel >= 1:
