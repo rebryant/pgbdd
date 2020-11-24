@@ -94,14 +94,6 @@ class Term:
     def uquantify(self, literals, prover):
         newRoot = self.manager.uquant(self.root, literals)
         validation = None
-        if self.mode == proof.ProverMode.satProof:
-            antecedents = [newRoot.id]
-            check, implication = self.manager.justifyImply(newRoot, self.root)
-            if not check:
-                raise bdd.BddException("Implication failed %s -/-> %s" % (newRoot.label(), self.root.label()))
-            if implication != resolver.tautologyId:
-                antecedents += [implication]
-            validation = self.manager.prover.proveDeleteResolution(self.id, antecedents, "Deletion of %s " % self.label())
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
     # Refutation proof: Split universal quantification into two operations per variable
@@ -140,14 +132,15 @@ class Term:
             shannon1 = None
         elif root1 == self.manager.leaf0:
             rclause = [-litid]
-            comment = "Assert !%s" % (lname)
+            comment = "Shannon Expansion: Assert !%s" % (lname)
             shannon1 = self.manager.prover.proveAdd(rclause, comment)
             up1 = shannon1
         else:
             rclause = [-litid, root1.id]
-            comment = "Assert %s --> %s" % (lname, root1.label())
+            comment = "Shannon Expansion: Assert %s --> %s" % (lname, root1.label())
             shannon1 = self.manager.prover.proveAdd(rclause, comment)
             antecedents = [shannon1, implication1]
+            comment = "Resolve with upward implication for N%d" % self.root.id
             up1 = prover.proveAddResolution([-litid, self.root.id], antecedents, None)
 
         root0, implication0 = self.manager.applyRestrictUp(self.root, nlit)
@@ -156,14 +149,15 @@ class Term:
             shannon0 = None
         elif root1 == self.manager.leaf0:
             rclause = [litid]
-            comment = "Assert %s" % (lname)
+            comment = "Shannon Expansion: Assert %s" % (lname)
             shannon0 = self.manager.prover.proveAdd(rclause, comment)
             up0 = shannon0
         else:
             rclause = [litid, root0.id]
-            comment = "Assert -%s --> %s" % (lname, root0.label())
+            comment = "Shannon Expansion: Assert -%s --> %s" % (lname, root0.label())
             shannon0 = self.manager.prover.proveAdd(rclause, comment)
             antecedents = [shannon0, implication0]
+            comment = "Resolve with upward implication for N%d" % self.root.id
             up0 = prover.proveAddResolution([litid, self.root.id], antecedents, None)
         
         antecedents = [up1, up0]
@@ -175,11 +169,11 @@ class Term:
         if root1 == self.manager.leaf1:
             newRoot = root0
             prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
-            validation = self.manager.prover.proveAdd([newRoot])
+            validation = self.manager.prover.proveAdd([newRoot.id])
         elif root0 == self.manager.leaf1:
             newRoot = root1
             prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
-            validation = self.manager.prover.proveAdd([newRoot])
+            validation = self.manager.prover.proveAdd([newRoot.id])
         else:            
             comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
             distid = prover.proveAdd([root1.id, root0.id], comment = comment)
@@ -189,7 +183,7 @@ class Term:
             if justifyOr != resolver.tautologyId:
                 antecedents.append(justifyOr)
             if newRoot != self.manager.leaf1:
-                validation = self.manager.prover.proveAdd([newRoot])
+                validation = self.manager.prover.proveAdd([newRoot.id])
                 antecedents.append(validation)
             comment = "Remove intermediate disjunction"
             prover.proveDeleteResolution(distid, antecedents, comment)
@@ -278,7 +272,10 @@ class Solver:
         for clause in reader.clauses:
             self.termCount += 1
             litList = [self.litMap[v] for v in clause]
-            root, validation = self.manager.constructClause(self.termCount, litList)
+            if self.prover.mode == proof.ProverMode.refProof:
+                root, validation = self.manager.constructClause(self.termCount, litList)
+            else:
+                root, validation = self.manager.constructClauseReverse(self.termCount, litList)
             term = Term(self.manager, root, validation, mode = prover.mode)
             self.activeIds[self.termCount] = term
         self.outcome = None
@@ -398,7 +395,7 @@ class Solver:
         else:
             self.termCount += 1
             if self.verbLevel >= 3:
-                print("T%d (Node %s) Equant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label))
+                print("T%d (Node %s) Equant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label()))
             self.activeIds[self.termCount] = newTerm
             newId = self.termCount
         # This could be a good time for garbage collection
@@ -425,7 +422,14 @@ class Solver:
             return -1
         self.termCount += 1
         comment = "T%d (Node %s) UQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
-        self.prover.comment(comment)
+        newTerm.validation = self.manager.prover.proveAdd([newTerm.root.id], comment)
+        antecedents = [newTerm.validation]
+        check, implication = self.manager.justifyImply(newTerm.root, term.root)
+        if not check:
+            raise bdd.BddException("Implication failed %s -/-> %s" % (newTerm.root.label(), term.root.label()))
+        if implication != resolver.tautologyId:
+            antecedents += [implication]
+        self.manager.prover.proveDeleteResolution(term.validation, antecedents, "Delete unit clause for T%d" % (id))
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
         self.manager.checkGC(generateClauses = False)
@@ -463,22 +467,20 @@ class Solver:
                     v = vars[0]
                     id = self.equantifyTermSingle(id, v)
                     if id < 0:
-                        # Have generated Leaf1.  Any further quantification will not change things
-                        if self.verbLevel >= 1:
-                            self.writer.write("Formula TRUE\n")
-                        return
+                        break
                 else:
                     id = self.uquantifyTerm(id, vars)
                     if id < 0:
                         return
 
         # Get here only haven't hit 0
+        if self.prover.mode == proof.ProverMode.satProof:
+            # Make sure all clauses cleared away
+            self.prover.qcollect(1)
         if self.verbLevel > 0:
             if self.prover.mode == proof.ProverMode.refProof:
                 self.writer.write("ERROR: Formula is TRUE\n")
             else:
-                # Make sure all clauses cleared away
-                self.prover.qcollect(1)
                 self.writer.write("Formula TRUE\n")
 
         
@@ -631,7 +633,7 @@ def run(name, args):
         return
     
     if reader.stretched:
-        proof.generateLevels(reader.varList)
+        prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
     if doBucket:
