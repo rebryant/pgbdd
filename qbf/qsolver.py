@@ -73,14 +73,6 @@ class Term:
             else:
                 comment = "Validation of %s" % newRoot.label()
             validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
-        elif self.mode == proof.ProverMode.satProof:
-            newRoot = self.manager.applyAnd(self.root, other.root)
-            implA = self.manager.justifyImply(newRoot, self.root)
-            implB = self.manager.justifyImply(newRoot, other.root)
-            comment = "Assertion of %s, and deletion of arguments %s and %s" % (newRoot.label(), self.label(), other.label())
-            validation = self.prover.proveAdd([newRoot.id], comment)
-            self.prover.proveDeleteResolution(self.id, [validation, implA])
-            self.prover.proveDeleteResolution(other.id, [validation, implB])
         else:
             newRoot = self.manager.applyAnd(self.root, other.root)
             validation = None
@@ -155,10 +147,10 @@ class Term:
             rclause = [-litid, root1.id]
             comment = "Assert %s --> %s" % (lname, root1.label())
             shannon1 = self.manager.prover.proveAdd(rclause, comment)
-            antecedents1 = [shannon1, implication1]
-            up1 = self.prover.proveAddResolution([-litid, self.id], antecedents, None)
+            antecedents = [shannon1, implication1]
+            up1 = prover.proveAddResolution([-litid, self.root.id], antecedents, None)
 
-        root0, implication0 = self.manager.applyRestrictUp(self,root, nlit)
+        root0, implication0 = self.manager.applyRestrictUp(self.root, nlit)
         if root1 == self.manager.leaf1:
             up0 = implication
             shannon0 = None
@@ -171,27 +163,27 @@ class Term:
             rclause = [litid, root0.id]
             comment = "Assert -%s --> %s" % (lname, root0.label())
             shannon0 = self.manager.prover.proveAdd(rclause, comment)
-            antecedents0 = [shannon0, implication0]
-            up0 = self.prover.proveAddResolution([litid, self.id], antecedents, None)
+            antecedents = [shannon0, implication0]
+            up0 = prover.proveAddResolution([litid, self.root.id], antecedents, None)
         
         antecedents = [up1, up0]
-        comment = "Deletion of %s during existential quantfication" % self.label()
-        self.prover.deleteResolution(self.validation, antecedents, comment)
-        self.prover.qcollect(lit.variable.qlevel)
+        comment = "Deletion of clause [%d] during existential quantfication" % self.root.id
+        prover.proveDeleteResolution(self.validation, antecedents, comment)
+        prover.qcollect(lit.variable.qlevel)
 
         comment = "Davis Putnam reduction of variable %s" % lname
         if root1 == self.manager.leaf1:
             newRoot = root0
-            self.prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
+            prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
             validation = self.manager.prover.proveAdd([newRoot])
         elif root0 == self.manager.leaf1:
             newRoot = root1
-            self.prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
+            prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
             validation = self.manager.prover.proveAdd([newRoot])
         else:            
             comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
-            distid = self.prover.proveAdd([root1.id, root0.id], comment = comment)
-            self.prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
+            distid = prover.proveAdd([root1.id, root0.id], comment = comment)
+            prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
             newRoot, justifyOr = self.manager.applyOrJustify(root1, root0)
             antecedents = []
             if justifyOr != resolver.tautologyId:
@@ -200,7 +192,7 @@ class Term:
                 validation = self.manager.prover.proveAdd([newRoot])
                 antecedents.append(validation)
             comment = "Remove intermediate disjunction"
-            self.prover.proveDeleteResolution(distid, antecedents, comment)
+            prover.proveDeleteResolution(distid, antecedents, comment)
 
         if newRoot == self.manager.leaf1:
             return None
@@ -308,6 +300,15 @@ class Solver:
         self.prover.comment(comment)
         if self.verbLevel >= 3:
             print("  T%d (Node N%d, QL=%d) support = %s" % (self.termCount, newTerm.root.id, newTerm.root.qlevel, self.manager.getSupportIds(newTerm.root)))
+
+        if self.prover.mode == proof.ProverMode.satProof:
+            comment = "Assertion of T%d (N%d)" % (self.termCount, newTerm.root.id)
+            newTerm.validation = self.prover.proveAdd([newTerm.root.id], comment)
+            implA = self.manager.justifyImply(newTerm.root, termA.root)[1]
+            implB = self.manager.justifyImply(newTerm.root, termB.root)[1]
+            comment = "Delete unit clauses for T%d and T%d" % (id1, id2)
+            self.prover.proveDeleteResolution(termA.validation, [newTerm.validation, implA], comment)
+            self.prover.proveDeleteResolution(termB.validation, [newTerm.validation, implB])
 
         del self.activeIds[id1]
         del self.activeIds[id2]
@@ -611,10 +612,6 @@ def run(name, args):
             return
 
     writer = stream.Logger(logName)
-
-    if mode == proof.ProverMode.satProof:
-        writer.write("Satisfaction not implemented\n")
-        return
 
     try:
         prover = proof.Prover(proofName, writer = writer, verbLevel = verbLevel, mode = mode)

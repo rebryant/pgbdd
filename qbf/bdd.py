@@ -202,8 +202,6 @@ class Manager:
     orResolver = None
     implyResolver = None
     restrictResolver = None
-    # Mapping from Id to qlevel
-    idToQlevel = {}
     # GC support
     # Callback function from driver that will collect accessible roots for GC
     rootGenerator = None
@@ -240,7 +238,6 @@ class Manager:
         self.orResolver = resolver.OrResolver(prover)
         self.implyResolver = resolver.ImplyResolver(prover)
         self.restrictResolver = resolver.RestrictResolver(prover)
-        self.idToQlevel = {}
         self.quantifiedVariableSet = set([])
         self.lastGC = 0
         self.cacheJustifyAdded = 0
@@ -258,7 +255,7 @@ class Manager:
         var = Variable(level, qlevel, name, id, existential)
         self.variables.append(var)
         self.variableCount += 1
-        self.idToQlevel[id] = qlevel
+        self.prover.idToQlevel[id] = qlevel
         return var
         
     def findOrMake(self, variable, high, low):
@@ -267,7 +264,7 @@ class Manager:
             return self.uniqueTable[key]
         else:
             node = VariableNode(self.nextNodeId, variable, high, low, self.prover)
-            self.idToQlevel[node.id] = node.qlevel
+            self.prover.idToQlevel[node.id] = node.qlevel
             self.nextNodeId += 1
             self.uniqueTable[key] = node
             self.nodeCount += 1
@@ -446,7 +443,6 @@ class Manager:
         return stringList
 
     # Return node + id of clause justifying that nodeA & NodeB ==> result
-    # Justification is None if it would be tautology
     def applyAndJustify(self, nodeA, nodeB):
         self.applyCount += 1
         # Constant cases.
@@ -597,7 +593,6 @@ class Manager:
         return newNode
 
     # Return node + id of clause justifying that result ==> nodeA | NodeB
-    # Justification is None if it would be tautology
     def applyOrJustify(self, nodeA, nodeB):
         self.applyCount += 1
         # Constant cases.
@@ -627,11 +622,11 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UHU"] = nodeA.inferTrueUp
+            ruleIndex["ULU"] = nodeA.inferFalseUp
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.inferTrueDown
-            ruleIndex["VLD"] = nodeB.inferFalseDown
+            ruleIndex["VHU"] = nodeB.inferTrueUp
+            ruleIndex["VLU"] = nodeB.inferFalseUp
 
         (newHigh, orHigh) = self.applyOrJustify(highA, highB)
         ruleIndex["ORH"] = orHigh
@@ -643,8 +638,8 @@ class Manager:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
-            ruleIndex["WHU"] = newNode.inferTrueUp
-            ruleIndex["WLU"] = newNode.inferFalseUp
+            ruleIndex["WHD"] = newNode.inferTrueDown
+            ruleIndex["WLD"] = newNode.inferFalseDown
 
         targetClause = resolver.cleanClause([-newNode.id, nodeA.id, nodeB.id])
         if targetClause == resolver.tautologyId:

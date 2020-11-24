@@ -430,8 +430,8 @@ class AndResolver(VResolver):
 class OrResolver(VResolver):
 
     def __init__(self, prover):
-        rule1Names = ["ORH", "WHU", "UHD", "VHD"]
-        rule2Names = ["ORL", "WLU", "ULD", "VLD"]
+        rule1Names = ["ORH", "WHD", "UHU", "VHU"]
+        rule2Names = ["ORL", "WLD", "ULU", "VLU"]
         VResolver.__init__(self, prover, rule1Names, rule2Names)
         self.profiler.prefix = "ORCHAIN"
 
@@ -439,12 +439,12 @@ class OrResolver(VResolver):
     # Guaranteed that have at least one clause
     def filterClauses(self, idList, ruleIndex):
         # See if WHU or WLU is in list
-        if "WHU" in ruleIndex:
+        if "WHD" in ruleIndex:
             wid = ruleIndex["WHU"]
             id = idList[0]
             if id == wid:
                 return id
-        if "WLU" in ruleIndex:
+        if "WLD" in ruleIndex:
             wid = ruleIndex["WLU"]
             id = idList[0]
             if id == wid:
@@ -452,9 +452,9 @@ class OrResolver(VResolver):
 
         clauseDict = self.prover.clauseDict
 
-        if "UHD" in ruleIndex and "VHD" in ruleIndex:
-            uid = ruleIndex["UHD"]
-            vid = ruleIndex["VHD"]
+        if "UHU" in ruleIndex and "VHU" in ruleIndex:
+            uid = ruleIndex["UHU"]
+            vid = ruleIndex["VHU"]
             if uid == idList[0] and vid == idList[1]:
                 uclause = clauseDict[uid]
                 vclause = clauseDict[vid]
@@ -462,9 +462,9 @@ class OrResolver(VResolver):
                     return uid
                 else:
                     return vid
-        if "ULD" in ruleIndex and "VLD" in ruleIndex:
-            uid = ruleIndex["ULD"]
-            vid = ruleIndex["VLD"]
+        if "ULU" in ruleIndex and "VLU" in ruleIndex:
+            uid = ruleIndex["ULU"]
+            vid = ruleIndex["VLU"]
             if uid == idList[0] and vid == idList[1]:
                 uclause = clauseDict[uid]
                 vclause = clauseDict[vid]

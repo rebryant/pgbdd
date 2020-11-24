@@ -1,6 +1,6 @@
 INTERP = python3
 T = 3
-VLEVEL = 1
+VLEVEL = 2
 SEED = 1
 
 GENERATOR = ../../kbf/gen-hardKB.py
@@ -25,7 +25,7 @@ kbf-$(T)-vo.data:
 	$(SOLVER) -m r -v $(VLEVEL) -i kbf-$(T).qcnf -p kbf-$(T)-v.order -b \
 		-o kbf-$(T)-vo.$(EXTENSION) | tee kbf-$(T)-vo.data
 	$(CHECKER) -i kbf-$(T).qcnf -p kbf-$(T)-vo.$(EXTENSION) | tee -a kbf-$(T)-vo.data
-	rm -f kbf-$(T)-vo.$(EXTENSION)
+#	rm -f kbf-$(T)-vo.$(EXTENSION)
 
 kbf-$(T)-rvo.data:
 	$(GENERATOR) $(T) > kbf-$(T).qcnf 

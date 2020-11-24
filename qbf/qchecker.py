@@ -448,9 +448,9 @@ class ClauseManager:
             else:
                 return (False, "Clause #%d includes neither %d nor -%d" % (id, var, var))
         if len(plist) != self.literalCountDict[var]:
-            return (False, "Expecting %d clauses containing %d.  Found %d" % (len(plist), var, self.literalCountDict[var]))
+            return (False, "Expecting %d clauses containing literal %d.  Found %d" % (len(plist), var, self.literalCountDict[var]))
         if len(nlist) != self.literalCountDict[-var]:
-            return (False, "Expecting %d clauses containing -%d.  Found %d" % (len(nlist), var, self.literalCountDict[-var]))
+            return (False, "Expecting %d clauses containing literal -%d.  Found %d" % (len(nlist), var, self.literalCountDict[-var]))
 
 
         checkList = []

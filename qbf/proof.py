@@ -30,6 +30,8 @@ class Prover:
     mode = None
     doQrat = True
     ### Support for satisfaction proofs
+    # Mapping from Id to qlevel.  Items inserted by BDD manager
+    idToQlevel = {}
     # Map from qlevel to added resolution clauses
     qlevelClauses = {}
     # Map from qlevel to extension variables.  For each level, have dictionary
@@ -62,6 +64,7 @@ class Prover:
         self.writer = sys.stderr if writer is None else writer
         self.clauseCount = 0
         self.proofCount = 0
+        self.idToQlevel = {}
         self.qlevelClauses = {}
         self.qlevelEvars = {}
         self.evarQlevels = {}
@@ -173,7 +176,7 @@ class Prover:
             fields += afields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         if self.mode == ProverMode.satProof:
-            qlevel = max([self.manager.idToQlevel[abs(lit)] for lit in result])
+            qlevel = max([self.idToQlevel[abs(lit)] for lit in result])
             if qlevel in self.qlevelClauses:
                 self.qlevelClauses[qlevel].append(stepNumber)
             else:
@@ -251,7 +254,7 @@ class Prover:
 
     def proveDeleteDavisPutnam(self, var, deleteIdList, causeIdList, comment = None):
         dlist = [str(id) for id in deleteIdList]
-        clist = [stri(id) for id in causeIdList]
+        clist = [str(id) for id in causeIdList]
         fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
         self.generateStepQP(fields, False, comment)
         for id in deleteIdList:
@@ -263,18 +266,21 @@ class Prover:
         # Delete all clauses for qlevels >= qlevel
         qmax = max(self.qlevelClauses.keys())
         for q in range(qlevel, qmax+1):
-            idList = self.qlevelClauses[q]
-            idList.reverse()
-            comment = "Deleting resolution clauses with qlevel %d" % q
-            for id in idList:
-                self.proveDeleteResolution(id, self.antecedentDict[id], comment)
-                comment = None
-            evarList = self.qlevelEvars[q].keys()
-            comment = "Deleting defining clauses for extension variables with qlevel %d" % q
-            for evar in evarList:
-                dlist = self.qlevelEvars[q][evar]
-                self.proveDeleteDavisPutnam(self, evar, dllist, [], comment)
-                comment = None
+            if q in self.qlevelClauses:
+                idList = self.qlevelClauses[q]
+                idList.reverse()
+                comment = "Deleting resolution clauses with qlevel %d" % q
+                for id in idList:
+                    if id in self.antecedentDict:
+                        self.proveDeleteResolution(id, self.antecedentDict[id], comment)
+                        comment = None
+            if q in self.qlevelEvars:
+                evarList = self.qlevelEvars[q].keys()
+                comment = "Deleting defining clauses for extension variables with qlevel %d" % q
+                for evar in evarList:
+                    dlist = self.qlevelEvars[q][evar]
+                    self.proveDeleteDavisPutnam(evar, dlist, [], comment)
+                    comment = None
 
 
 
