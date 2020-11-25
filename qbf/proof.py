@@ -201,7 +201,7 @@ class Prover:
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
         var = abs(clause[0])
-        # Record blocking clause
+        # Record defining clause 
         qlevel = self.evarQlevels[var]
         self.qlevelEvars[qlevel][var].append(stepNumber)
         return stepNumber
@@ -269,25 +269,27 @@ class Prover:
         for q in qlevels:
             if q < qlevel:
                 break
-            if q in self.qlevelClauses:
-                idList = self.qlevelClauses[q]
-                idList.reverse()
-                comment = "Deleting resolution clauses with qlevel %d" % q
-                for id in idList:
-                    if id in self.antecedentDict:
-                        self.proveDeleteResolution(id, self.antecedentDict[id], comment)
-                        comment = None
-                self.qlevelClauses[q] = []
-            if q in self.qlevelEvars:
-                evarList = self.qlevelEvars[q].keys()
-                evarList.sort(key = lambda i : -i)
-                comment = "Deleting defining clauses for extension variables with qlevel %d" % q
-                for evar in evarList:
-                    dlist = self.qlevelEvars[q][evar]
-                    self.proveDeleteDavisPutnam(evar, dlist, [], comment)
+            idList = self.qlevelClauses[q]
+            idList.reverse()
+            comment = "Deleting resolution clauses with qlevel %d" % q
+            for id in idList:
+                if id in self.antecedentDict:
+                    self.proveDeleteResolution(id, self.antecedentDict[id], comment)
                     comment = None
-                self.qlevelEvars[q] = {}
+            self.qlevelClauses[q] = []
 
+        qlevels = sorted(self.qlevelEvars.keys(), key=lambda q:-q)
+        for q in qlevels:
+            if q < qlevel:
+                break
+            evarList = self.qlevelEvars[q].keys()
+            evarList.sort(key = lambda i : -i)
+            comment = "Deleting defining clauses for extension variables with qlevel %d" % q
+            for evar in evarList:
+                dlist = self.qlevelEvars[q][evar]
+                self.proveDeleteDavisPutnam(evar, dlist, [], comment)
+                comment = None
+            self.qlevelEvars[q] = {}
 
 
     def summarize(self):

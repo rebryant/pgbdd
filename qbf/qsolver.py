@@ -495,7 +495,7 @@ class Solver:
                 self.writer.write("ERROR: Formula is TRUE\n")
             else:
                 self.writer.write("Formula TRUE\n")
-                self.manager.summarize()
+            self.manager.summarize()
 
 
         
@@ -566,18 +566,22 @@ class Solver:
                                 return
                         self.placeInQuantBucket(buckets, newId)
 
+        # Get here only haven't hit 0
+        if self.prover.mode == proof.ProverMode.satProof:
+            # Make sure all clauses cleared away
+            self.prover.qcollect(1)
+
         if self.verbLevel >= 0:
             if self.prover.mode == proof.ProverMode.refProof:
                 self.writer.write("ERROR: Formula is TRUE\n")
             else:
-                # Make sure all clauses cleared aways
-                self.prover.qcollect(1)
                 self.writer.write("Formula TRUE\n")
-                self.manager.summarize()
+            self.manager.summarize()
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
         rootList = [t.root for t in self.activeIds.values()]
+        rootList += self.litMap.values()
         return rootList
 
 
