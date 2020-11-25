@@ -596,11 +596,11 @@ class Prover:
                     foundLevels = True
                 self.doLevel(rest)
                 continue
-            elif foundLevels:
+            elif foundLevels and not doneLevels:
                 if not self.checkLevels():
                     break
                 self.varDict = self.shiftedVarDict
-                doneLevels = True
+            doneLevels = True
             if cmd == 'a':
                 self.doAdd(id, rest)
             elif cmd == 'ab':
