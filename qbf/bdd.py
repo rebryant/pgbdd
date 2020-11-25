@@ -751,12 +751,16 @@ class Manager:
             fun = operator(fun, n)
         return fun
 
+    # Indicate that variable has been quantified
+    def markQuantified(self, variable):
+        self.quantifiedVariableSet.add(variable)        
+
     # Use clause to provide canonical list of nodes.  Should all be positive
     def equant(self, node, clause, topLevel = True):
         if topLevel:
             nextc = clause
             while not nextc.isLeaf():
-                self.quantifiedVariableSet.add(nextc.variable)
+                self.markQuantified(nextc.variable)
                 nextc = nextc.low
         if node.isLeaf():
             return node
@@ -787,7 +791,7 @@ class Manager:
         if topLevel:
             nextc = clause
             while not nextc.isLeaf():
-                self.quantifiedVariableSet.add(nextc.variable)
+                self.markQuantified(nextc.variable)
                 nextc = nextc.low
         if node.isLeaf():
             return node

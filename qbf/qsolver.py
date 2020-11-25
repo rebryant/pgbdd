@@ -193,6 +193,8 @@ class Term:
         if newRoot == self.manager.leaf1:
             return None
 
+        # Manager needs to be informed that quantification has completed
+        self.manager.markQuantified(lit.variable)
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
 
@@ -382,6 +384,8 @@ class Solver:
             newId = id1
         else:
             newId = self.combineTerms(id1, id0)
+        # Manager needs to be informed that quantification has completed
+        self.manager.markQuantified(lit.variable)
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
         if len(clauseList) > 0:
