@@ -20,8 +20,8 @@ def run(name, args):
     else:
         sys.stderr.write("Usage: %s [FILE.qcnf]\n")
         sys.exit(0)
-    eden = eextract.Eden(infile)
-    eden.bucketOrder()
+    eden = eextract.Eden(infile, True)
+    eden.variableOrder()
 
 run(sys.argv[0], sys.argv[1:])
         
