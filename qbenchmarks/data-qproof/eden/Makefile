@@ -1,20 +1,21 @@
+INTERP=python3
 MODE=plain
 GDIR=../../eden
 SDIR=../../../qbf
 
-BUCKET=$(GDIR)/gen-bucket.py
-VARIABLE=$(GDIR)/gen-variable.py
+BUCKET=$(INTERP) $(GDIR)/gen-bucket.py
+VARIABLE=$(INTERP) $(GDIR)/gen-variable.py
 GEN=$(GDIR)/gen-goe-$(MODE)
-SOLVE=$(SDIR)/qsolver.py
-CHECK=$(SDIR)/qchecker.py
+SOLVE=$(INTERP) $(SDIR)/qsolver.py
+CHECK=$(INTERP) $(SDIR)/qchecker.py
 VLEVEL=2
 R=4
 C=4
 
 all: goe-$(MODE)-$(R)x$(C)-reorder.data
 
-goe-$(MODE)-$(R)x$(C).qcnf: $(GEN)
-	$(GEN) $(R) $(C) > goe-$(MODE)-$(R)x$(C).qcnf
+goe-$(MODE)-$(R)x$(C).qcnf:
+	- $(GEN) $(R) $(C) > goe-$(MODE)-$(R)x$(C).qcnf
 	$(BUCKET) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).border
 	$(VARIABLE) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).vorder
 

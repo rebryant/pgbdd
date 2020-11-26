@@ -562,7 +562,7 @@ class Solver:
                         if newId < 0:
                             # Formula is False
                             if self.verbLevel >= 0:
-                                self.writer.write("ERROR: Formula is FALSE")
+                                self.writer.write("ERROR: Formula is FALSE\n")
                                 return
                         self.placeInQuantBucket(buckets, newId)
 

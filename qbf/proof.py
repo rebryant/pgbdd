@@ -282,8 +282,7 @@ class Prover:
         for q in qlevels:
             if q < qlevel:
                 break
-            evarList = self.qlevelEvars[q].keys()
-            evarList.sort(key = lambda i : -i)
+            evarList = sorted(self.qlevelEvars[q].keys(), key=lambda i : -i)
             comment = "Deleting defining clauses for extension variables with qlevel %d" % q
             for evar in evarList:
                 dlist = self.qlevelEvars[q][evar]
