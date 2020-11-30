@@ -10,6 +10,7 @@ SDIR=../../../qbf
 BUCKET=$(INTERP) $(GDIR)/gen-bucket.py
 VARIABLE=$(INTERP) $(GDIR)/gen-variable.py
 CLUSTER=$(INTERP) $(GDIR)/gen-cluster.py
+GRABBER = $(INTERP) ./grab_xclauses.py
 GEN=$(GDIR)/gen-goe-$(MODE)
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) $(SDIR)/qchecker.py
@@ -29,7 +30,6 @@ goe-$(MODE)-$(R)x$(C).qcnf:
 	$(VARIABLE) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).vorder
 	$(CLUSTER) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).cluster
 
-
 goe-$(MODE)-$(R)x$(C)-VBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(SOLVE) -m s -v $(VLEVEL) -b \
 		-B goe-$(MODE)-$(R)x$(C).border \
@@ -37,6 +37,7 @@ goe-$(MODE)-$(R)x$(C)-VBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	        -c goe-$(MODE)-$(R)x$(C).cluster \
 	 	-i goe-$(MODE)-$(R)x$(C).qcnf -o goe-$(MODE)-$(R)x$(C).qproof | tee goe-$(MODE)-$(R)x$(C)-VBC.data
 	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-VBC.data
+	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
 goe-$(MODE)-$(R)x$(C)-VBc.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(SOLVE) -m s -v $(VLEVEL) -b \
@@ -44,7 +45,7 @@ goe-$(MODE)-$(R)x$(C)-VBc.data: goe-$(MODE)-$(R)x$(C).qcnf
 	        -p goe-$(MODE)-$(R)x$(C).vorder \
 	 	-i goe-$(MODE)-$(R)x$(C).qcnf -o goe-$(MODE)-$(R)x$(C).qproof | tee goe-$(MODE)-$(R)x$(C)-VBc.data
 	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-VBc.data
-
+	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
 goe-$(MODE)-$(R)x$(C)-vBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(SOLVE) -m s -b \
@@ -53,6 +54,11 @@ goe-$(MODE)-$(R)x$(C)-vBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	        -c goe-$(MODE)-$(R)x$(C).cluster \
 	 	-i goe-$(MODE)-$(R)x$(C).qcnf -o goe-$(MODE)-$(R)x$(C).qproof | tee goe-$(MODE)-$(R)x$(C)-vBC.data
 	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-vBC.data
+	rm -f goe-$(MODE)-$(R)x$(C).qproof
+
+data:
+	$(GRABBER) goe-plain-*-VBC.data > goe-VBC.csv
+
 
 
 clean:
