@@ -822,7 +822,6 @@ class Manager:
     # Compute restriction on node.
     # Variable and phase indicated by literal node
     # Generate justification that (literal &) node  --> newNode
-    # For up: Generate justification that (literal &) newNode --> node
     def applyRestrictDown(self, u, literal):
         if u.isLeaf():
             return (u, resolver.tautologyId)
@@ -879,7 +878,7 @@ class Manager:
         self.cacheJustifyAdded += 1
         return (v, justification)
 
-        # Compute restriction on node.
+    # Compute restriction on node.
     # Variable and phase indicated by literal node
     # Generate justification that literal & newNode --> node
     def applyRestrictUp(self, u, literal):

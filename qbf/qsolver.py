@@ -16,14 +16,15 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-m (s|r)] [-B BPERM] [-p PERMUTE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-m (s|r)] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -m MODE     Set proof mode (s = satisfaction, r = refutation)\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
     sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
-    sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
+    sys.stderr.write("  -p VPERM    Name of file specifying mapping from CNF variable to BDD level\n")
+    sys.stderr.write("  -c CLUSTER  Name of file specifying how to group clauses into clusters\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
 # Verbosity levels
@@ -34,6 +35,10 @@ def usage(name):
 # 4: ?
 # 5: Tree generation information
 
+def trim(s):
+    while len(s) > 0 and s[-1] == '\n':
+        s = s[:-1]
+    return s
 
 # Abstract representation of Boolean function
 class Term:
@@ -130,7 +135,7 @@ class Term:
         root1, implication1 = self.manager.applyRestrictUp(self.root, lit)
         if root1 == self.manager.leaf1:
             # Implication will be [-lit, self.root.id]
-            up1 = implication
+            up1 = implication1
             shannon1 = None
         elif root1 == self.manager.leaf0:
             rclause = [-litid]
@@ -143,13 +148,13 @@ class Term:
             shannon1 = self.manager.prover.proveAdd(rclause, comment)
             antecedents = [shannon1, implication1]
             comment = "Resolve with upward implication for N%d" % self.root.id
-            up1 = prover.proveAddResolution([-litid, self.root.id], antecedents, None)
+            up1 = prover.proveAddResolution([-litid, self.root.id], antecedents, comment)
 
         root0, implication0 = self.manager.applyRestrictUp(self.root, nlit)
-        if root1 == self.manager.leaf1:
-            up0 = implication
+        if root0 == self.manager.leaf1:
+            up0 = implication0
             shannon0 = None
-        elif root1 == self.manager.leaf0:
+        elif root0 == self.manager.leaf0:
             rclause = [litid]
             comment = "Shannon Expansion: Assert %s" % (lname)
             shannon0 = self.manager.prover.proveAdd(rclause, comment)
@@ -160,7 +165,7 @@ class Term:
             shannon0 = self.manager.prover.proveAdd(rclause, comment)
             antecedents = [shannon0, implication0]
             comment = "Resolve with upward implication for N%d" % self.root.id
-            up0 = prover.proveAddResolution([litid, self.root.id], antecedents, None)
+            up0 = prover.proveAddResolution([litid, self.root.id], antecedents, comment)
         
         antecedents = [up1, up0]
         comment = "Deletion of clause [%d] during existential quantfication" % self.root.id
@@ -169,23 +174,27 @@ class Term:
 
         comment = "Davis Putnam reduction of variable %s" % lname
         if root1 == self.manager.leaf1:
-            newRoot = root0
+            newRoot = root1
             prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
             validation = self.manager.prover.proveAdd([newRoot.id])
         elif root0 == self.manager.leaf1:
-            newRoot = root1
+            newRoot = root0
             prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
             validation = self.manager.prover.proveAdd([newRoot.id])
         else:            
             comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
             distid = prover.proveAdd([root1.id, root0.id], comment = comment)
+            comment = "Delete Shannon expansion clauses"
             prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
             newRoot, justifyOr = self.manager.applyOrJustify(root1, root0)
             antecedents = []
-            if justifyOr != resolver.tautologyId:
+            if justifyOr == resolver.tautologyId:
+                pass
+            else:
                 antecedents.append(justifyOr)
             if newRoot != self.manager.leaf1:
-                validation = self.manager.prover.proveAdd([newRoot.id])
+                comment = "Assert unit clause for disjunction %s (= %s | %s)" % (newRoot.label(), root1.label(), root0.label())
+                validation = self.manager.prover.proveAdd([newRoot.id], comment)
                 antecedents.append(validation)
             comment = "Remove intermediate disjunction"
             prover.proveDeleteResolution(distid, antecedents, comment)
@@ -284,6 +293,11 @@ class Solver:
             self.activeIds[self.termCount] = term
         self.outcome = None
 
+    # Determine whether term is constant.  Optionally matching specified value
+    def termIsConstant(self, id):
+        root = self.activeIds[id].root
+        return root == self.manager.leaf1 or root == self.manager.leaf0
+
     # Simplistic version of scheduling
     def choosePair(self):
         ids = sorted(self.activeIds.keys())
@@ -305,11 +319,17 @@ class Solver:
         if self.prover.mode == proof.ProverMode.satProof:
             comment = "Assertion of T%d (N%d)" % (self.termCount, newTerm.root.id)
             newTerm.validation = self.prover.proveAdd([newTerm.root.id], comment)
+            justificationA = [newTerm.validation]
             implA = self.manager.justifyImply(newTerm.root, termA.root)[1]
+            if implA is not resolver.tautologyId:
+                justificationA.append(implA)
             implB = self.manager.justifyImply(newTerm.root, termB.root)[1]
+            justificationB = [newTerm.validation]
+            if implB is not resolver.tautologyId:
+                justificationB.append(implB)
             comment = "Delete unit clauses for T%d and T%d" % (id1, id2)
-            self.prover.proveDeleteResolution(termA.validation, [newTerm.validation, implA], comment)
-            self.prover.proveDeleteResolution(termB.validation, [newTerm.validation, implB])
+            self.prover.proveDeleteResolution(termA.validation, justificationA, comment)
+            self.prover.proveDeleteResolution(termB.validation, justificationB)
 
         del self.activeIds[id1]
         del self.activeIds[id2]
@@ -318,7 +338,7 @@ class Solver:
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
             if self.verbLevel >= 1:
-                self.writer.write("Formula FALSE\n")
+                self.writer.write("Conjunction: Formula FALSE\n")
             self.outcome = False
             self.manager.summarize()
             return -1
@@ -337,6 +357,8 @@ class Solver:
         newTerm = term.equantify(clause, self.prover)
         comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
+        if self.verbLevel >= 3:
+            print(comment)
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
@@ -378,6 +400,10 @@ class Solver:
             id0 = self.termCount
             self.activeIds[id0] = term0
 
+        if term1 is None and term0 is None:
+            msg = "Got C1 for both cofactors of %s" % (term.root.label())
+            raise SolverException(msg)
+
         if term1 is None:
             newId = id0
         elif term0 is None:
@@ -399,16 +425,20 @@ class Solver:
         lit = self.litMap[var]
         nlit = self.litMap[-var]
         if self.verbLevel >= 3:
-            print("Computing T%d (Node %s) Equant(%s)" % (id, term.root.label(), str(var)))
+            print("Computing T%d (Node %s) EQuant(%s)" % (id, term.root.label(), str(var)))
+            print("  lit = %s,  nlit = %s" % (lit.label(), nlit.label()))
         newTerm = term.equantifySatisfaction(lit, nlit, self.prover)
         newId = -1
         if newTerm is None:
             if self.verbLevel >= 3:
-                print("T%d (Node %s) Equant(%s) --> ONE" % (id, term.root.label(), str(var)))
+                print("T%d (Node %s) EQuant(%s) --> ONE" % (id, term.root.label(), str(var)))
         else:
             self.termCount += 1
+
+            comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label())
+            self.prover.comment(comment)
             if self.verbLevel >= 3:
-                print("T%d (Node %s) Equant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label()))
+                print(comment)
             self.activeIds[self.termCount] = newTerm
             newId = self.termCount
         # This could be a good time for garbage collection
@@ -429,7 +459,7 @@ class Solver:
         newTerm = term.uquantify(clause, self.prover)
         if newTerm.root == self.manager.leaf0:
             if self.verbLevel >= 1:
-                self.writer.write("Formula FALSE\n")
+                self.writer.write("Universal Quantification: Formula FALSE\n")
             self.outcome = False
             self.manager.summarize()
             return -1
@@ -448,6 +478,41 @@ class Solver:
         self.manager.checkGC(generateClauses = False)
         return self.termCount
 
+    def processClusters(self, cfile):
+        try:
+            infile = open(cfile, 'r')
+        except:
+            self.writer.write("ERROR: Could not open cluster file '%s'\n" % cfile)
+            return False
+        clusterCount = 0
+        clauseCount = 0
+        for line in infile:
+            line = trim(line)
+            cnum = clusterCount + 1
+            slist = line.split()
+            try:
+                clist = [int(s) for s in line.split()]
+            except:
+                self.writer.write("ERROR: Invalid clause number in cluster #%d\n" % cnum)
+                return False
+            if len(clist) == 0:
+                continue
+            id = clist[0]
+            for nextId in clist[1:]:
+                id = self.combineTerms(id, nextId)
+                if id < 0:
+                    self.writer.write("ERROR: Conjunction of input clauses for cluster #%d is unsatisfiable\n" % cnum)
+                    return False
+            clauseCount += len(clist)
+            clusterCount += 1
+            if self.verbLevel >= 3:
+                self.writer.write("Combined %d clauses to form cluster #%d (T%d)\n" % (len(clist), cnum, id))
+        if self.verbLevel >= 2:
+            self.writer.write("Combined %d clauses to form %d clusters\n" % (clauseCount, clusterCount))
+        infile.close()
+        return True
+                
+
     def runNoSchedule(self):
         # Start by conjuncting all clauses to get single BDD
         id = 0
@@ -459,6 +524,11 @@ class Solver:
         # Now handle all of the quantifications:
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         for level in levels:
+     
+            if self.termIsConstant(id):
+                if self.verbLevel >= 3:
+                    self.writer.write("Encountered constant value before performing quantification level %d\n" % level)
+                break
             vars, isExistential = self.quantMap[level]
             if len(vars) == 0:
                 continue
@@ -496,7 +566,6 @@ class Solver:
             else:
                 self.writer.write("Formula TRUE\n")
             self.manager.summarize()
-
 
         
     def placeInQuantBucket(self, buckets, id):
@@ -595,8 +664,9 @@ def run(name, args):
     verbLevel = 1
     logName = None
     mode = proof.ProverMode.noProof
+    clusterFile = None
 
-    optlist, args = getopt.getopt(args, "hbB:m:v:i:o:m:p:L:")
+    optlist, args = getopt.getopt(args, "hbB:c:m:v:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -607,6 +677,8 @@ def run(name, args):
             bpermuter = permutation.readPermutation(val)
             if bpermuter is None:
                 return
+        elif opt == '-c':
+            clusterFile = val
         elif opt == '-m':
             if val == 's':
                 mode = proof.ProverMode.satProof
@@ -656,10 +728,12 @@ def run(name, args):
         prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
-    if doBucket:
-        solver.runQuantBucket()
-    else:
-        solver.runNoSchedule()
+
+    if clusterFile is None or solver.processClusters(clusterFile):
+        if doBucket:
+            solver.runQuantBucket()
+        else:
+            solver.runNoSchedule()
 
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds

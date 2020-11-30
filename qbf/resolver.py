@@ -276,7 +276,7 @@ class VResolver:
 #                        msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
 #                        raise ResolveException(msg)
                 
-        if self.prover.verbLevel >= 3:
+        if self.prover.verbLevel >= 4:
             if comment is not None:
                 print("Failing: " + comment)
             print("Trying to generate target clause %s" % showClause(targetClause))
