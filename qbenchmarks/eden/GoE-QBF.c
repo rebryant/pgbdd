@@ -247,4 +247,5 @@ int main (int argc, char **argv )
 	for (i = 1; i <= vsize; ++i)
 	    for (j = 1; j <= hsize; ++j)
 		if (aztec(vsize, hsize, map[i][j])) printInternal (i, j, vsize, hsize, universals, map [i][j]);
+	return 0;
 }
