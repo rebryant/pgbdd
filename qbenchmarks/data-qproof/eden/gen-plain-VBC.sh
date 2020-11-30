@@ -1,51 +1,51 @@
 #!/bin/bash
 # 4
-make VBC MODE=plain R=1 C=4
-make VBC MODE=plain R=2 C=2
-make VBC MODE=plain R=4 C=1
+make VBC MODE=plain R=01 C=04
+make VBC MODE=plain R=02 C=02
+make VBC MODE=plain R=04 C=01
 # 5
-make VBC MODE=plain R=1 C=5
-make VBC MODE=plain R=5 C=1
+make VBC MODE=plain R=01 C=05
+make VBC MODE=plain R=05 C=01
 # 6
-make VBC MODE=plain R=1 C=6
-make VBC MODE=plain R=2 C=3
-make VBC MODE=plain R=3 C=2
-make VBC MODE=plain R=6 C=1
+make VBC MODE=plain R=01 C=06
+make VBC MODE=plain R=02 C=03
+make VBC MODE=plain R=03 C=02
+make VBC MODE=plain R=06 C=01
 # 7
-make VBC MODE=plain R=1 C=7
-make VBC MODE=plain R=7 C=1
+make VBC MODE=plain R=01 C=07
+make VBC MODE=plain R=07 C=01
 # 8
-make VBC MODE=plain R=1 C=8
-make VBC MODE=plain R=2 C=4
-make VBC MODE=plain R=4 C=2
-make VBC MODE=plain R=8 C=1
+make VBC MODE=plain R=01 C=08
+make VBC MODE=plain R=02 C=04
+make VBC MODE=plain R=04 C=02
+make VBC MODE=plain R=08 C=01
 # 9
-make VBC MODE=plain R=1 C=9
-make VBC MODE=plain R=3 C=3
-make VBC MODE=plain R=9 C=1
+make VBC MODE=plain R=01 C=09
+make VBC MODE=plain R=03 C=03
+make VBC MODE=plain R=09 C=01
 # 10
-make VBC MODE=plain R=1 C=10
-make VBC MODE=plain R=2 C=5
-make VBC MODE=plain R=10 C=1
+make VBC MODE=plain R=01 C=10
+make VBC MODE=plain R=02 C=05
+make VBC MODE=plain R=10 C=01
 # 11
-make VBC MODE=plain R=1 C=11
-make VBC MODE=plain R=11 C=1
+make VBC MODE=plain R=01 C=11
+make VBC MODE=plain R=11 C=01
 # 12
-make VBC MODE=plain R=1 C=12
-make VBC MODE=plain R=2 C=6
-make VBC MODE=plain R=3 C=4
-make VBC MODE=plain R=4 C=3
-make VBC MODE=plain R=12 C=1
+make VBC MODE=plain R=01 C=12
+make VBC MODE=plain R=02 C=06
+make VBC MODE=plain R=03 C=04
+make VBC MODE=plain R=04 C=03
+make VBC MODE=plain R=12 C=01
 # 13
-make VBC MODE=plain R=1 C=13
-make VBC MODE=plain R=13 C=1
+make VBC MODE=plain R=01 C=13
+make VBC MODE=plain R=13 C=01
 # 14
-make VBC MODE=plain R=1 C=14
-make VBC MODE=plain R=2 C=7
-make VBC MODE=plain R=14 C=1
+make VBC MODE=plain R=01 C=14
+make VBC MODE=plain R=02 C=07
+make VBC MODE=plain R=14 C=01
 # 16
-make VBC MODE=plain R=1 C=16
-make VBC MODE=plain R=2 C=8
-make VBC MODE=plain R=4 C=4
-make VBC MODE=plain R=8 C=2
-make VBC MODE=plain R=16 C=1
+make VBC MODE=plain R=01 C=16
+make VBC MODE=plain R=02 C=08
+make VBC MODE=plain R=04 C=04
+make VBC MODE=plain R=08 C=02
+make VBC MODE=plain R=16 C=01

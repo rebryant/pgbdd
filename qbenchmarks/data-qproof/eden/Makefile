@@ -60,4 +60,4 @@ clean:
 
 
 superclean: clean
-	rm -f *.qcnf *.border *.data *.qproof
+	rm -f *.qcnf *.border *.vorder *.cluster *.data *.qproof
