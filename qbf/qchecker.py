@@ -430,7 +430,8 @@ class ClauseManager:
         if subsetOK and testClauseSubset(rclause, clause) or testClauseEquality(clause, rclause):
             return (True, "")
         else:
-            return (False, "Antecedents resolve to %s, not to %s" % (showClause(rclause), showClause(clause)))
+            key = "allowed" if subsetOK else "not allowed"
+            return (False, "Antecedents resolve to %s, not to %s. Subset %s." % (showClause(rclause), showClause(clause), key))
                 
     # Check that clause is blocked w.r.t. its first literal
     # Return (T/F, Reason)
