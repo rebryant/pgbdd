@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g
+CFLAGS = -O1 -g
 
 all: gen-goe-plain gen-goe-doublediag gen-goe-ninety gen-goe-oneeighty
 
