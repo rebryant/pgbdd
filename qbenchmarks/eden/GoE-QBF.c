@@ -5,7 +5,6 @@
 // REB: Allow different aspect ratios
 
 //#define PLAIN
-//#define AZTEC
 //#define DOUBLEDIAG
 //#define NINETY
 //#define ONEEIGHTY
@@ -26,26 +25,6 @@ const char *modename = "ninety";
 #ifdef ONEEIGHTY
 const char *modename = "one-eighty";
 #endif    
-
-
-int *mask;
-
-// REB: This function limits the cells that are considered are part of the system
-// It is normally disabled
-int aztec (int vsize, int hsize, int rotation) {
-#ifdef BIGTEN
-  if (rotation == 1 ||
-      rotation == 2 ||
-      rotation == 9 ||
-      rotation == 10 ||
-      rotation == 11 ||
-      rotation == 20) return 0;
-#endif
-#ifdef AZTEC
-  return mask[ rotation ];
-#endif
-  return 1;
-}
 
 // REB: Generate constraint for specified cell.  Rotation is the
 // new value at this position
@@ -216,36 +195,21 @@ int main (int argc, char **argv )
         universals   = tmp - 1;
 	// REB: One existential for each square + square, expanded to include boundary values
 	existentials = (vsize + 2) * (hsize + 2);
-/*
-        for (i = 1; i <= vsize; ++i) {
-          for (j = 1; j <= hsize; ++j)
-            printf("%i ", map[i][j]);
-          printf("\n"); }
-*/
-	// REB: Limits scope of cells
-        mask = (int*) malloc (sizeof (int) * (universals+1));
-        for (i = 0; i <= universals; i++) mask[ i ] = 0;
-        tmp = 0;
-	for (i = 0; i < (vsize + 1) / 2; ++i) {
-	  for (j = 0; j <= 2*i + ((hsize & 1) ^ 1); ++j)
-            mask[ map[i+1][ (hsize+1)/ 2 - i + j] ] = 1; }
 
-	// REB: Constraints only imposed on cells satisfying aztec constraints
         tmp = 0;
 	for (i = 1; i <= vsize; ++i)
 	  for (j = 1; j <= hsize; ++j)
-	      if (aztec(vsize, hsize, map[i][j])) tmp++;
+	      tmp++;
 
 	printf ("p cnf %i %i\n", existentials + universals, tmp * 190);
 
 	printf ("a ");
         for (i = 1; i <= universals; i++)
-	    if (aztec(vsize, hsize, i))
-             printf ("%i ", i); printf ("0\n");
+	    printf ("%i ", i); printf ("0\n");
 	printf ("e "); for (i = 1; i <= existentials;  i++) printf ("%i ", universals + i); printf ("0\n");
 
 	for (i = 1; i <= vsize; ++i)
 	    for (j = 1; j <= hsize; ++j)
-		if (aztec(vsize, hsize, map[i][j])) printInternal (i, j, vsize, hsize, universals, map [i][j]);
+		printInternal (i, j, vsize, hsize, universals, map [i][j]);
 	return 0;
 }
