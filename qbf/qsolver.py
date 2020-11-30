@@ -16,14 +16,15 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-m (s|r)] [-B BPERM] [-p PERMUTE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-m (s|r)] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -m MODE     Set proof mode (s = satisfaction, r = refutation)\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
     sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
-    sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
+    sys.stderr.write("  -p VPERM    Name of file specifying mapping from CNF variable to BDD level\n")
+    sys.stderr.write("  -c CLUSTER  Name of file specifying how to group clauses into clusters\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
 # Verbosity levels
@@ -34,6 +35,10 @@ def usage(name):
 # 4: ?
 # 5: Tree generation information
 
+def trim(s):
+    while len(s) > 0 and s[-1] == '\n':
+        s = s[:-1]
+    return s
 
 # Abstract representation of Boolean function
 class Term:
@@ -473,6 +478,41 @@ class Solver:
         self.manager.checkGC(generateClauses = False)
         return self.termCount
 
+    def processClusters(self, cfile):
+        try:
+            infile = open(cfile, 'r')
+        except:
+            self.writer.write("ERROR: Could not open cluster file '%s'\n" % cfile)
+            return False
+        clusterCount = 0
+        clauseCount = 0
+        for line in infile:
+            line = trim(line)
+            cnum = clusterCount + 1
+            slist = line.split()
+            try:
+                clist = [int(s) for s in line.split()]
+            except:
+                self.writer.write("ERROR: Invalid clause number in cluster #%d\n" % cnum)
+                return False
+            if len(clist) == 0:
+                continue
+            id = clist[0]
+            for nextId in clist[1:]:
+                id = self.combineTerms(id, nextId)
+                if id < 0:
+                    self.writer.write("ERROR: Conjunction of input clauses for cluster #%d is unsatisfiable\n" % cnum)
+                    return False
+            clauseCount += len(clist)
+            clusterCount += 1
+            if self.verbLevel >= 3:
+                self.writer.write("Combined %d clauses to form cluster #%d (T%d)\n" % (len(clist), cnum, id))
+        if self.verbLevel >= 2:
+            self.writer.write("Combined %d clauses to form %d clusters\n" % (clauseCount, clusterCount))
+        infile.close()
+        return True
+                
+
     def runNoSchedule(self):
         # Start by conjuncting all clauses to get single BDD
         id = 0
@@ -526,7 +566,6 @@ class Solver:
             else:
                 self.writer.write("Formula TRUE\n")
             self.manager.summarize()
-
 
         
     def placeInQuantBucket(self, buckets, id):
@@ -625,8 +664,9 @@ def run(name, args):
     verbLevel = 1
     logName = None
     mode = proof.ProverMode.noProof
+    clusterFile = None
 
-    optlist, args = getopt.getopt(args, "hbB:m:v:i:o:m:p:L:")
+    optlist, args = getopt.getopt(args, "hbB:c:m:v:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -637,6 +677,8 @@ def run(name, args):
             bpermuter = permutation.readPermutation(val)
             if bpermuter is None:
                 return
+        elif opt == '-c':
+            clusterFile = val
         elif opt == '-m':
             if val == 's':
                 mode = proof.ProverMode.satProof
@@ -686,10 +728,12 @@ def run(name, args):
         prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
-    if doBucket:
-        solver.runQuantBucket()
-    else:
-        solver.runNoSchedule()
+
+    if clusterFile is None or solver.processClusters(clusterFile):
+        if doBucket:
+            solver.runQuantBucket()
+        else:
+            solver.runNoSchedule()
 
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
