@@ -26,7 +26,7 @@ make VBC MODE=plain R=9 C=1
 # 10
 make VBC MODE=plain R=1 C=10
 make VBC MODE=plain R=2 C=5
-make VBC MODE=plain R=10 C=10
+make VBC MODE=plain R=10 C=1
 # 11
 make VBC MODE=plain R=1 C=11
 make VBC MODE=plain R=11 C=1
