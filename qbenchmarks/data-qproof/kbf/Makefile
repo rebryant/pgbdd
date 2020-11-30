@@ -10,7 +10,7 @@ REVERSER = ../../reverse.py
 RANDOMIZER = ../../../benchmarks/randomizer.py
 SOLVER = $(INTERP) ../../../qbf/qsolver.py
 CHECKER = $(INTERP) ../../../qbf/qchecker.py
-GRABBER = ../../../benchmarks/grab_clauses.py
+GRABBER = $(INTERP) ../../../benchmarks/grab_clauses.py
 EXTENSION = qproof
 
 vo: kbf-$(T)-vo.data
@@ -58,7 +58,6 @@ kbf-$(T)-ran-$(SEED).data:
 		-o kbf-$(T)-ran-$(SEED).$(EXTENSION) | tee kbf-$(T)-ran-$(SEED).data
 	$(CHECKER) -i kbf-$(T)-ran-$(SEED).qcnf -p kbf-$(T)-ran-$(SEED).$(EXTENSION) | tee -a kbf-$(T)-ran-$(SEED).data
 	rm -f kbf-$(T)-ran-$(SEED).$(EXTENSION)
-
 
 data:
 #	$(GRABBER) kbf-*-vo.data > kbf-vo.csv
