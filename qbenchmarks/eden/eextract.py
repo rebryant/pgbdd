@@ -8,6 +8,11 @@
 
 import sys
 
+def trim(s):
+    while len(s) > 0 and s[-1] == '\n':
+        s = s[:-1]
+    return s
+
 class Eden:
     nrow = 0
     ncol = 0
@@ -18,16 +23,23 @@ class Eden:
     
     # If requested to find ordering of universal variables, must
     # find the lowest number existential variable with which it shares a clause
-    uvarSuccessor = {}
+    uvarSuccessor = None
 
+    # If requested to find clusters, must create list of clauses for each universal variable
+    # When multiple universals occur, associate clause with smallest one
+    uvarClauses = None
 
-    def __init__(self, infile, tagUvars = False):
+    def __init__(self, infile, tagUvars = False, cluster = False):
         self.nrow = 0
         self.ncol = 0
         self.ulist = None
         self.elist = None
         self.varCount = 0
+        self.uvarClauses = None
+        self.uvarSuccessor = None
+        clauseId = 1
         for line in infile:
+            line = trim(line)
             fields = line.split()
             if len(fields) == 0:
                 continue
@@ -53,44 +65,70 @@ class Eden:
                     sys.stderr.write("Couldn't get list of existential variables from line:" + line)
                     sys.exit(1)
                 self.varCount += len(self.elist)
+            elif fields[0] == 'p':
+                continue
             else:
-                try:
-                    # Stop once hit first clause
-                    lit = int(fields[0])
-                    if tagUvars:
-                        self.matchUvars(infile, line)
-                except:
-                    continue
+                lit = int(fields[0])
+                if tagUvars:
+                    self.matchLine(line)
+                elif cluster:
+                    self.clusterLine(line, clauseId)
+                    clauseId += 1
 
         if self.nrow == 0 or self.ncol == 0 or self.ulist is None or self.elist is None:
             sys.stderr.write("Failed to extract metadata from QCNF file\n")
             sys.exit(1)
 
         
-    def matchUvars(self, infile, firstLine):
-        self.uvarSuccessor = { u : self.varCount+1 for u in self.ulist}
-        self.matchLine(firstLine)
-        for line in infile:
-            self.matchLine(line)
-            
+    def setupMatch(self):
+        if self.uvarSuccessor is None:
+            self.uvarSuccessor = { u : self.varCount+1 for u in self.ulist}
         
     def matchLine(self, line):
+        self.setupMatch()
         mine = self.varCount + 1
         uvars = []
         try:
-            vlist = [abs(int(s)) for s in line.split()][:-1]
+            llist = [abs(int(s)) for s in line.split()][:-1]
         except:
             sys.stderr.write("Warning.  Had trouble reading line: " + line)
             return
-        for v in vlist:
+        for l in llist:
+            v = abs(l)
             if v in self.uvarSuccessor:
                 uvars.append(v)
             else:
                 mine = min(mine, v)
         for u in uvars:
             self.uvarSuccessor[u] = min(mine, self.uvarSuccessor[u])
-        
 
+    def setupCluster(self):
+        if self.uvarClauses is None:
+            self.uvarClauses = { u : [] for u in ([0] + self.ulist) }
+        
+    def clusterLine(self, line, clauseId):
+        self.setupCluster()
+        minu = self.varCount + 1
+        try:
+            llist = [abs(int(s)) for s in line.split()][:-1]
+        except:
+            sys.stderr.write("Warning.  Had trouble reading line: " + line)
+            return
+        for l in llist:
+            v = abs(l)
+            if v in self.uvarClauses:
+                minu = min(minu, v)
+        if minu < self.varCount + 1:
+            self.uvarClauses[v].append(clauseId)
+        else:
+            self.uvarClauses[0].append(clauseId)
+
+    def generateCluster(self):
+        for u in [0] + self.ulist:
+            clist = self.uvarClauses[u]
+            if len(clist) > 0:
+                slist = [str(c) for c in clist]
+                print(" ".join(slist))
 
     def bucketOrder(self):
         # Universals first
