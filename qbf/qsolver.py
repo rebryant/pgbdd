@@ -130,7 +130,7 @@ class Term:
         root1, implication1 = self.manager.applyRestrictUp(self.root, lit)
         if root1 == self.manager.leaf1:
             # Implication will be [-lit, self.root.id]
-            up1 = implication
+            up1 = implication1
             shannon1 = None
         elif root1 == self.manager.leaf0:
             rclause = [-litid]
@@ -169,11 +169,11 @@ class Term:
 
         comment = "Davis Putnam reduction of variable %s" % lname
         if root1 == self.manager.leaf1:
-            newRoot = root0
+            newRoot = root1
             prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
             validation = self.manager.prover.proveAdd([newRoot.id])
         elif root0 == self.manager.leaf1:
-            newRoot = root1
+            newRoot = root0
             prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
             validation = self.manager.prover.proveAdd([newRoot.id])
         else:            
@@ -288,6 +288,11 @@ class Solver:
             self.activeIds[self.termCount] = term
         self.outcome = None
 
+    # Determine whether term is constant.  Optionally matching specified value
+    def termIsConstant(self, id):
+        root = self.activeIds[id].root
+        return root == self.manager.leaf1 or root == self.manager.leaf0
+
     # Simplistic version of scheduling
     def choosePair(self):
         ids = sorted(self.activeIds.keys())
@@ -347,6 +352,8 @@ class Solver:
         newTerm = term.equantify(clause, self.prover)
         comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
+        if self.verbLevel >= 3:
+            print(comment)
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
         clauseList = self.manager.checkGC()
@@ -388,6 +395,10 @@ class Solver:
             id0 = self.termCount
             self.activeIds[id0] = term0
 
+        if term1 is None and term0 is None:
+            msg = "Got C1 for both cofactors of %s" % (term.root.label())
+            raise SolverException(msg)
+
         if term1 is None:
             newId = id0
         elif term0 is None:
@@ -409,16 +420,20 @@ class Solver:
         lit = self.litMap[var]
         nlit = self.litMap[-var]
         if self.verbLevel >= 3:
-            print("Computing T%d (Node %s) Equant(%s)" % (id, term.root.label(), str(var)))
+            print("Computing T%d (Node %s) EQuant(%s)" % (id, term.root.label(), str(var)))
+            print("  lit = %s,  nlit = %s" % (lit.label(), nlit.label()))
         newTerm = term.equantifySatisfaction(lit, nlit, self.prover)
         newId = -1
         if newTerm is None:
             if self.verbLevel >= 3:
-                print("T%d (Node %s) Equant(%s) --> ONE" % (id, term.root.label(), str(var)))
+                print("T%d (Node %s) EQuant(%s) --> ONE" % (id, term.root.label(), str(var)))
         else:
             self.termCount += 1
+
+            comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label())
+            self.prover.comment(comment)
             if self.verbLevel >= 3:
-                print("T%d (Node %s) Equant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label()))
+                print(comment)
             self.activeIds[self.termCount] = newTerm
             newId = self.termCount
         # This could be a good time for garbage collection
@@ -469,6 +484,11 @@ class Solver:
         # Now handle all of the quantifications:
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         for level in levels:
+     
+            if self.termIsConstant(id):
+                if self.verbLevel >= 3:
+                    self.writer.write("Encountered constant value before performing quantification level %d\n" % level)
+                break
             vars, isExistential = self.quantMap[level]
             if len(vars) == 0:
                 continue
