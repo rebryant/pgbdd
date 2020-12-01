@@ -57,13 +57,6 @@ class Board:
     def addSearch(self):
         self.searchCount += 1
 
-    def trim(self, s):
-        while len(s) > 0 and s[0] == '1':
-            s = s[1:]
-        while len(s) > 0 and s[-1] == '1':
-            s = s[:-1]
-        return s
-
     def otrim(self, s):
         while len(s) > 0 and s[0] == '1':
             s = s[1:]
@@ -72,7 +65,7 @@ class Board:
         return s
 
     # Compress state to eliminate consecutive ones
-    def trim(self, s):
+    def ftrim(self, s):
         result = ""
         while len(s) > 0 and s[0] == '1':
             s = s[1:]
@@ -87,6 +80,21 @@ class Board:
             result = result[:-1]
         return result
                     
+    # Compress by keeping track of runs of consecutive zeros
+    # Sort to put into canonical form
+    def trim(self, s):
+        substrings = []
+        while len(s) > 0:
+            ns = ""
+            while len(s) > 0 and s[0] == '1':
+                s = s[1:]
+            while len(s) > 0 and s[0] == '0':
+                ns += '0'
+                s = s[1:]
+            if len(ns) > 0:
+                substrings.append(ns)
+        substrings.sort()
+        return '1'.join(substrings)
 
     def compress(self):
         sarray = ['0'] * self.size
