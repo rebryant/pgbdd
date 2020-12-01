@@ -26,6 +26,7 @@ make VBC MODE=plain R=09 C=01
 # 10
 make VBC MODE=plain R=01 C=10
 make VBC MODE=plain R=02 C=05
+make VBC MODE=plain R=05 C=02
 make VBC MODE=plain R=10 C=01
 # 11
 make VBC MODE=plain R=01 C=11
@@ -35,6 +36,7 @@ make VBC MODE=plain R=01 C=12
 make VBC MODE=plain R=02 C=06
 make VBC MODE=plain R=03 C=04
 make VBC MODE=plain R=04 C=03
+make VBC MODE=plain R=06 C=02
 make VBC MODE=plain R=12 C=01
 # 13
 make VBC MODE=plain R=01 C=13
@@ -42,10 +44,11 @@ make VBC MODE=plain R=13 C=01
 # 14
 make VBC MODE=plain R=01 C=14
 make VBC MODE=plain R=02 C=07
+make VBC MODE=plain R=07 C=02
 make VBC MODE=plain R=14 C=01
 # 16
 make VBC MODE=plain R=01 C=16
 make VBC MODE=plain R=02 C=08
-make VBC MODE=plain R=04 C=04
+#make VBC MODE=plain R=04 C=04
 make VBC MODE=plain R=08 C=02
 make VBC MODE=plain R=16 C=01

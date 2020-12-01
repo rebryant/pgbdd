@@ -14,7 +14,7 @@ GRABBER = $(INTERP) ./grab_xclauses.py
 GEN=$(GDIR)/gen-goe-$(MODE)
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) $(SDIR)/qchecker.py
-VLEVEL=2
+VLEVEL=1
 R=4
 C=4
 
@@ -57,8 +57,9 @@ goe-$(MODE)-$(R)x$(C)-vBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
 data:
-	$(GRABBER) goe-plain-*-VBC.data > goe-VBC.csv
-
+	$(GRABBER) goe-plain-*-VBC.data > goe-plain-VBC.csv
+	$(GRABBER) goe-oneeighty-*-VBC.data > goe-oneeighty-VBC.csv
+	$(GRABBER) goe-ninety-*-VBC.data > goe-ninety-VBC.csv
 
 
 clean:
