@@ -65,16 +65,18 @@ def usage(name):
 #    Add clause C[Id] = [Lit*].
 
 # - dr Id Id+ 0
-#    Delete clause C[Id] by resolution.
-#    Must check that antecedents resolve to C[Id]
+#    Delete clause C[Id] by resolution. 
+#    Also incorporates subsumption, i.e., if C' subset C, the C' ==> C.
+#    Must check that antecedents resolve to to clause C' that is
+#     (perhaps improper) subset of C[Id]
 
 # - dd Var Id+ 0 Id* 0
 #    Delete all clauses in first list by
 #    Davis-Putnam reduction on variable Var
-#    No clauses other than those listed can contain Var or -Var
-#    None of these can contain a universal literal > Var
 #    Second list consists of all resolvents from first list
 #      w.r.t. resolution variable Var
+#    No clauses other than those in first list can contain Var or -Var
+#    None of these can contain a universal literal > Var
 ######################################################################################
 
 def trim(s):
