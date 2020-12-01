@@ -19,8 +19,8 @@ make VBC MODE=oneeighty R=03 C=04
 make VBC MODE=oneeighty R=01 C=14
 make VBC MODE=oneeighty R=07 C=02
 # 16
-make VBC MODE=oneeighty R=01 C=16
-make VBC MODE=oneeighty R=02 C=08
+#make VBC MODE=oneeighty R=01 C=16
+#make VBC MODE=oneeighty R=02 C=08
 make VBC MODE=oneeighty R=04 C=04
-make VBC MODE=oneeighty R=08 C=02
+#make VBC MODE=oneeighty R=08 C=02
 

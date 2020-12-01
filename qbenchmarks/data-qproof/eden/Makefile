@@ -23,6 +23,7 @@ all: VBC
 VBC: goe-$(MODE)-$(R)x$(C)-VBC.data
 VBc: goe-$(MODE)-$(R)x$(C)-VBc.data
 vBC: goe-$(MODE)-$(R)x$(C)-vBC.data
+VbC: goe-$(MODE)-$(R)x$(C)-VbC.data
 
 goe-$(MODE)-$(R)x$(C).qcnf:
 	- $(GEN) $(R) $(C) > goe-$(MODE)-$(R)x$(C).qcnf
@@ -56,11 +57,28 @@ goe-$(MODE)-$(R)x$(C)-vBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-vBC.data
 	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
+goe-$(MODE)-$(R)x$(C)-VbC.data: goe-$(MODE)-$(R)x$(C).qcnf
+	$(SOLVE) -m s -v $(VLEVEL) -b \
+	        -p goe-$(MODE)-$(R)x$(C).vorder \
+	        -c goe-$(MODE)-$(R)x$(C).cluster \
+	 	-i goe-$(MODE)-$(R)x$(C).qcnf -o goe-$(MODE)-$(R)x$(C).qproof | tee goe-$(MODE)-$(R)x$(C)-VbC.data
+	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-VbC.data
+	rm -f goe-$(MODE)-$(R)x$(C).qproof
+
+
 data:
 	$(GRABBER) goe-plain-*-VBC.data > goe-plain-VBC.csv
 	$(GRABBER) goe-oneeighty-*-VBC.data > goe-oneeighty-VBC.csv
 	$(GRABBER) goe-ninety-*-VBC.data > goe-ninety-VBC.csv
-
+	$(GRABBER) goe-plain-*-vBC.data > goe-plain-vBC.csv
+	$(GRABBER) goe-plain-*-VbC.data > goe-plain-VbC.csv
+	$(GRABBER) goe-plain-*-VBc.data > goe-plain-VBc.csv
+	$(GRABBER) goe-plain-01x*-VBC.data > goe-plain-01x-VBC.csv
+	$(GRABBER) goe-plain-*x01-VBC.data > goe-plain-x01-VBC.csv
+	$(GRABBER) goe-plain-02x*-VBC.data > goe-plain-02x-VBC.csv
+	$(GRABBER) goe-plain-*x02-VBC.data > goe-plain-x02-VBC.csv
+	$(GRABBER) goe-plain-03x*-VBC.data > goe-plain-03x-VBC.csv
+	$(GRABBER) goe-plain-*x03-VBC.data > goe-plain-x03-VBC.csv
 
 clean:
 	rm -f *~ 
