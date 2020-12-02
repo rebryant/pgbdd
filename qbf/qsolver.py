@@ -515,12 +515,13 @@ class Solver:
 
     def runNoSchedule(self):
         # Start by conjuncting all clauses to get single BDD
-        id = 0
+        id = self.activeIds.keys()[0]
         while (len(self.activeIds) > 1):
             i, j = self.choosePair()
             id = self.combineTerms(i, j)
             if id < 0:
                 return
+#        print("Conjunction of clauses.  Size: %d" % (self.activeIds[id].size))
         # Now handle all of the quantifications:
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         for level in levels:
@@ -553,6 +554,7 @@ class Solver:
                         break
                 else:
                     id = self.uquantifyTerm(id, vars)
+
                     if id < 0:
                         return
 
