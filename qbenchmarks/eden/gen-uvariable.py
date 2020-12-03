@@ -3,7 +3,8 @@
 ## Generate permutation of variables to define BDD variable ordering for Garden of Eden problem
 # Parses qcnf file to determine number of existential and universal variables
 # Keeps existential variables in their input order (row-major)
-# Places each universal variable just before first existential with which it shares a clause
+# Group universal variables with those existentials having the same cell
+# Orders groups using sorted order of lowest numbered existential
 
 import sys
 import eextract
@@ -20,8 +21,15 @@ def run(name, args):
     else:
         sys.stderr.write("Usage: %s [FILE.qcnf]\n")
         sys.exit(0)
-    eden = eextract.Eden(infile, True)
-    eden.variableOrder()
+    eden = eextract.Eden(infile)
+    if eden.mode == "plain":
+        eden.plainVariableOrder()
+    elif eden.mode == "ninety":
+        eden.ninetyVariableOrder()
+    elif eden.mode == "one-eighty":
+        eden.oneEightyVariableOrder()
+    else:
+        sys.stderr.write("Unknown mode '%s'\n" % eden.mode)
 
 run(sys.argv[0], sys.argv[1:])
         

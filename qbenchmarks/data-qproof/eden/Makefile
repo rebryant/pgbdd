@@ -4,11 +4,14 @@ INTERP=python3
 # B/b: Reorder/don't reorder buckets
 # C/c: Use/don't use clustering of input clauses
 MODE=plain
-GDIR=../../eden
-SDIR=../../../qbf
+BDIR=../..
+GDIR=$(BDIR)/eden
+SDIR=$(BDIR)/../qbf
 
 BUCKET=$(INTERP) $(GDIR)/gen-bucket.py
 VARIABLE=$(INTERP) $(GDIR)/gen-variable.py
+UVARIABLE=$(INTERP) $(GDIR)/gen-uvariable.py
+REVERSE=$(INTERP) $(BDIR)/reverse.py
 CLUSTER=$(INTERP) $(GDIR)/gen-cluster.py
 GRABBER = $(INTERP) ./grab_xclauses.py
 GEN=$(GDIR)/gen-goe-$(MODE)
@@ -25,11 +28,18 @@ VBc: goe-$(MODE)-$(R)x$(C)-VBc.data
 vBC: goe-$(MODE)-$(R)x$(C)-vBC.data
 VbC: goe-$(MODE)-$(R)x$(C)-VbC.data
 
+UBC: goe-$(MODE)-$(R)x$(C)-UBC.data
+RRC: goe-$(MODE)-$(R)x$(C)-RRC.data
+
+
+
 goe-$(MODE)-$(R)x$(C).qcnf:
-	- $(GEN) $(R) $(C) > goe-$(MODE)-$(R)x$(C).qcnf
+	$(GEN) $(R) $(C) > goe-$(MODE)-$(R)x$(C).qcnf
 	$(BUCKET) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).border
 	$(VARIABLE) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).vorder
 	$(CLUSTER) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).cluster
+	$(UVARIABLE) goe-$(MODE)-$(R)x$(C).qcnf > goe-$(MODE)-$(R)x$(C).uorder
+	$(REVERSE) < goe-$(MODE)-$(R)x$(C).uorder > goe-$(MODE)-$(R)x$(C).rorder
 
 goe-$(MODE)-$(R)x$(C)-VBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(SOLVE) -m s -v $(VLEVEL) -b \
@@ -65,6 +75,23 @@ goe-$(MODE)-$(R)x$(C)-VbC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-VbC.data
 	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
+goe-$(MODE)-$(R)x$(C)-RRC.data: goe-$(MODE)-$(R)x$(C).qcnf
+	$(SOLVE) -m s -v $(VLEVEL) -b \
+		-B goe-$(MODE)-$(R)x$(C).rorder \
+	        -p goe-$(MODE)-$(R)x$(C).uorder \
+	        -c goe-$(MODE)-$(R)x$(C).cluster \
+	 	-i goe-$(MODE)-$(R)x$(C).qcnf -o goe-$(MODE)-$(R)x$(C).qproof | tee goe-$(MODE)-$(R)x$(C)-RRC.data
+	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-RRC.data
+	rm -f goe-$(MODE)-$(R)x$(C).qproof
+
+goe-$(MODE)-$(R)x$(C)-UBC.data: goe-$(MODE)-$(R)x$(C).qcnf
+	$(SOLVE) -m s -v $(VLEVEL) -b \
+		-B goe-$(MODE)-$(R)x$(C).border \
+	        -p goe-$(MODE)-$(R)x$(C).uorder \
+	        -c goe-$(MODE)-$(R)x$(C).cluster \
+	 	-i goe-$(MODE)-$(R)x$(C).qcnf -o goe-$(MODE)-$(R)x$(C).qproof | tee goe-$(MODE)-$(R)x$(C)-UBC.data
+	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-UBC.data
+	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
 data:
 #	$(GRABBER) goe-plain-*-VBC.data > goe-plain-VBC.csv

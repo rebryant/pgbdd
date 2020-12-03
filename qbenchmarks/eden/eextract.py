@@ -37,6 +37,7 @@ class Eden:
         self.varCount = 0
         self.uvarClauses = None
         self.uvarSuccessor = None
+        self.pairCounts = None
         clauseId = 1
         for line in infile:
             line = trim(line)
@@ -47,6 +48,7 @@ class Eden:
                 try:
                     self.nrow = int(fields[1])
                     self.ncol = int(fields[3])
+                    self.mode = fields[-2]
                 except:
                     continue
             elif fields[0] == 'a':
@@ -152,8 +154,101 @@ class Eden:
             slist.append(str(e))
             print(" ".join(slist))
 
+    def plainVariableOrder(self):
+        nr = self.nrow
+        nc = self.ncol
+        for erow in range(nr+2):
+            slist = []
+            for ecol in range(nc+2):
+                if erow > 0 and erow < nr+1 and ecol > 0 and ecol < nc+1:
+                    uidx = (erow-1)*nc + (ecol-1)
+                    uvar = self.ulist[uidx]
+                    slist.append(str(uvar))
+                eidx = erow * (nc+2) + ecol
+                evar = self.elist[eidx]
+                slist.append(str(evar))
+            print(" ".join(slist))
         
-        
-            
-            
-    
+    def ninetyElements(self, erow, ecol):
+        nr = self.nrow
+        nc = self.ncol
+        hc = nc//2
+        vlist = []
+        if erow > 0 and ecol > 0:
+            uidx = (erow-1)*hc + (ecol-1)
+            uvar = self.ulist[uidx]
+            vlist.append(uvar)
+        # Upper left
+        r = erow
+        c = ecol
+        eidxul = r*(nc+2) + c
+        vlist.append(self.elist[eidxul])
+        # Lower Left 
+        r = nr-ecol+1
+        c = erow
+        eidxll = r*(nc+2) + c
+        vlist.append(self.elist[eidxll])
+        # Lower Right
+        r = nr-erow+1
+        c = nc-ecol+1
+        eidxlr = r*(nc+2) + c                
+        vlist.append(self.elist[eidxlr])
+        # Upper Right
+        r = ecol
+        c = nc-erow+1
+        eidxur = r*(nc+2) + c            
+        vlist.append(self.elist[eidxur])
+        return vlist
+
+
+    def ninetyVariableOrder(self):
+        if self.nrow %2 != 0 or self.ncol % 2 != 0:
+            sys.stderr.write("Cannot handle odd configurations\n")
+            sys.exit(1)
+        nr = self.nrow
+        nc = self.ncol
+        hr = nr//2
+        hc = nc//2
+        for erow in range(hr+1):        
+            for ecol in range(hc+1):
+                vlist = self.ninetyElements(erow, ecol)
+                slist = [str(v) for v in vlist]
+                print(" ".join(slist))
+
+    def oneeeightyElements(self, erow, ecol):
+        nr = self.nrow
+        nc = self.ncol
+        hc = nc//2
+        vlist = []
+        if erow > 0 and erow < nr+1 and ecol > 0:
+            uidx = (erow-1)*hc + (ecol-1)
+            uvar = self.ulist[uidx]
+            vlist.append(uvar)
+        # Left
+        r = erow
+        c = ecol
+        eidxl = r*(nc+2) + c
+        vlist.append(self.elist[eidxl])
+        # Right
+        r = nr-erow+1
+        c = nc-ecol+1
+        eidxr = r*(nc+2) + c
+        vlist.append(self.elist[eidxr])
+        return vlist
+
+
+    def oneEightyVariableOrder(self):
+        print("Generating")
+        if self.ncol % 2 != 0:
+            sys.stderr.write("Cannot handle odd configurations\n")
+            sys.exit(1)
+        nr = self.nrow
+        nc = self.ncol
+        hc = nc//2
+        for erow in range(nr+1):        
+            for ecol in range(hc+1):
+                vlist = self.oneeeightyElements(erow, ecol)
+                slist = [str(v) for v in vlist]
+                print(" ".join(slist))
+
+
