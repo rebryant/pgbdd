@@ -67,12 +67,12 @@ goe-$(MODE)-$(R)x$(C)-VbC.data: goe-$(MODE)-$(R)x$(C).qcnf
 
 
 data:
-	$(GRABBER) goe-plain-*-VBC.data > goe-plain-VBC.csv
-	$(GRABBER) goe-oneeighty-*-VBC.data > goe-oneeighty-VBC.csv
-	$(GRABBER) goe-ninety-*-VBC.data > goe-ninety-VBC.csv
-	$(GRABBER) goe-plain-*-vBC.data > goe-plain-vBC.csv
-	$(GRABBER) goe-plain-*-VbC.data > goe-plain-VbC.csv
-	$(GRABBER) goe-plain-*-VBc.data > goe-plain-VBc.csv
+#	$(GRABBER) goe-plain-*-VBC.data > goe-plain-VBC.csv
+#	$(GRABBER) goe-oneeighty-*-VBC.data > goe-oneeighty-VBC.csv
+#	$(GRABBER) goe-ninety-*-VBC.data > goe-ninety-VBC.csv
+#	$(GRABBER) goe-plain-*-vBC.data > goe-plain-vBC.csv
+#	$(GRABBER) goe-plain-*-VbC.data > goe-plain-VbC.csv
+#	$(GRABBER) goe-plain-*-VBc.data > goe-plain-VBc.csv
 	$(GRABBER) goe-plain-01x*-VBC.data > goe-plain-01x-VBC.csv
 	$(GRABBER) goe-plain-*x01-VBC.data > goe-plain-x01-VBC.csv
 	$(GRABBER) goe-plain-02x*-VBC.data > goe-plain-02x-VBC.csv

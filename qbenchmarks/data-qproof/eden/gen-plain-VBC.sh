@@ -92,3 +92,6 @@ make VBC MODE=plain R=24 C=01
 make VBC MODE=plain R=26 C=01
 make VBC MODE=plain R=28 C=01
 make VBC MODE=plain R=30 C=01
+
+# Harder
+make VBC MODE=plain R=03 C=06
