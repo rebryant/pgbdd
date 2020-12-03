@@ -521,7 +521,8 @@ class Solver:
             id = self.combineTerms(i, j)
             if id < 0:
                 return
-#        print("Conjunction of clauses.  Size: %d" % (self.activeIds[id].size))
+        if self.verbLevel >= 2:
+            self.writer.write("Conjunction of clauses.  Size: %d\n" % (self.activeIds[id].size))
         # Now handle all of the quantifications:
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         for level in levels:
@@ -583,6 +584,8 @@ class Solver:
         # Insert ids into lists according quantification level
         ids = sorted(self.activeIds.keys())
         for id in ids:
+            if self.verbLevel >= 2:
+                self.writer.write("Initial cluster #%d.  Size: %d\n" % (id, self.activeIds[id].size))
             self.placeInQuantBucket(buckets, id)
         for blevel in levels:
             vars, isExistential = self.quantMap[blevel]
