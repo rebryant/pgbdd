@@ -1,0 +1,41 @@
+Combined 190 clauses to form 1 clusters
+Initial cluster #379.  Size: 63
+Formula TRUE
+Input variables: 10
+Variables quantified out: 4
+Total nodes: 1806
+Total nodes removed by gc: 0
+Maximum live nodes: 1806
+Total apply operations: 6919
+Total cached results not requiring proofs: 753
+Total cached results requiring proofs: 2330
+Total cache entries removed: 0
+Total GCs performed: 0
+Results from And Operations:
+Results from Or Operations:
+  68 proofs generated
+  Avg antecedents / proof = 5.74.  Avg clauses / proof = 1.68.  Avg tries / proof = 1.81
+Results from Implication Testing Operations:
+  1997 proofs generated
+  Avg antecedents / proof = 4.32.  Avg clauses / proof = 1.50.  Avg tries / proof = 1.43
+Results from Restriction Operations:
+  277 proofs generated
+  Avg antecedents / proof = 4.09.  Avg clauses / proof = 1.35.  Avg tries / proof = 1.18
+Results from proof generation
+Total Clauses: 10423
+Input clauses: 190
+Added clauses without antecedents: 7933
+Added clauses requiring proofs: 2300
+Elapsed time for SAT: 0.21 seconds
+Read 190 clauses from file goe-plain-1x1-demo.qcnf
+PROOF SUCCESSFUL
+10423 total clauses
+9224 maximum live clauses
+Command occurences:
+     a   : 10233
+    dd   : 1811
+    dr   : 4068
+     l   : 10
+     x   : 1806
+    TOTAL: 17928
+Elapsed time for check: 0.17 seconds
