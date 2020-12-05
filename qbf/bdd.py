@@ -1029,6 +1029,8 @@ class Manager:
         if self.verbLevel >= 1:
             self.writer.write("Results from And Operations:\n")
             self.andResolver.summarize()
+            self.writer.write("Results from Or Operations:\n")
+            self.orResolver.summarize()
             self.writer.write("Results from Implication Testing Operations:\n")
             self.implyResolver.summarize()
             self.writer.write("Results from Restriction Operations:\n")
