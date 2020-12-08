@@ -25,9 +25,7 @@ def cleanClause(literalList):
             return tautologyId
         else:
             slist = slist[1:]
-    if len(slist) == 0:
-        return -tautologyId
-    elif len(slist) == 1:
+    if len(slist) <= 1:
         return slist
     else:
         nlist = [slist[0]]
@@ -198,8 +196,8 @@ class Profiler:
     def summarize(self):
         if self.prover.verbLevel <= 1:
             return
-        total = sum(self.signatureDict.values())
-        self.prover.writer.write("Chain resolution signatures:\n")
+        if len(self.signatureDict.keys()) > 0:
+            self.prover.writer.write("Chain resolution signatures:\n")
         sigList = sorted(self.signatureDict.keys())
         for sig in sigList:
             count = self.signatureDict[sig]
@@ -270,6 +268,27 @@ class VResolver:
                 self.tryCount += 1
                 if r is not None and testClauseEquality(r, targetClause):
                     return self.generateProof(r, r1, a1, r2, a2, comment)
+
+#                if len(pairList1) == 1 and len(pairList2) == 1:
+#                    if r is None:
+#                        msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
+#                        raise ResolveException(msg)
+#                    if not testClauseEquality(r, targetClause):
+#                        msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
+#                        raise ResolveException(msg)
+                
+        if self.prover.verbLevel >= 4:
+            if comment is not None:
+                print("Failing: " + comment)
+            print("Trying to generate target clause %s" % showClause(targetClause))
+            print("%d candidate clauses:" % len(ruleIndex))
+            for k in ruleIndex.keys():
+                v = ruleIndex[k]
+                if v == tautologyId:
+                    print("%s: %s: TAUTOLOGY" % (str(k), str(v)))
+                else:
+                    print("%s: %s: %s" % (str(k), str(v), showClause(self.prover.clauseDict[v])))
+                    
         msg = "Could not justify clause %s.  Tried %d combinations" % (showClause(targetClause), len(pairList1) * len(pairList2))
         raise ResolveException(msg)
 
@@ -338,20 +357,21 @@ class VResolver:
         self.prover.proofCount += 1
         self.clauseCount += 1
         if len(a1) == 1:
-            id = self.prover.createClause(r, a1 + a2, comment, isInput = False)
+            id = self.prover.proveAddResolution(r, a1 + a2, comment)
             return id, [id]
         elif len(a2) == 1:
-            id = self.prover.createClause(r, a2 + a1, comment, isInput = False)
+            id = self.prover.proveAddResolution(r, a2 + a1, comment)
             return id, [id]
         else:
-            id1 = self.prover.createClause(r1, a1, comment, isInput = False)
-            id = self.prover.createClause(r, [id1] + a2, comment = None, isInput = False)
+            id1 = self.prover.proveAddResolution(r1, a1, comment)
+            id = self.prover.proveAddResolution(r, [id1] + a2, comment = None)
             self.clauseCount += 1
             return id, [id1, id]
 
 
     def summarize(self):
         if self.prover.verbLevel >= 1 and self.runCount > 0:
+            self.prover.writer.write("  %d proofs generated\n" % self.runCount)
             antecedentAvg = float(self.antecedentCount) / float(self.runCount)
             clauseAvg = float(self.clauseCount) / float(self.runCount)
             tryAvg = float(self.tryCount) / float(self.runCount)
@@ -411,8 +431,8 @@ class AndResolver(VResolver):
 class OrResolver(VResolver):
 
     def __init__(self, prover):
-        rule1Names = ["ORH", "WHU", "UHD", "VHD"]
-        rule2Names = ["ORL", "WLU", "ULD", "VLD"]
+        rule1Names = ["ORH", "WHD", "UHU", "VHU"]
+        rule2Names = ["ORL", "WLD", "ULU", "VLU"]
         VResolver.__init__(self, prover, rule1Names, rule2Names)
         self.profiler.prefix = "ORCHAIN"
 
@@ -420,12 +440,12 @@ class OrResolver(VResolver):
     # Guaranteed that have at least one clause
     def filterClauses(self, idList, ruleIndex):
         # See if WHU or WLU is in list
-        if "WHU" in ruleIndex:
+        if "WHD" in ruleIndex:
             wid = ruleIndex["WHU"]
             id = idList[0]
             if id == wid:
                 return id
-        if "WLU" in ruleIndex:
+        if "WLD" in ruleIndex:
             wid = ruleIndex["WLU"]
             id = idList[0]
             if id == wid:
@@ -433,9 +453,9 @@ class OrResolver(VResolver):
 
         clauseDict = self.prover.clauseDict
 
-        if "UHD" in ruleIndex and "VHD" in ruleIndex:
-            uid = ruleIndex["UHD"]
-            vid = ruleIndex["VHD"]
+        if "UHU" in ruleIndex and "VHU" in ruleIndex:
+            uid = ruleIndex["UHU"]
+            vid = ruleIndex["VHU"]
             if uid == idList[0] and vid == idList[1]:
                 uclause = clauseDict[uid]
                 vclause = clauseDict[vid]
@@ -443,9 +463,9 @@ class OrResolver(VResolver):
                     return uid
                 else:
                     return vid
-        if "ULD" in ruleIndex and "VLD" in ruleIndex:
-            uid = ruleIndex["ULD"]
-            vid = ruleIndex["VLD"]
+        if "ULU" in ruleIndex and "VLU" in ruleIndex:
+            uid = ruleIndex["ULU"]
+            vid = ruleIndex["VLU"]
             if uid == idList[0] and vid == idList[1]:
                 uclause = clauseDict[uid]
                 vclause = clauseDict[vid]

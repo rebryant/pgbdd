@@ -7,44 +7,13 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-B] [-c] [-v] [-r ROOT] -n N" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
-    print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
+    print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
     print("  -c       Include corners")
     print("  -n N     Specify size of board")
 
-
-def popcount(x):
-    count = 0
-    while x != 0:
-        count += x & 1
-        x = x >> 1
-    return count
-
-def bitList(x, count):
-    ls = []
-    for i in range(count):
-        b = (x>>i) & 1
-        ls.append(b)
-    return ls
-
-# Less efficient version
-def exactlyOneOld(vars):
-    n = len(vars)
-    if n == 0:
-        return None # Can't do it
-    # Generate integer values for not = 1
-    bits = []
-    for x in range(1<<n):
-        if popcount(x) != 1:
-            bits.append(bitList(x, n))
-    # Build clauses, inverting bits
-    clauses = []
-    for blist in bits:
-        clause = [vars[i] if blist[i] == 0 else -vars[i] for i in range(n)]
-        clauses.append(clause)
-    return clauses
 
 def exactlyOne(vars):
     n = len(vars)
@@ -126,11 +95,14 @@ class Board:
     cnfWriter = None
     scheduleWriter = None
     orderWriter = None
+    bucketWriter = None
     verbose = False
     includeCorners = False
     n = None
     # What approach should be used to construct board
     doLinear = True
+    # List of variable Ids for bucket ordering
+    idList = []
 
     def __init__(self, n, rootName, verbose = False, includeCorners = False):
         self.n = n
@@ -141,10 +113,12 @@ class Board:
         self.includeCorners = includeCorners
         self.cnfWriter = writer.CnfWriter(variableCount, rootName, self.verbose)
         self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose)
+        self.bucketWriter = writer.OrderWriter(variableCount, rootName, self.verbose, suffix = "buckets")
         self.orderWriter = writer.OrderWriter(variableCount, rootName, self.verbose)
         self.idDict = {}
         self.squares = {}
         self.variableCount = 0
+        self.idList = []
 
     def nextVariable(self):
         self.variableCount += 1
@@ -261,11 +235,24 @@ class Board:
             for c in range(n):
                 self.squares[(r,c)] = Square(r, c, self.idDict)
 
+        # Generate bucket ordering
+        for c in range(n):
+            blist = []
+            for r in range(n):
+                if (r,c,True) in self.idDict:
+                    blist.append(self.idDict[(r,c,True)])
+            for r in range(n):
+                if (r,c,False) in self.idDict:
+                    blist.append(self.idDict[(r,c,False)])
+            self.bucketWriter.doOrder(blist)
+
+
         self.constructBoard()
 
     def finish(self):
         self.cnfWriter.finish()
         self.orderWriter.finish()
+        self.bucketWriter.finish()
         self.scheduleWriter.finish()
                            
 def run(name, args):

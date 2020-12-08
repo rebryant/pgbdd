@@ -13,37 +13,10 @@ class BddException(Exception):
     def __str__(self):
         return "BDD Exception: " + str(self.value)
 
-# Place holder to allow program to run without proving anything
-class DummyProver:
-
-    doLrat = False
-    clauseCount = 0
-    writer = None
-
-    def __init__(self, fname = None):
-        self.clauseCount = 0
-        self.writer = sys.stderr
-
-    def comment(self, comment):
-        pass
-
-    def createClause(self, result, antecedent, comment = None):
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            return result
-        self.clauseCount += 1
-        return self.clauseCount
-
-    def emitProof(self, proof, ruleIndex, comment = None):
-        self.clauseCount += 1
-        return self.clauseCount
-
-    def fileOutput(self):
-        return False
-
 # Object that is part of quantification sequence.
 # Position defined by combination of qindex and qlevel
 # Also have quantifier type
+# Quantifier levels are odd for input variables and even for extension variables
 class Quantified:
     qindex = 0
     qlevel = 0
@@ -64,7 +37,7 @@ class Variable(Quantified):
     leafLevel = -1 # Special value
     id = None # Serves as identity of resolution variable
 
-    def __init__(self, level, name = None, id = None, existential = True):
+    def __init__(self, level, qlevel, name = None, id = None, existential = True):
         self.level = level
         if id is None:
             self.id = level
@@ -75,7 +48,7 @@ class Variable(Quantified):
         if name is None:
             name = "var-%d" % level
         self.name = str(name)
-        Quantified.__init__(self, id, id, existential)
+        Quantified.__init__(self, id, qlevel, existential)
 
     def __eq__(self, other):
         return self.level == other.level
@@ -128,7 +101,7 @@ class LeafNode(Node):
 
     def __init__(self, value):
         id = resolver.tautologyId if value == 1 else -resolver.tautologyId        
-        Node.__init__(self, id, Variable(Variable.leafLevel, "Leaf"))
+        Node.__init__(self, id, Variable(Variable.leafLevel, 0, "leaf-%d" % value))
         self.value = value
         self.inferValue = self.id
         Quantified.__init__(self, id, 0, False)
@@ -156,28 +129,31 @@ class VariableNode(Node):
     inferTrueUp = None
     inferFalseUp = None
     inferTrueDown = None
-    inferTrueDown = None
+    inferFalseDown = None
     
     def __init__(self, id, variable, high, low, prover):
         Node.__init__(self, id, variable)
         self.high = high
         self.low = low
-        qlevel = max(variable.qlevel, high.qlevel, low.qlevel)
+        # Extension variable must be at higher level than node variable
+        # and at least as high as children
+        qlevel = max(variable.qlevel+1, high.qlevel, low.qlevel)
         Quantified.__init__(self, id, qlevel, True)
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        # id should be first literal in clause for some proof checkers
-        self.inferTrueUp = prover.createClause([id, -vid, -hid], [], "ITE assertions for node %s" % self.label())
-        self.inferFalseUp = prover.createClause([id, vid, -lid], [])
-        antecedents = []
-        if prover.doLrat:
-            if self.inferTrueUp != resolver.tautologyId:
-                antecedents.append(-self.inferTrueUp)
-            if self.inferFalseUp != resolver.tautologyId:
-                antecedents.append(-self.inferFalseUp)
-        self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents)
-        self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents)
+        hname = "ONE" if hid == resolver.tautologyId else "ZERO" if hid == -resolver.tautologyId else "N%d" % hid
+        lname = "ONE" if lid == resolver.tautologyId else "ZERO" if lid == -resolver.tautologyId else "N%d" % lid
+        prover.proveExtend(id, qlevel, "Define extension variable for node %s = ITE(%d, %s, %s).  Qlevel=%d" % (self.label(), vid, hname, lname, self.qlevel))
+        blockers = []
+        self.inferTrueUp = prover.proveAddBlocked([id, -vid, -hid], blockers, "ITE assertions for node %s" % self.label())
+        self.inferFalseUp = prover.proveAddBlocked([id, vid, -lid], blockers)
+        if self.inferTrueUp != resolver.tautologyId:
+            blockers.append(-self.inferTrueUp)
+        if self.inferFalseUp != resolver.tautologyId:
+            blockers.append(-self.inferFalseUp)
+        self.inferTrueDown = prover.proveAddBlocked([-id, -vid, hid], blockers)
+        self.inferFalseDown = prover.proveAddBlocked([-id, vid, lid], blockers)
 
     def isLeaf(self):
         return False
@@ -232,8 +208,9 @@ class Manager:
     # How many quantifications had been performed by last GC?
     lastGC = 0
     # How many variables should be quantified to trigger GC?
-    gcThreshold = 10
-    # Dictionary mapping variables to their IDs
+    gcThreshold = 4
+    # Dictionary mapping variables to their IDs.
+    # Used to determine when to trigger GC
     quantifiedVariableSet = None
     # Statistics
     cacheJustifyAdded = 0
@@ -247,7 +224,6 @@ class Manager:
     gcCount = 0
 
     def __init__(self, prover = None, rootGenerator = None, nextNodeId = 0, verbLevel = 1):
-
         self.verbLevel = verbLevel
         self.prover = DummyProver() if prover is None else prover
         self.writer = self.prover.writer
@@ -274,11 +250,12 @@ class Manager:
         self.nodesRemoved = 0
         self.gcCount = 0
 
-    def newVariable(self, name, id = None):
+    def newVariable(self, qlevel, name, id = None, existential = False):
         level = len(self.variables) + 1
-        var = Variable(level, name, id)
+        var = Variable(level, qlevel, name, id, existential)
         self.variables.append(var)
         self.variableCount += 1
+        self.prover.idToQlevel[id] = qlevel
         return var
         
     def findOrMake(self, variable, high, low):
@@ -287,6 +264,7 @@ class Manager:
             return self.uniqueTable[key]
         else:
             node = VariableNode(self.nextNodeId, variable, high, low, self.prover)
+            self.prover.idToQlevel[node.id] = node.qlevel
             self.nextNodeId += 1
             self.uniqueTable[key] = node
             self.nodeCount += 1
@@ -298,6 +276,10 @@ class Manager:
             return self.findOrMake(variable, self.leaf1, self.leaf0)
         else:
             return self.findOrMake(variable, self.leaf0, self.leaf1)
+
+    # Is a literal positive or negative
+    def isPositive(self, literal):
+        return literal.high == self.leaf1 and literal.low == self.leaf0
 
     def buildClause(self, literalList):
         lits = sorted(literalList, key=lambda n: -n.variable.level)
@@ -321,7 +303,7 @@ class Manager:
                 if node.high != self.leaf0:
                     antecedents.append(node.inferTrueUp)
         antecedents.append(clauseId)
-        validation = self.prover.createClause([root.id], antecedents, "Validate clause %d entails BDD %d" % (clauseId, root.id))
+        validation = self.prover.proveAddResolution([root.id], antecedents, "Validate clause %d entails node N%d" % (clauseId, root.id))
         return root, validation
 
     # Construct BDD representation of clause
@@ -332,19 +314,15 @@ class Manager:
         lits.reverse()
         # List antecedents in reverse order of resolution steps
         antecedents = []
-        # TODO: Need to change logic here
         for node in lits:
             positive = node.high == self.leaf1
             if positive:
-                antecedents.append(node.inferTrueDown)
-                if node.low != self.leaf0:
-                    antecedents.append(node.inferFalseDown)
-            else:
                 antecedents.append(node.inferFalseDown)
-                if node.high != self.leaf0:
-                    antecedents.append(node.inferTrueDown)
-        antecedents.append(root.id)
-        validation = self.prover.createClause([clauseId], antecedents, "Validate BDD %d entails clause %d" % (root.id, clauseId))
+            else:
+                antecedents.append(node.inferTrueDown)
+        validation = self.prover.proveAdd([root.id], "Assert unit clause for N%d" % root.id)
+        antecedents.append(validation)
+        self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
         return root, validation
     
     def deconstructClause(self, clause):
@@ -377,6 +355,15 @@ class Manager:
                 vlist.append(v)
         lits = [self.literal(v, 1) for v in  vlist]
         return self.buildClause(lits)
+
+    def getSupportIds(self, node):
+        varDict = self.buildInformation(node, lambda n: n.variable.id, {})
+        fullList = sorted(varDict.values())
+        ilist = []
+        for id in fullList:
+            if (len(ilist) == 0 or ilist[-1] != id) and id > 0:
+                ilist.append(id)
+        return ilist
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
@@ -457,7 +444,6 @@ class Manager:
         return stringList
 
     # Return node + id of clause justifying that nodeA & NodeB ==> result
-    # Justification is None if it would be tautology
     def applyAndJustify(self, nodeA, nodeB):
         self.applyCount += 1
         # Constant cases.
@@ -533,7 +519,7 @@ class Manager:
             nodeA, nodeB = nodeB, nodeA
         key = ("andnj", nodeA.id, nodeB.id)
         if key in self.operationCache:
-            return self.operationCache[key]
+            return self.operationCache[key][0]
 
         # Mapping from variable names to variable numbers
         splitVar = min(nodeA.variable, nodeB.variable)
@@ -550,7 +536,7 @@ class Manager:
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
 
-        self.operationCache[key] = newNode
+        self.operationCache[key] = (newNode, resolver.tautologyId, [])
         return newNode
 
     def applyNot(self, node):
@@ -567,7 +553,10 @@ class Manager:
         low = node.low
         newHigh = self.applyNot(high)
         newLow = self.applyNot(low)
-        newNode = self.findOrMake(var, newHigh, newLow)
+        if newHigh == newLow:
+            newNode = newNode
+        else:
+            newNode = self.findOrMake(var, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
@@ -605,7 +594,6 @@ class Manager:
         return newNode
 
     # Return node + id of clause justifying that result ==> nodeA | NodeB
-    # Justification is None if it would be tautology
     def applyOrJustify(self, nodeA, nodeB):
         self.applyCount += 1
         # Constant cases.
@@ -635,11 +623,11 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UHU"] = nodeA.inferTrueUp
+            ruleIndex["ULU"] = nodeA.inferFalseUp
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.inferTrueDown
-            ruleIndex["VLD"] = nodeB.inferFalseDown
+            ruleIndex["VHU"] = nodeB.inferTrueUp
+            ruleIndex["VLU"] = nodeB.inferFalseUp
 
         (newHigh, orHigh) = self.applyOrJustify(highA, highB)
         ruleIndex["ORH"] = orHigh
@@ -651,8 +639,8 @@ class Manager:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
-            ruleIndex["WHU"] = newNode.inferTrueUp
-            ruleIndex["WLU"] = newNode.inferFalseUp
+            ruleIndex["WHD"] = newNode.inferTrueDown
+            ruleIndex["WLD"] = newNode.inferFalseDown
 
         targetClause = resolver.cleanClause([-newNode.id, nodeA.id, nodeB.id])
         if targetClause == resolver.tautologyId:
@@ -763,12 +751,16 @@ class Manager:
             fun = operator(fun, n)
         return fun
 
+    # Indicate that variable has been quantified
+    def markQuantified(self, variable):
+        self.quantifiedVariableSet.add(variable)        
+
     # Use clause to provide canonical list of nodes.  Should all be positive
     def equant(self, node, clause, topLevel = True):
         if topLevel:
             nextc = clause
             while not nextc.isLeaf():
-                self.quantifiedVariableSet.add(nextc.variable)
+                self.markQuantified(nextc.variable)
                 nextc = nextc.low
         if node.isLeaf():
             return node
@@ -784,7 +776,12 @@ class Manager:
         newHigh = self.equant(node.high, clause, topLevel = False)
         newLow = self.equant(node.low, clause, topLevel = False)
         quant = node.variable == clause.variable
-        newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
+        if newHigh == newLow:
+            newNode = newHigh
+        elif quant:
+            newNode = self.applyOr(newHigh, newLow) 
+        else:
+            newNode = self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
@@ -794,7 +791,7 @@ class Manager:
         if topLevel:
             nextc = clause
             while not nextc.isLeaf():
-                self.quantifiedVariableSet.add(nextc.variable)
+                self.markQuantified(nextc.variable)
                 nextc = nextc.low
         if node.isLeaf():
             return node
@@ -810,15 +807,21 @@ class Manager:
         newHigh = self.uquant(node.high, clause, topLevel = False)
         newLow = self.uquant(node.low, clause, topLevel = False)
         quant = node.variable == clause.variable
-        newNode = self.applyAnd(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
+        
+        if newHigh == newLow:
+            newNode = newHigh
+        elif quant:
+            newNode = self.applyAnd(newHigh, newLow) 
+        else:
+            newNode = self.findOrMake(node.variable, newHigh, newLow)
+
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode
 
     # Compute restriction on node.
     # Variable and phase indicated by literal node
-    # Generate justification that literal & node  --> newNode
-    # For up: Generate justification that literal & newNode --> node
+    # Generate justification that (literal &) node  --> newNode
     def applyRestrictDown(self, u, literal):
         if u.isLeaf():
             return (u, resolver.tautologyId)
@@ -829,7 +832,7 @@ class Manager:
             return (u, resolver.tautologyId)
         elif rvar == nvar:
             result = u.high if phase1 else u.low
-            just = u.inferHighDown if phase1 else u.inferLowDown
+            just = u.inferTrueDown if phase1 else u.inferFalseDown
             return (result, just)
         
         key = ("resdown", u.id, literal.id)
@@ -838,9 +841,9 @@ class Manager:
 
         ruleIndex = { }
         uhigh = u.high
-        ruleIndex["UHX"] = u.inferHighDown
+        ruleIndex["UHX"] = u.inferTrueDown
         ulow = u.low
-        ruleIndex["ULX"] = u.inferLowDown
+        ruleIndex["ULX"] = u.inferFalseDown
 
         (vhigh, resHigh) = self.applyRestrictDown(uhigh, literal)
         ruleIndex["RESH"] = resHigh
@@ -859,13 +862,23 @@ class Manager:
         if targetClause == resolver.tautologyId:
             justification, clauseList = resolver.tautologyId, []
         else:
-            comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, u.label(), v.label())
-            justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            try:
+                comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, u.label(), v.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            except resolver.ResolveException:
+#                print("Degeneracy encountered.  Couldn't prove '%s'" % comment)
+#                print("Clauses available:")
+#                for k in ruleIndex.keys():
+#                    print("  %s: %s" % (k, str(ruleIndex[k])))
+                targetClause = resolver.cleanClause([-u.id, v.id])
+                comment = "Degenerate restriction.  Justification that %s ==> %s" % (u.label(), v.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+#                print("Degeneracy resolved.  Proved '%s'" % comment)
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
 
-        # Compute restriction on node.
+    # Compute restriction on node.
     # Variable and phase indicated by literal node
     # Generate justification that literal & newNode --> node
     def applyRestrictUp(self, u, literal):
@@ -878,7 +891,7 @@ class Manager:
             return (u, resolver.tautologyId)
         elif rvar == nvar:
             result = u.high if phase1 else u.low
-            just = u.inferHighUp if phase1 else u.inferLowUp
+            just = u.inferTrueUp if phase1 else u.inferFalseUp
             return (result, just)
         
         key = ("resup", u.id, literal.id)
@@ -887,9 +900,9 @@ class Manager:
 
         ruleIndex = { }
         uhigh = u.high
-        ruleIndex["UHX"] = u.inferHighUp
+        ruleIndex["UHX"] = u.inferTrueUp
         ulow = u.low
-        ruleIndex["ULX"] = u.inferLowUp
+        ruleIndex["ULX"] = u.inferFalseUp
 
         (vhigh, resHigh) = self.applyRestrictUp(uhigh, literal)
         ruleIndex["RESH"] = resHigh
@@ -908,18 +921,30 @@ class Manager:
         if targetClause == resolver.tautologyId:
             justification, clauseList = resolver.tautologyId, []
         else:
-            comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, v.label(), u.label())
-            justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            try:
+                comment = "Justification that %s%s & %s ==> %s" % ("" if phase1 else "!", rvar.name, v.label(), u.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+            except resolver.ResolveException:
+#                print("Degeneracy encountered.  Couldn't prove '%s'" % comment)
+#                print("Clauses available:")
+#                for k in ruleIndex.keys():
+#                    print("  %s: %s" % (k, str(ruleIndex[k])))
+                targetClause = resolver.cleanClause([u.id, -v.id])
+                comment = "Degenerate restriction.  Justification that %s ==> %s" % (v.label(), u.label())
+                justification, clauseList = self.restrictResolver.run(targetClause, ruleIndex, comment)
+                # Record this for use by the prover
+                self.prover.restrictDegeneracies.add(justification)
+#                print("Degeneracy resolved.  Proved '%s'" % comment)
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
 
     
     # Should a GC be triggered?
-    def checkGC(self):
+    def checkGC(self, generateClauses = True):
         newQuants = len(self.quantifiedVariableSet) - self.lastGC
         if newQuants > self.gcThreshold:
-            return self.collectGarbage()
+            return self.collectGarbage(generateClauses)
         return []
 
 
@@ -939,7 +964,7 @@ class Manager:
                 frontier.append(node.low)
         return markedSet
 
-    def cleanCache(self, markedSet):
+    def cleanCache(self, markedSet, generateClauses):
         clauseList = []
         markedIds = set([node.id for node in markedSet])
         klist = list(self.operationCache.keys())
@@ -949,22 +974,24 @@ class Manager:
             for id in k[1:]:
                 kill = kill or id not in markedIds
             if kill:
-                clist = self.operationCache[k][2]
-                clauseList += clist
+                if generateClauses:
+                    clist = self.operationCache[k][2]
+                    clauseList += clist
                 self.cacheRemoved += 1
                 del self.operationCache[k]
         return clauseList
         
-    def cleanNodes(self, markedSet):
+    def cleanNodes(self, markedSet, generateClauses):
         clauseList = []
         klist = list(self.uniqueTable.keys())
         for k in klist:
             node = self.uniqueTable[k]
             # If node is marked, then its children will be, too
             if node not in markedSet:
-                clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
-                clist = [c for c in clist if abs(c) != resolver.tautologyId]
-                clauseList += clist
+                if generateClauses:
+                    clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
+                    clist = [c for c in clist if abs(c) != resolver.tautologyId]
+                    clauseList += clist
                 self.nodesRemoved += 1
                 del self.uniqueTable[k]
         return clauseList
@@ -972,15 +999,15 @@ class Manager:
 
     # Start garbage collection.
     # Provided with partial list of accessible roots
-    def collectGarbage(self):
+    def collectGarbage(self, generateClauses):
         frontier = []
         if self.rootGenerator is not None:
             frontier += self.rootGenerator()
         frontier = [r for r in frontier if not r.isLeaf()]
         # Marking phase
         markedSet = self.doMarking(frontier)
-        clauseList = self.cleanCache(markedSet)
-        clauseList += self.cleanNodes(markedSet)
+        clauseList = self.cleanCache(markedSet, generateClauses)
+        clauseList += self.cleanNodes(markedSet, generateClauses)
         # Turn off trigger for garbage collection
         self.lastGC = len(self.quantifiedVariableSet)
         self.gcCount += 1
@@ -1002,8 +1029,12 @@ class Manager:
         if self.verbLevel >= 1:
             self.writer.write("Results from And Operations:\n")
             self.andResolver.summarize()
+            self.writer.write("Results from Or Operations:\n")
+            self.orResolver.summarize()
             self.writer.write("Results from Implication Testing Operations:\n")
             self.implyResolver.summarize()
+            self.writer.write("Results from Restriction Operations:\n")
+            self.restrictResolver.summarize()
         if self.verbLevel >= 1:
             self.writer.write("Results from proof generation\n")
             self.prover.summarize()

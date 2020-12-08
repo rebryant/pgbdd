@@ -10,6 +10,7 @@ RANDOMIZER = ../../randomizer.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
+VGRABBER = ../../grab_verification.py
 EXTENSION = lratb
 
 io: urquhart-simon-$(M)-$(SEED)-inputorder.data
@@ -42,6 +43,12 @@ urquhart-simon-$(M)-$(SEED)-linear.data:
 data:
 	$(GRABBER) urquhart-simon-*-randomorder.data > urquhart-simon-randomorder.csv
 	$(GRABBER) urquhart-simon-*-linear.data > urquhart-simon-linear.csv
+
+vdata:
+	$(VGRABBER) urquhart-simon-*-randomorder.data > urquhart-simon-randomorder-verification.csv
+	$(VGRABBER) urquhart-simon-*-linear.data > urquhart-simon-linear-verification.csv
+
+
 clean:
 	rm -f *~
 

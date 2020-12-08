@@ -13,9 +13,10 @@ import stream
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-b] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-m t|b|p] [-p PERMUTE] [-s SCHEDULE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-m t|b|p] [-p PERMUTE] [-s SCHEDULE] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -b          Process terms via bucket elimination\n")
+    sys.stderr.write("  -b          Process terms via bucket elimination ordered by variable levels\n")
+    sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)\n")
@@ -85,12 +86,15 @@ class CnfReader():
             line = trim(line)
             if len(line) == 0:
                 continue
+            fields = line.split()
+            if len(fields) == 0:
+                continue
             elif line[0] == 'c':
                 if self.verbLevel > 1:
                     self.commentLines.append(line)
             elif line[0] == 'p':
                 fields = line[1:].split()
-                if fields[0] != 'cnf':
+                if len(fields) != 3 or fields[0] != 'cnf':
                     raise CnfException("Line %d.  Bad header line '%s'.  Not cnf" % (lineNumber, line))
                 try:
                     self.nvar = int(fields[1])
@@ -218,6 +222,19 @@ class Permuter:
     def __len__(self):
         return len(self.forwardMap)
         
+    def permMin(self, v1, v2):
+        pv1 = self.reverse(v1)
+        pv2 = self.reverse(v2)
+        return v1 if pv1 < pv2 else v2
+
+    def permMinList(self, ls):
+        if len(ls) == 0:
+            return None
+        m = ls[0]
+        for v in ls[1:]:
+            m = self.permMin(v, m)
+        return m
+
 class ProverException(Exception):
 
     def __init__(self, value):
@@ -362,9 +379,6 @@ class Solver:
 
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
-    # Dictionary of terms stored for later reuse.  Track so that don't get GCed
-    storeTerms = {}
-    # Dictionary of Ids of terms that are stored for reuse
     unsat = False
     permuter = None
     prover = None
@@ -384,8 +398,6 @@ class Solver:
             self.writer.write("Aborted: %s\n" % str(ex))
             raise ex
         clauseCount = 0
-        for line in reader.commentLines:
-            self.prover.comment(line)
         # Print input clauses
         for clause in reader.clauses:
             clauseCount += 1
@@ -466,13 +478,6 @@ class Solver:
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
         return self.termCount
-
-    # Allow temporary storage of Ids for reuse
-    def storeTerm(self, id):
-        self.storeTerms[id] = self.activeIds[id]
-
-    def unstoreTerm(self, id):
-        del self.storeTerms[id]
 
     def runNoSchedule(self):
         nid = 0
@@ -562,6 +567,8 @@ class Solver:
         for id in ids:
             self.placeInBucket(buckets, id)
         for blevel in range(0, maxLevel + 1):
+            if self.verbLevel >= 3:
+                self.writer.write("Working on bucket for level %d.  %d items\n" % (blevel, len(buckets[blevel])))
             # Conjunct all terms in bucket
             while len(buckets[blevel]) > 1:
                 id1 = buckets[blevel][0]
@@ -583,9 +590,57 @@ class Solver:
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
 
+        term = self.activeIds[id]
+        level = term.root.variable.level
+        if level == bdd.Variable.leafLevel:
+            buckets[0].append(id)
+        else:
+            buckets[level].append(id)
+
+    def placeInBucketPerm(self, buckets, id, bperm):
+        term = self.activeIds[id]
+        if term.root.variable.level == bdd.Variable.leafLevel:
+            buckets[0].append(id)
+        else:
+            idList = self.manager.getSupportIds(term.root)
+            vid = bperm.permMinList(idList)
+            bid = bperm.reverse(vid)
+            buckets[bid].append(id)
+
+    # Bucket elimination using permuted list of Ids to order buckets
+    def runBucketSchedulePerm(self, bperm):
+        maxBid = len(self.manager.variables)
+        buckets = { bid : [] for bid in range(0, maxBid + 1) }
+        # Insert ids into lists according to top variable in BDD
+        ids = sorted(self.activeIds.keys())
+        for id in ids:
+            self.placeInBucketPerm(buckets, id, bperm)
+        for bid in range(0, maxBid + 1):
+            vid = 0 if bid == 0 else bperm.forward(bid)
+            if self.verbLevel >= 3:
+                self.writer.write("Working on bucket %d (variable Id %d).  %d items\n" % (bid, vid, len(buckets[bid])))
+            # Conjunct all terms in bucket
+            while len(buckets[bid]) > 1:
+                id1 = buckets[bid][0]
+                id2 = buckets[bid][1]
+                buckets[bid] = buckets[bid][2:]
+                newId = self.combineTerms(id1, id2)
+                if newId < 0:
+                    # Hit unsat case
+                    return
+                self.placeInBucketPerm(buckets, newId, bperm)
+            # Quantify variable for this bucket
+            if bid > 0 and len(buckets[bid]) > 0:
+                id = buckets[bid][0]
+                buckets[bid] = []
+                newId = self.quantifyTerm(id, [vid])
+                self.placeInBucketPerm(buckets, newId, bperm)
+        if self.verbLevel >= 0:
+            self.writer.write("SAT\n")
+
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
-        rootList = [t.root for t in self.activeIds.values()] + [t.root for t in self.storeTerms.values()]
+        rootList = [t.root for t in self.activeIds.values()]
         return rootList
 
 def readPermutation(fname, writer = None):
@@ -650,18 +705,23 @@ def run(name, args):
     doLrat = False
     doBinary = False
     permuter = None
+    bpermuter = None
     doBucket = False
     scheduler = None
     verbLevel = 1
     logName = None
 
-    optlist, args = getopt.getopt(args, "hbv:i:o:m:p:s:L:")
+    optlist, args = getopt.getopt(args, "hbB:v:i:o:m:p:s:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         if opt == '-b':
             doBucket = True
+        elif opt == '-B':
+            bpermuter = readPermutation(val)
+            if bpermuter is None:
+                return
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -696,8 +756,11 @@ def run(name, args):
 
     writer = stream.Logger(logName)
 
-    if doBucket and scheduler is not None:
+    if (doBucket or bpermuter is not None) and scheduler is not None:
         writer.write("Cannot have both bucket scheduling and defined scheduler\n")
+        return
+    if (doBucket and bpermuter is not None):
+        writer.write("Cannot do bucket scheduling on levels and with defined permutation\n")
         return
 
     try:
@@ -710,6 +773,8 @@ def run(name, args):
     solver = Solver(cnfName, prover = prover, permuter = permuter, verbLevel = verbLevel)
     if doBucket:
         solver.runBucketSchedule()
+    elif bpermuter is not None:
+        solver.runBucketSchedulePerm(bpermuter)
     elif scheduler is not None:
         solver.runSchedule(scheduler)
     else:

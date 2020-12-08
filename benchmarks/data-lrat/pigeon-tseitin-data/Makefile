@@ -6,6 +6,7 @@ GENERATOR = $(INTERP) ../../pigeon-sinz.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
+VGRABBER = ../../grab_verification.py
 EXTENSION = lrat
 
 c: pigeon-tseitin-$(N)-column.data
@@ -37,6 +38,11 @@ data:
 	$(GRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket.csv
 	$(GRABBER) pigeon-*-column.data > pigeon-tseitin-column.csv
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
+
+vdata:
+	$(VGRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket-verification.csv
+	$(VGRABBER) pigeon-*-column.data > pigeon-tseitin-column-verification.csv
+	$(VGRABBER) pigeon-*-linear.data > pigeon-tseitin-linear-verification.csv
 
 clean:
 	rm -f *~

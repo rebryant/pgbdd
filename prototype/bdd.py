@@ -149,16 +149,27 @@ class VariableNode(Node):
         hid = self.high.id
         lid = self.low.id
         # id should be first literal in clause for some proof checkers
-        self.inferTrueUp = prover.createClause([id, -vid, -hid], [], "ITE assertions for node %s" % self.label())
-        self.inferFalseUp = prover.createClause([id, vid, -lid], [])
+        if prover.verbLevel >= 3:
+            mhu = "ITE assertion for node %s: HU" % self.label()
+            mlu = "ITE assertion for node %s: LU" % self.label()            
+            mhd = "ITE assertion for node %s: HD" % self.label()
+            mld = "ITE assertion for node %s: LD" % self.label()
+        else:
+            mhu = "ITE assertions for node %s"  % self.label()
+            mlu = None
+            mhd = None
+            mld = None
+            
+        self.inferTrueUp = prover.createClause([id, -vid, -hid], [], mhu)
+        self.inferFalseUp = prover.createClause([id, vid, -lid], [], mlu)
         antecedents = []
         if prover.doLrat:
             if self.inferTrueUp != resolver.tautologyId:
                 antecedents.append(-self.inferTrueUp)
             if self.inferFalseUp != resolver.tautologyId:
                 antecedents.append(-self.inferFalseUp)
-        self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents)
-        self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents)
+        self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents, mhd)
+        self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents, mld)
 
     def isLeaf(self):
         return False
@@ -329,6 +340,15 @@ class Manager:
                 vlist.append(v)
         lits = [self.literal(v, 1) for v in  vlist]
         return self.buildClause(lits)
+
+    def getSupportIds(self, node):
+        varDict = self.buildInformation(node, lambda n: n.variable.id, {})
+        fullList = sorted(varDict.values())
+        ilist = []
+        for id in fullList:
+            if (len(ilist) == 0 or ilist[-1] != id) and id > 0:
+                ilist.append(id)
+        return ilist
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
@@ -675,8 +695,11 @@ class Manager:
 
         newHigh = self.equant(node.high, clause, topLevel = False)
         newLow = self.equant(node.low, clause, topLevel = False)
-        quant = node.variable == clause.variable
-        newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
+        if newHigh == newLow:
+            newNode = newHigh
+        else:
+            quant = node.variable == clause.variable
+            newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
         self.operationCache[key] = (newNode, resolver.tautologyId,[])
         self.cacheNoJustifyAdded += 1
         return newNode

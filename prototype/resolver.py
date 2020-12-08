@@ -269,6 +269,14 @@ class VResolver:
                 self.tryCount += 1
                 if r is not None and testClauseEquality(r, targetClause):
                     return self.generateProof(r, r1, a1, r2, a2, comment)
+        if self.prover.verbLevel >= 3:
+            if comment is not None:
+                print("Failing: " + comment)
+            print("Trying to generate target clause %s" % showClause(targetClause))
+            print("%d candidate clauses:" % len(ruleIndex))
+            for k in ruleIndex.keys():
+                v = ruleIndex[k]
+                print("%s: %s: %s" % (str(k), str(v), showClause(self.prover.clauseDict[v])))
         msg = "Could not justify clause %s.  Tried %d combinations" % (showClause(targetClause), len(pairList1) * len(pairList2))
         raise ResolveException(msg)
 
@@ -346,6 +354,7 @@ class VResolver:
         else:
             id1 = self.prover.createClause(r1, a1, comment, isInput = False)
             id = self.prover.createClause(r, [id1] + a2, comment = None, isInput = False)
+            self.prover.proofCount += 1
             self.clauseCount += 1
             return id, [id1, id]
 

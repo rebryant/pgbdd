@@ -10,6 +10,7 @@ SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 UPLOADER = ../../../pcaas/upload
 GRABBER = ../../grab_clauses.py
+VGRABBER = ../../grab_verification.py
 DGRABBER = ./grab_drat.py
 EXTENSION = lrat
 HOST = whaleshark.ics.cs.cmu.edu
@@ -75,10 +76,16 @@ chew-$(N)-noquant-pipe.data:
 		 | $(UPLOADER) -m $(PMODE) -H $(HOST) -c chew-$(N)-noquant-pipe.cnf | tee -a chew-$(N)-noquant-pipe.data
 
 data:
-	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
 	$(GRABBER) chew*-inputorder.data > chew-inputorder.csv
+	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
 	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-drat.csv
 	$(GRABBER) chew*-noquant.data > chew-noquant.csv
+
+vdata:
+	$(VGRABBER) chew*-inputorder.data > chew-inputorder-verification.csv
+	$(VGRABBER) chew-*-randomorder.data > chew-randomorder-verification.csv
+	$(VGRABBER) chew*-noquant.data > chew-noquant-verification.csv
+
 clean:
 	rm -f *~
 

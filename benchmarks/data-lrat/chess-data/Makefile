@@ -16,12 +16,15 @@ ns: chess-$(N)-noschedule.data
 
 b: chess-$(N)-bucket.data
 
+gb: chess-$(N)-gbucket.data
+
 chess-$(N)-column.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-column | tee chess-$(N)-column.data
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-column.cnf -s chess-$(N)-column.schedule \
 		-p chess-$(N)-column.order -o chess-$(N)-column.$(EXTENSION) 2>&1 | tee -a chess-$(N)-column.data
 	$(CHECKER) chess-$(N)-column.cnf chess-$(N)-column.$(EXTENSION) | tee -a chess-$(N)-column.data
-#	rm -f chess-$(N)-column.$(EXTENSION)
+	rm -f chess-$(N)-column.$(EXTENSION)
+
 
 chess-$(N)-noquant.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-noquant | tee chess-$(N)-noquant.data
@@ -45,9 +48,18 @@ chess-$(N)-bucket.data:
 	$(CHECKER) chess-$(N)-bucket.cnf chess-$(N)-bucket.$(EXTENSION) | tee -a chess-$(N)-bucket.data
 	rm -f chess-$(N)-bucket.$(EXTENSION)
 
+chess-$(N)-gbucket.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-gbucket | tee chess-$(N)-gbucket.data
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-gbucket.cnf -B chess-$(N)-gbucket.buckets \
+		-p chess-$(N)-gbucket.order -o chess-$(N)-gbucket.$(EXTENSION) 2>&1 | tee -a chess-$(N)-gbucket.data
+	$(CHECKER) chess-$(N)-gbucket.cnf chess-$(N)-gbucket.$(EXTENSION) | tee -a chess-$(N)-gbucket.data
+	rm -f chess-$(N)-gbucket.$(EXTENSION)
+
+
 data:
-	$(GRABBER) chess-???.data > chess-columnscan.csv
+	$(GRABBER) chess-*-column.data > chess-column.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
+	$(GRABBER) chess-*-gbucket.data > chess-gbucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv
 	$(GRABBER) chess-*-noschedule.data > chess-noschedule.csv
 
@@ -55,4 +67,4 @@ clean:
 	rm -f *~
 
 superclean: clean
-	rm -f *.cnf *.lrat *.lratb *.data *.order *.schedule
+	rm -f *.cnf *.lrat *.lratb *.data *.order *.schedule *.buckets

@@ -1,0 +1,13 @@
+c 2-input Xor
+c With falsifying quantification
+c a: 1, b:2, out:3
+p cnf 3 4
+e 1 0
+a 3 2 0
+-1 -2  -3 0
+-1  2  3 0
+ 1 -2  3 0
+ 1  2 -3 0
+
+ 
+
