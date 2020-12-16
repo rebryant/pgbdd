@@ -7,7 +7,7 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-B] [-c] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
