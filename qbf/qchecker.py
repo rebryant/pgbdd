@@ -726,6 +726,14 @@ class Prover:
     def diffLists(self, ls1, ls2):
         ls1 = sorted(ls1)
         ls2 = sorted(ls2)
+
+        # First do quick check for equality
+        if len(ls1) == len(ls2):
+            mmlist = [1 if a != b else 0 for a,b in zip(ls1, ls2)]
+            if sum(mmlist) == 0:
+                return ([],[])
+
+        # Nontrivial difference
         ls1not2 = []
         ls2not1 = []
         idx1 = 0
@@ -744,8 +752,10 @@ class Prover:
                 idx2 += 1
         while idx1 < len(ls1):
             ls1not2.append(ls1[idx1])
+            idx1 += 1
         while idx2 < len(ls2):
             ls2not1.append(ls2[idx2])
+            idx2 += 1
         return (ls1not2, ls2not1)
 
     # Make sure shifted variables compatible with original
