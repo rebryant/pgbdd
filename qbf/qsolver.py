@@ -584,7 +584,7 @@ class Solver:
         # Insert ids into lists according quantification level
         ids = sorted(self.activeIds.keys())
         for id in ids:
-            if self.verbLevel >= 2:
+            if self.verbLevel >= 3:
                 self.writer.write("Initial cluster #%d.  Size: %d\n" % (id, self.activeIds[id].size))
             self.placeInQuantBucket(buckets, id)
         for blevel in levels:
