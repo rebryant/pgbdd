@@ -16,7 +16,7 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-i CNF] [-o file.{qrat,qproof}] [-m (s|r)] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (s|r)] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -m MODE     Set proof mode (s = satisfaction, r = refutation)\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")

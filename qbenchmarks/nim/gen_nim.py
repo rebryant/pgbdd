@@ -7,13 +7,16 @@ import writer
 
 
 def usage(name):
-    print("Usage: %s: [-h][-v] [-t b|a|i] -p N1:N2:..Nk -r ROOT")
+    print("Usage: %s: [-h][-v] [-t b|a|i] -p N1+N2+..+Nk -r ROOT")
     print("  -h             Print this message")
     print("  -v             Include comments in output")
     print("  -t b|a|e       Specify position of Tseitin variables:")
     print("                   b: before their defining variables (when possible, otherwise after)")
     print("                   a: after their defining variables")
     print("                   e: at end of quantifier string")
+    print("  -V p|b         Specify variable ordering strategy:")
+    print("                   p: Ply-major")
+    print("                   b: Bucket-major")
     print("  -p N1:N2:..Nk  Specify bucket profile")
     print("  -r ROOT        Specify root name for files.  Will generate ROOT.qcnf, ROOT.order, and ROOT.buckets")
 
@@ -519,9 +522,64 @@ class Ply:
         self.allAvailableClauses()
         self.doMovedClauses()
 
+
+    # Provide ordered list of variables that depend only on t
+    def listTopVariables(self):
+        #   uniqueChanged[t]: 1<=t<=N
+        #   gameMonotonic[t]: All state is monotonically ordered
+        #   allAvailable[t]: 1 <t<=N
+        #   moved[t]: 1<=t<=N
+        if self.level == 1:
+            vlist = [self.uniqueChangedVar.id, self.gameMonotonicVar.id, self.movedVar.id]
+        else:
+            vlist = [self.uniqueChangedVar.id, self.gameMonotonicVar.id, self.allAvailableVar.id, self.movedVar.id]
+        return vlist
+
+    # Provide ordered list of variables that depend only on i and t
+    # If bucket specified, then only those for indicated bucket
+    def listMiddleVariables(self, bucket = None):
+
+        #   bucketChanged[i,t]:  1<=i<=k, 1<=t<=N
+        #   bucketMonotonic[i,t]: 1<=i<=k, 1<=t<=N
+        if bucket is None:
+            vlist = []
+            for i in unitRange(self.bucketCount):
+                vlist += [self.bucketChangedVars[i].id, self.bucketMonotonicVars[i].id]
+        else:
+            vlist = [self.bucketChangedVars[bucket].id, self.bucketMonotonicVars[bucket].id]
+        return vlist
+        
+    # Provide ordered list of variables that depend on i, j, and t
+    # If bucket specified, then only those for indicated bucket
+    def listBottomVariables(self, bucket = None):
+        #   itemRemoved[i,j,t]: 1<=i<=k, 1<=j<=Ni, 1<=t<=N
+        #   itemPresent[i,j,t]: 1<=i<=k, 1<=j<=Ni, 1<=t<=N
+        #   itemAvailable[i,j,t]: 1<=i<=k, 1<=j<=Ni, 2<=t<=N
+        vlist = []
+        if bucket is None:
+            for i in unitRange(self.bucketCount):
+                for j in unitRange(self.profile[i-1]):
+                    vlist += [self.itemRemovedVars[(i,j)].id, self.itemPresentVars[(i,j)].id]
+                    if self.level > 1:
+                        vlist += [self.itemAvailableVars[(i,j)].id]
+        else:
+            for j in unitRange(self.profile[bucket-1]):
+                vlist += [self.itemRemovedVars[(bucket,j)].id, self.itemPresentVars[(bucket,j)].id]
+                if self.level > 1:
+                    vlist += [self.itemAvailableVars[(bucket,j)].id]
+        return vlist
+
+
+
 class Nim:
+
+    # Variable ordering strategies
+    plyMajor, bucketMajor = range(2)
+
+
     manager = None
     profile = None
+    bucketCount = 0
     plyList = []
     plyCount = 0
     winnerVars = None
@@ -529,6 +587,7 @@ class Nim:
     def __init__(self, manager, profile):
         self.manager = manager
         self.profile = profile
+        self.bucketCount = len(profile)
         self.plyCount = sum(profile)
         pply = Ply(manager, 1, profile, None)
         self.plyList = [pply]
@@ -580,13 +639,55 @@ class Nim:
         self.doClauses()
         self.manager.finish()
 
+    def listVariablesPlyMajor(self, writer):
+        for l in unitRange(self.plyCount):
+            vlist = []
+            vlist += self.plyList[l-1].listTopVariables()
+            if l-1 in self.winnerVars:
+                # Winner variable belongs to next higher level
+                vlist.append(self.winnerVars[l-1].id)
+            if l == self.plyCount and l in self.winnerVars:
+                # Final winner variable belongs in last level
+                vlist.append(self.winnerVars[l].id)
+            writer.doOrder(vlist)
+            writer.doOrder(self.plyList[l-1].listMiddleVariables(bucket = None))
+            writer.doOrder(self.plyList[l-1].listBottomVariables(bucket = None))
+        return vlist
+
+    def listVariablesBucketMajor(self, writer):
+        for l in unitRange(self.plyCount):
+            vlist = []
+            vlist += self.plyList[l-1].listTopVariables()
+            if l-1 in self.winnerVars:
+                # Winner variable belongs to next higher level
+                vlist.append(self.winnerVars[l-1].id)
+            if l == self.plyCount and l in self.winnerVars:
+                # Final winner variable belongs in last level
+                vlist.append(self.winnerVars[l].id)
+            writer.doOrder(vlist)
+        for i in unitRange(self.bucketCount):
+            for l in unitRange(self.plyCount):
+                writer.doOrder(self.plyList[l-1].listMiddleVariables(bucket = i))
+                writer.doOrder(self.plyList[l-1].listBottomVariables(bucket = i))
+        return vlist
+    
+    def listVariables(self, mode, writer):
+        if mode == self.plyMajor:
+            self.listVariablesPlyMajor(writer)
+        elif mode == self.bucketMajor:
+            self.listVariablesBucketMajor(writer)
+        else:
+            msg = "Unknown variable ordering mode %s" % str(mode)
+            raise Exception(msg)
+
 
 def run(name, args):
     profile = []
     root = None
     verbose = False
     tseitinMode = Manager.tseitinEnd
-    optlist, args = getopt.getopt(args, "hvt:p:r:")
+    variableMode = None
+    optlist, args = getopt.getopt(args, "hvt:V:p:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -604,8 +705,17 @@ def run(name, args):
                 print("Unknown Tseitin variable placement mode '%s'" % val)
                 usage(name)
                 return
+        elif opt == '-V':
+            if val == 'p':
+                variableMode = Nim.plyMajor
+            elif val == 'b':
+                variableMode = Nim.bucketMajor
+            else:
+                print("Unknown Tseitin variable ordering strategy '%s'" % val)
+                usage(name)
+                return
         elif opt == '-p':
-            pfields = val.split(':')
+            pfields = val.split('+')
             try:
                 profile = [int(s) for s in pfields]
             except:
@@ -625,10 +735,14 @@ def run(name, args):
         print("Must have output file root name")
         usage(name)
         return
-    write = writer.QcnfWriter(root)
-    manager = Manager(write, verbose, tseitinMode)
+    qwrite = writer.QcnfWriter(root)
+    manager = Manager(qwrite, verbose, tseitinMode)
     nim = Nim(manager, profile)
     nim.buildQcnf()
+
+    if variableMode is not None:
+        vwrite = writer.OrderWriter(manager.variableCount, root, verbose=verbose)
+        nim.listVariables(variableMode, vwrite)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
