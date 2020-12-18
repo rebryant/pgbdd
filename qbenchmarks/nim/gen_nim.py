@@ -7,9 +7,12 @@ import writer
 
 
 def usage(name):
-    print("Usage: %s: [-h][-v] [-t b|a|i] -p N1+N2+..+Nk -r ROOT")
+    print("Usage: %s: [-h][-v] [-e u|o] [-t b|a|i] [-V p|b] -p N1+N2+..+Nk -r ROOT")
     print("  -h             Print this message")
     print("  -v             Include comments in output")
+    print("  -e u|o         Specify encoding of buckets::")    
+    print("                   u: unary counter")
+    print("                   o: labeled objects")
     print("  -t b|a|e       Specify position of Tseitin variables:")
     print("                   b: before their defining variables (when possible, otherwise after)")
     print("                   a: after their defining variables")
@@ -42,10 +45,11 @@ def usage(name):
 #   uniqueChanged[t]: 1<=t<=N
 #    Items removed from exactly one bucket on step t
 #
-#   bucketMonotonic[i,t]: 1<=i<=k, 1<=t<=N
+#
+#   bucketMonotonic[i,t]: 1<=i<=k, 1<=t<=N (Unary Encoding only)
 #    State elements for bucket i are monotonically ordered
 #
-#   gameMonotonic[t]: All state is monotonically ordered
+#   gameMonotonic[t]: All state is monotonically ordered (Unary Encoding only)
 #
 #   itemAvailable[i,j,t]: 1<=i<=k, 1<=j<=Ni, 2<=t<=N
 #    Any item taken was available for step t
@@ -219,12 +223,17 @@ class Manager:
 # Manage single ply of game
 class Ply:
 
+    # Ways to encode bucket states
+    encodingUnary, encodingObject = range(2)
+
     level = 1
     manager = None
     # profile is a list of bucket sizes
     profile = []
     bucketCount = 0 
     isExistential = False
+    # How are buckets encoded?
+    encoding = None
     #   itemRemoved[i,j,t]: 1<=i<=k, 1<=j<=Ni
     #    Attempt to remove item j from bucket i on step t
     itemRemovedVars = {}
@@ -240,11 +249,16 @@ class Ply:
     #   uniqueChanged[t]
     #    Items removed from exactly one bucket on step t
     uniqueChangedVar = None
+
+    ## Only for unary encoding:
+    #
     #   bucketMonotonic[i,t]: 1<=i<=k
     #    State elements for bucket i are monotonically ordered
     bucketMonotonicVars = None
     #   gameMonotonic[t]: All state is monotonically ordered
     gameMonotonicVar = None
+    #####
+
     #   itemAvailable[i,j,t]: 1<=i<=k, 1<=j<=Ni, 1<t<=N
     #    Any item removed was available for step t
     itemAvailableVars = None
@@ -255,13 +269,14 @@ class Ply:
     #    Legal move took place
     movedVar = None
 
-    def __init__(self, manager, level, profile, prevVars):
+    def __init__(self, manager, level, profile, prevVars, encoding):
         self.level = level
         self.isExistential = level % 2 == 1
         self.manager = manager
         self.profile = profile
         self.bucketCount = len(profile)
         self.prevVars = prevVars
+        self.encoding = encoding
         self.makeInputVars()
         self.makeTseitinVars()
         
@@ -308,21 +323,22 @@ class Ply:
         cstring = "  uniqueChanged: %s" % self.uniqueChangedVar.id
         self.manager.doTseitinVariableComment(self.level, self.isExistential, cstring)
 
-        #   bucketMonotonic[i,t]: 1<=i<=k, 1<=t<=N
-        self.bucketMonotonicVars = {}
-        slist = []
-        for i in unitRange(self.bucketCount):
-            name = "bucketMonotonic[%d,%d]" % (i, self.level)
-            v = self.manager.createTseitinVariable(self.level, name, self.isExistential) 
-            self.bucketMonotonicVars[i] = v
-            slist.append(str(v.id))
-        cstring = "  bucketMonotonic: %s" % ", ".join(slist)
-        self.manager.doTseitinVariableComment(self.level, self.isExistential, cstring)
+        if self.encoding == self.encodingUnary:
+            #   bucketMonotonic[i,t]: 1<=i<=k, 1<=t<=N
+            self.bucketMonotonicVars = {}
+            slist = []
+            for i in unitRange(self.bucketCount):
+                name = "bucketMonotonic[%d,%d]" % (i, self.level)
+                v = self.manager.createTseitinVariable(self.level, name, self.isExistential) 
+                self.bucketMonotonicVars[i] = v
+                slist.append(str(v.id))
+            cstring = "  bucketMonotonic: %s" % ", ".join(slist)
+            self.manager.doTseitinVariableComment(self.level, self.isExistential, cstring)
 
-        #   gameMonotonic[t]
-        self.gameMonotonicVar = self.manager.createTseitinVariable(self.level, "gameMonotonic[%d]" % self.level, self.isExistential)
-        cstring = "  gameMonotonic: %s" % self.gameMonotonicVar.id
-        self.manager.doTseitinVariableComment(self.level, self.isExistential, cstring)
+            #   gameMonotonic[t]
+            self.gameMonotonicVar = self.manager.createTseitinVariable(self.level, "gameMonotonic[%d]" % self.level, self.isExistential)
+            cstring = "  gameMonotonic: %s" % self.gameMonotonicVar.id
+            self.manager.doTseitinVariableComment(self.level, self.isExistential, cstring)
 
         if self.level == 1:
             self.itemAvailableVars = None
@@ -354,17 +370,14 @@ class Ply:
         self.manager.addVariables(self.itemRemovedVars)
         self.manager.addVariables(self.itemPresentVars)
         self.manager.addVariables(self.bucketChangedVars)
-        self.manager.addVariables(self.bucketMonotonicVars)
-        if self.level == 1:
-            self.manager.addVariables({1: self.uniqueChangedVar,
-                                       2: self.gameMonotonicVar,
-                                       3: self.movedVar})
-        else:
+        vdict = {1: self.uniqueChangedVar, 4: self.movedVar}
+        if self.encoding == self.encodingUnary:
+            self.manager.addVariables(self.bucketMonotonicVars)
+            vdict[2] = self.gameMonotonicVar
+        if self.level > 1:
             self.manager.addVariables(self.itemAvailableVars)
-            self.manager.addVariables({1: self.uniqueChangedVar,
-                                       2: self.gameMonotonicVar,
-                                       3: self.allAvailableVar, 
-                                       4: self.movedVar})
+            vdict[3] = self.allAvailableVar
+        self.manager.addVariables(vdict)
 
     def doItemPresentClauses(self):
         self.manager.doComment("Item Present, level %d" % self.level)
@@ -484,40 +497,26 @@ class Ply:
         self.manager.doClause(vlist, plist)
 
     def doMovedClauses(self):
-        if self.level == 1:
-            #  moved[t] <--> uniqueChanged[t] & gameMonotonic[t]
-            self.manager.doComment("Moved, level %d" % self.level)
-            #     moved[t] --> uniqueChanged[t]
-            vlist = [self.movedVar, self.uniqueChangedVar]
-            self.manager.doClause(vlist, [0,1])
-            #     moved[t] --> gameMonotonic[t]
-            vlist = [self.movedVar, self.gameMonotonicVar]
-            self.manager.doClause(vlist, [0,1])
-            #     uniqueChanged[t] & gameMonotonic[t] --> moved[t]
-            vlist = [self.uniqueChangedVar, self.gameMonotonicVar, self.movedVar]
-            self.manager.doClause(vlist, [0,0,1])
-        else:
-            #  moved[t] <--> uniqueChanged[t] & gameMonotonic[t] & allAvailable[t]
-            self.manager.doComment("Moved, level %d" % self.level)
-            #     moved[t] --> uniqueChanged[t]
-            vlist = [self.movedVar, self.uniqueChangedVar]
-            self.manager.doClause(vlist, [0,1])
-            #     moved[t] --> gameMonotonic[t]
-            vlist = [self.movedVar, self.gameMonotonicVar]
-            self.manager.doClause(vlist, [0,1])
-            #     moved[t] --> allAvailable[t]
-            vlist = [self.movedVar, self.allAvailableVar]
-            self.manager.doClause(vlist, [0,1])
-            #     uniqueChanged[t] & gameMonotonic[t] & allAvailable[t] --> moved[t]
-            vlist = [self.uniqueChangedVar, self.gameMonotonicVar, self.allAvailableVar, self.movedVar]
-            self.manager.doClause(vlist, [0,0,0,1])
+        self.manager.doComment("Moved, level %d" % self.level)
+        clist = [self.uniqueChangedVar]
+        if self.encoding == self.encodingUnary:
+            clist.append(self.gameMonotonicVar)
+        if self.level > 1:
+            clist.append(self.allAvailableVar)
+        vlist = [self.movedVar] + clist
+        plist = [1] + [0] * len(clist)
+        self.manager.doClause(vlist, plist)
+        for v in clist:
+            vlist = [self.movedVar, v]
+            self.manager.doClause(vlist, [0,1])            
 
     def doClauses(self):
         self.doItemPresentClauses()
         self.doBucketChangedClauses()
         self.doUniqueChangedClauses()
-        self.doBucketMonotonicClauses()
-        self.doGameMontonicClauses()
+        if self.encoding == self.encodingUnary:
+            self.doBucketMonotonicClauses()
+            self.doGameMontonicClauses()
         self.doItemAvailableClauses()
         self.allAvailableClauses()
         self.doMovedClauses()
@@ -529,10 +528,12 @@ class Ply:
         #   gameMonotonic[t]: All state is monotonically ordered
         #   allAvailable[t]: 1 <t<=N
         #   moved[t]: 1<=t<=N
-        if self.level == 1:
-            vlist = [self.uniqueChangedVar.id, self.gameMonotonicVar.id, self.movedVar.id]
-        else:
-            vlist = [self.uniqueChangedVar.id, self.gameMonotonicVar.id, self.allAvailableVar.id, self.movedVar.id]
+        vlist = [self.uniqueChangedVar.id]
+        if self.encoding == self.encodingUnary:
+            vlist.append(self.gameMonotonicVar.id)
+        if self.level > 1:
+            vlist.append(self.allAvailableVar.id)
+        vlist.append(self.movedVar.id)
         return vlist
 
     # Provide ordered list of variables that depend only on i and t
@@ -544,9 +545,13 @@ class Ply:
         if bucket is None:
             vlist = []
             for i in unitRange(self.bucketCount):
-                vlist += [self.bucketChangedVars[i].id, self.bucketMonotonicVars[i].id]
+                vlist.append(self.bucketChangedVars[i].id)
+                if self.encoding == self.encodingUnary:
+                    vlist.append(self.bucketMonotonicVars[i].id)
         else:
-            vlist = [self.bucketChangedVars[bucket].id, self.bucketMonotonicVars[bucket].id]
+            vlist = [self.bucketChangedVars[bucket].id]
+            if self.encoding == self.encodingUnary:
+                vlist.append(self.bucketMonotonicVars[bucket].id)
         return vlist
         
     # Provide ordered list of variables that depend on i, j, and t
@@ -569,8 +574,6 @@ class Ply:
                     vlist += [self.itemAvailableVars[(bucket,j)].id]
         return vlist
 
-
-
 class Nim:
 
     # Variable ordering strategies
@@ -584,15 +587,15 @@ class Nim:
     plyCount = 0
     winnerVars = None
 
-    def __init__(self, manager, profile):
+    def __init__(self, manager, profile, encoding):
         self.manager = manager
         self.profile = profile
         self.bucketCount = len(profile)
         self.plyCount = sum(profile)
-        pply = Ply(manager, 1, profile, None)
+        pply = Ply(manager, 1, profile, None, encoding)
         self.plyList = [pply]
         for l in range(2, self.plyCount+1):
-            nply = Ply(manager, l, profile, pply.itemPresentVars)
+            nply = Ply(manager, l, profile, pply.itemPresentVars, encoding)
             self.plyList.append(nply)
             pply = nply
         self.doWinnerVars()
@@ -686,14 +689,24 @@ def run(name, args):
     root = None
     verbose = False
     tseitinMode = Manager.tseitinEnd
+    encodingMode = Ply.encodingUnary
     variableMode = None
-    optlist, args = getopt.getopt(args, "hvt:V:p:r:")
+    optlist, args = getopt.getopt(args, "hve:t:V:p:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-e':
+            if val == 'u':
+                encodingMode = Ply.encodingUnary
+            elif val == 'o':
+                encodingMode = Ply.encodingObject
+            else:
+                print("Unknown Tseitin bucket encoding mode '%s'" % val)
+                usage(name)
+                return
         elif opt == '-t':
             if val == 'b':
                 tseitinMode = Manager.tseitinBefore
@@ -737,7 +750,7 @@ def run(name, args):
         return
     qwrite = writer.QcnfWriter(root)
     manager = Manager(qwrite, verbose, tseitinMode)
-    nim = Nim(manager, profile)
+    nim = Nim(manager, profile, encodingMode)
     nim.buildQcnf()
 
     if variableMode is not None:

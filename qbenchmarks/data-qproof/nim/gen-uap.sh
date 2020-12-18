@@ -1,0 +1,22 @@
+#!/bin/bash
+# N = 3
+make usap PROFILE=1+1+1
+# N = 4
+make usap PROFILE=2+1+1
+# N = 5
+make usap PROFILE=2+2+1
+make usap PROFILE=3+1+1
+# N = 6
+make usap PROFILE=2+2+2
+make urap PROFILE=3+2+1
+make usap PROFILE=4+1+1
+# N = 7
+make usap PROFILE=3+2+2
+make usap PROFILE=4+2+1
+make usap PROFILE=5+1+1
+# N = 8
+make usap PROFILE=3+3+2
+make usap PROFILE=4+2+2
+make usap PROFILE=4+3+1
+make usap PROFILE=5+2+1
+make usap PROFILE=6+1+1
