@@ -196,7 +196,8 @@ class Profiler:
     def summarize(self):
         if self.prover.verbLevel <= 1:
             return
-        self.prover.writer.write("Chain resolution signatures:\n")
+        if len(self.signatureDict.keys()) > 0:
+            self.prover.writer.write("Chain resolution signatures:\n")
         sigList = sorted(self.signatureDict.keys())
         for sig in sigList:
             count = self.signatureDict[sig]

@@ -93,6 +93,14 @@ goe-$(MODE)-$(R)x$(C)-UBC.data: goe-$(MODE)-$(R)x$(C).qcnf
 	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C).qcnf -p goe-$(MODE)-$(R)x$(C).qproof | tee -a goe-$(MODE)-$(R)x$(C)-UBC.data
 	rm -f goe-$(MODE)-$(R)x$(C).qproof
 
+demo:
+	$(GEN) $(R) $(C) > goe-$(MODE)-$(R)x$(C)-demo.qcnf
+	$(CLUSTER) goe-$(MODE)-$(R)x$(C)-demo.qcnf > goe-$(MODE)-$(R)x$(C).cluster
+	$(SOLVE) -m s -b -v 2 \
+	        -c goe-$(MODE)-$(R)x$(C).cluster \
+	 	-i goe-$(MODE)-$(R)x$(C)-demo.qcnf -o goe-$(MODE)-$(R)x$(C)-demo.qproof | tee goe-$(MODE)-$(R)x$(C)-demo.data
+	$(CHECK) -S -i goe-$(MODE)-$(R)x$(C)-demo.qcnf -p goe-$(MODE)-$(R)x$(C)-demo.qproof | tee -a goe-$(MODE)-$(R)x$(C)-demo.data
+
 data:
 #	$(GRABBER) goe-plain-*-VBC.data > goe-plain-VBC.csv
 #	$(GRABBER) goe-oneeighty-*-VBC.data > goe-oneeighty-VBC.csv
