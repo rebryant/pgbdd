@@ -6,7 +6,8 @@ import getopt
 import datetime
 
 def usage(name):
-    print("Usage: %s [-S] [-v] -i FILE.qcnf -p FILE.qproof" % name)
+    print("Usage: %s [-S] [-v] [-m (s|r)] -i FILE.qcnf -p FILE.qproof" % name)
+    print("   -m MODE   Set proof mode (s = satisfaction, r = refutation)")
     print("   -S        Satisfaction proof")
     print("   -v        Print more helpful diagnostic information if there is an error")
 
@@ -726,14 +727,6 @@ class Prover:
     def diffLists(self, ls1, ls2):
         ls1 = sorted(ls1)
         ls2 = sorted(ls2)
-
-        # First do quick check for equality
-        if len(ls1) == len(ls2):
-            mmlist = [1 if a != b else 0 for a,b in zip(ls1, ls2)]
-            if sum(mmlist) == 0:
-                return ([],[])
-
-        # Nontrivial difference
         ls1not2 = []
         ls2not1 = []
         idx1 = 0
@@ -1105,13 +1098,20 @@ def run(name, args):
     proofName = None
     refutation = True
     verbose = False
-    optList, args = getopt.getopt(args, "hSvi:p:")
+    optList, args = getopt.getopt(args, "hm:vi:p:")
     for (opt, val) in optList:
         if opt == '-h':
             usage(name)
             return
-        elif opt == '-S':
-            refutation = False
+        elif opt == '-m':
+            if val == 's':
+                refutation = False
+            elif val == 'r':
+                refutation = True
+            else:
+                print("Unknown proof mode '%s'" % val)
+                usage(name)
+                return
         elif opt == '-v':
             verbose = True
         elif opt == '-i':
