@@ -18,83 +18,86 @@ SDIR=$(BDIR)/../qbf
 GEN=$(NDIR)/gen_nim.py
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) $(SDIR)/qchecker.py
-VLEVEL=2
+
+GRAB=./grab_plusclauses.py
+
+VLEVEL=1
 PROFILE=4+3+2
+CAT=
 
 all: osab
 
-usab: nimu-$(PROFILE)-sab.data
-urab: nimu-$(PROFILE)-rab.data
+usab: nimu$(CAT)-$(PROFILE)-sab.data
+urab: nimu$(CAT)-$(PROFILE)-rab.data
 
-usam: nimu-$(PROFILE)-sam.data
-uram: nimu-$(PROFILE)-ram.data
+usam: nimu$(CAT)-$(PROFILE)-sam.data
+uram: nimu$(CAT)-$(PROFILE)-ram.data
 
-osab: nimo-$(PROFILE)-sab.data
-orab: nimo-$(PROFILE)-rab.data
+osab: nimo$(CAT)-$(PROFILE)-sab.data
+orab: nimo$(CAT)-$(PROFILE)-rab.data
 
 
 
-nimu-$(PROFILE)-sab.data:
-	$(GEN) -e u -t a -V b -p $(PROFILE) -r nimu-$(PROFILE)-sab
+nimu$(CAT)-$(PROFILE)-sab.data:
+	$(GEN) -e u -t a -V b -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-sab
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i nimu-$(PROFILE)-sab.qcnf \
-		-o nimu-$(PROFILE)-sab.qproof \
-		-p nimu-$(PROFILE)-sab.order \
-		-L nimu-$(PROFILE)-sab.data
-	$(CHECK) -m s -i nimu-$(PROFILE)-sab.qcnf -p nimu-$(PROFILE)-sab.qproof | tee -a nimu-$(PROFILE)-sab.data
-	rm -f nimu-$(PROFILE)-sab.qproof
+		-i nimu$(CAT)-$(PROFILE)-sab.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-sab.qproof \
+		-p nimu$(CAT)-$(PROFILE)-sab.order \
+		-L nimu$(CAT)-$(PROFILE)-sab.data
+	$(CHECK) -m s -i nimu$(CAT)-$(PROFILE)-sab.qcnf -p nimu$(CAT)-$(PROFILE)-sab.qproof | tee -a nimu$(CAT)-$(PROFILE)-sab.data
+	rm -f nimu$(CAT)-$(PROFILE)-sab.qproof
 
-nimu-$(PROFILE)-rab.data:
-	$(GEN) -e u -t a -V b -p $(PROFILE) -r nimu-$(PROFILE)-rab
+nimu$(CAT)-$(PROFILE)-rab.data:
+	$(GEN) -e u -t a -V b -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-rab
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i nimu-$(PROFILE)-rab.qcnf \
-		-o nimu-$(PROFILE)-rab.qproof \
-		-p nimu-$(PROFILE)-rab.order \
-		-L nimu-$(PROFILE)-rab.data
-	$(CHECK) -m r -i nimu-$(PROFILE)-rab.qcnf -p nimu-$(PROFILE)-rab.qproof | tee -a nimu-$(PROFILE)-rab.data
-	rm -f nimu-$(PROFILE)-rab.qproof
+		-i nimu$(CAT)-$(PROFILE)-rab.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-rab.qproof \
+		-p nimu$(CAT)-$(PROFILE)-rab.order \
+		-L nimu$(CAT)-$(PROFILE)-rab.data
+	$(CHECK) -m r -i nimu$(CAT)-$(PROFILE)-rab.qcnf -p nimu$(CAT)-$(PROFILE)-rab.qproof | tee -a nimu$(CAT)-$(PROFILE)-rab.data
+	rm -f nimu$(CAT)-$(PROFILE)-rab.qproof
 
-nimu-$(PROFILE)-sam.data:
-	$(GEN) -e u -t a -V m -p $(PROFILE) -r nimu-$(PROFILE)-sam
+nimu$(CAT)-$(PROFILE)-sam.data:
+	$(GEN) -e u -t a -V m -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-sam
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i nimu-$(PROFILE)-sam.qcnf \
-		-o nimu-$(PROFILE)-sam.qproof \
-		-p nimu-$(PROFILE)-sam.order \
-		-L nimu-$(PROFILE)-sam.data
-	$(CHECK) -m s -i nimu-$(PROFILE)-sam.qcnf -p nimu-$(PROFILE)-sam.qproof | tee -a nimu-$(PROFILE)-sam.data
-	rm -f nimu-$(PROFILE)-sam.qproof
+		-i nimu$(CAT)-$(PROFILE)-sam.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-sam.qproof \
+		-p nimu$(CAT)-$(PROFILE)-sam.order \
+		-L nimu$(CAT)-$(PROFILE)-sam.data
+	$(CHECK) -m s -i nimu$(CAT)-$(PROFILE)-sam.qcnf -p nimu$(CAT)-$(PROFILE)-sam.qproof | tee -a nimu$(CAT)-$(PROFILE)-sam.data
+	rm -f nimu$(CAT)-$(PROFILE)-sam.qproof
 
-nimu-$(PROFILE)-ram.data:
-	$(GEN) -e u -t a -V m -p $(PROFILE) -r nimu-$(PROFILE)-ram
+nimu$(CAT)-$(PROFILE)-ram.data:
+	$(GEN) -e u -t a -V m -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-ram
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i nimu-$(PROFILE)-ram.qcnf \
-		-o nimu-$(PROFILE)-ram.qproof \
-		-p nimu-$(PROFILE)-ram.order \
-		-L nimu-$(PROFILE)-ram.data
-	$(CHECK) -m r -i nimu-$(PROFILE)-ram.qcnf -p nimu-$(PROFILE)-ram.qproof | tee -a nimu-$(PROFILE)-ram.data
-	rm -f nimu-$(PROFILE)-ram.qproof
+		-i nimu$(CAT)-$(PROFILE)-ram.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-ram.qproof \
+		-p nimu$(CAT)-$(PROFILE)-ram.order \
+		-L nimu$(CAT)-$(PROFILE)-ram.data
+	$(CHECK) -m r -i nimu$(CAT)-$(PROFILE)-ram.qcnf -p nimu$(CAT)-$(PROFILE)-ram.qproof | tee -a nimu$(CAT)-$(PROFILE)-ram.data
+	rm -f nimu$(CAT)-$(PROFILE)-ram.qproof
 
-nimo-$(PROFILE)-sab.data:
-	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo-$(PROFILE)-sab
+nimo$(CAT)-$(PROFILE)-sab.data:
+	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo$(CAT)-$(PROFILE)-sab
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i nimo-$(PROFILE)-sab.qcnf \
-		-o nimo-$(PROFILE)-sab.qproof \
-		-p nimo-$(PROFILE)-sab.order \
-		-L nimo-$(PROFILE)-sab.data
-	$(CHECK) -m s -i nimo-$(PROFILE)-sab.qcnf -p nimo-$(PROFILE)-sab.qproof | tee -a nimo-$(PROFILE)-sab.data
-	rm -f nimo-$(PROFILE)-sab.qproof
+		-i nimo$(CAT)-$(PROFILE)-sab.qcnf \
+		-o nimo$(CAT)-$(PROFILE)-sab.qproof \
+		-p nimo$(CAT)-$(PROFILE)-sab.order \
+		-L nimo$(CAT)-$(PROFILE)-sab.data
+	$(CHECK) -m s -i nimo$(CAT)-$(PROFILE)-sab.qcnf -p nimo$(CAT)-$(PROFILE)-sab.qproof | tee -a nimo$(CAT)-$(PROFILE)-sab.data
+	rm -f nimo$(CAT)-$(PROFILE)-sab.qproof
 
 
-nimo-$(PROFILE)-rab.data:
-	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo-$(PROFILE)-rab
+nimo$(CAT)-$(PROFILE)-rab.data:
+	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo$(CAT)-$(PROFILE)-rab
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i nimo-$(PROFILE)-rab.qcnf \
-		-o nimo-$(PROFILE)-rab.qproof \
-		-p nimo-$(PROFILE)-rab.order \
-		-L nimo-$(PROFILE)-rab.data
-	$(CHECK) -m r -i nimo-$(PROFILE)-rab.qcnf -p nimo-$(PROFILE)-rab.qproof | tee -a nimo-$(PROFILE)-rab.data
-	rm -f nimo-$(PROFILE)-rab.qproof
-
+		-i nimo$(CAT)-$(PROFILE)-rab.qcnf \
+		-o nimo$(CAT)-$(PROFILE)-rab.qproof \
+		-p nimo$(CAT)-$(PROFILE)-rab.order \
+		-L nimo$(CAT)-$(PROFILE)-rab.data
+	$(CHECK) -m r -i nimo$(CAT)-$(PROFILE)-rab.qcnf -p nimo$(CAT)-$(PROFILE)-rab.qproof | tee -a nimo$(CAT)-$(PROFILE)-rab.data
+	rm -f nimo$(CAT)-$(PROFILE)-rab.qproof
 
 clean:
 	rm -f *~ 
