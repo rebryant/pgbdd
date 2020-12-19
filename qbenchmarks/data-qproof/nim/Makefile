@@ -8,7 +8,7 @@ INTERP=python3
 #   a: After defining variables 
 #   b: Before defining variables (when possible)
 # Variable ordering
-#   p: ply-major
+#   m: move-major
 #   b: bucket-major
 
 BDIR=../..
@@ -26,8 +26,8 @@ all: osab
 usab: nimu-$(PROFILE)-sab.data
 urab: nimu-$(PROFILE)-rab.data
 
-usap: nimu-$(PROFILE)-sap.data
-urap: nimu-$(PROFILE)-rap.data
+usam: nimu-$(PROFILE)-sam.data
+uram: nimu-$(PROFILE)-ram.data
 
 osab: nimo-$(PROFILE)-sab.data
 orab: nimo-$(PROFILE)-rab.data
@@ -54,25 +54,25 @@ nimu-$(PROFILE)-rab.data:
 	$(CHECK) -m r -i nimu-$(PROFILE)-rab.qcnf -p nimu-$(PROFILE)-rab.qproof | tee -a nimu-$(PROFILE)-rab.data
 	rm -f nimu-$(PROFILE)-rab.qproof
 
-nimu-$(PROFILE)-sap.data:
-	$(GEN) -e u -t a -V p -p $(PROFILE) -r nimu-$(PROFILE)-sap
+nimu-$(PROFILE)-sam.data:
+	$(GEN) -e u -t a -V m -p $(PROFILE) -r nimu-$(PROFILE)-sam
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i nimu-$(PROFILE)-sap.qcnf \
-		-o nimu-$(PROFILE)-sap.qproof \
-		-p nimu-$(PROFILE)-sap.order \
-		-L nimu-$(PROFILE)-sap.data
-	$(CHECK) -m s -i nimu-$(PROFILE)-sap.qcnf -p nimu-$(PROFILE)-sap.qproof | tee -a nimu-$(PROFILE)-sap.data
-	rm -f nimu-$(PROFILE)-sap.qproof
+		-i nimu-$(PROFILE)-sam.qcnf \
+		-o nimu-$(PROFILE)-sam.qproof \
+		-p nimu-$(PROFILE)-sam.order \
+		-L nimu-$(PROFILE)-sam.data
+	$(CHECK) -m s -i nimu-$(PROFILE)-sam.qcnf -p nimu-$(PROFILE)-sam.qproof | tee -a nimu-$(PROFILE)-sam.data
+	rm -f nimu-$(PROFILE)-sam.qproof
 
-nimu-$(PROFILE)-rap.data:
-	$(GEN) -e u -t a -V p -p $(PROFILE) -r nimu-$(PROFILE)-rap
+nimu-$(PROFILE)-ram.data:
+	$(GEN) -e u -t a -V m -p $(PROFILE) -r nimu-$(PROFILE)-ram
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i nimu-$(PROFILE)-rap.qcnf \
-		-o nimu-$(PROFILE)-rap.qproof \
-		-p nimu-$(PROFILE)-rap.order \
-		-L nimu-$(PROFILE)-rap.data
-	$(CHECK) -m r -i nimu-$(PROFILE)-rap.qcnf -p nimu-$(PROFILE)-rap.qproof | tee -a nimu-$(PROFILE)-rap.data
-	rm -f nimu-$(PROFILE)-rap.qproof
+		-i nimu-$(PROFILE)-ram.qcnf \
+		-o nimu-$(PROFILE)-ram.qproof \
+		-p nimu-$(PROFILE)-ram.order \
+		-L nimu-$(PROFILE)-ram.data
+	$(CHECK) -m r -i nimu-$(PROFILE)-ram.qcnf -p nimu-$(PROFILE)-ram.qproof | tee -a nimu-$(PROFILE)-ram.data
+	rm -f nimu-$(PROFILE)-ram.qproof
 
 nimo-$(PROFILE)-sab.data:
 	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo-$(PROFILE)-sab

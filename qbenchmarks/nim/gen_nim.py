@@ -7,7 +7,7 @@ import writer
 
 
 def usage(name):
-    print("Usage: %s: [-h][-v] [-e u|o] [-t b|a|i] [-V p|b] -p N1+N2+..+Nk -r ROOT")
+    print("Usage: %s: [-h][-v] [-e u|o] [-t b|a|i] [-V m|b] -p N1+N2+..+Nk -r ROOT")
     print("  -h             Print this message")
     print("  -v             Include comments in output")
     print("  -e u|o         Specify encoding of buckets::")    
@@ -17,8 +17,8 @@ def usage(name):
     print("                   b: before their defining variables (when possible, otherwise after)")
     print("                   a: after their defining variables")
     print("                   e: at end of quantifier string")
-    print("  -V p|b         Specify variable ordering strategy:")
-    print("                   p: Ply-major")
+    print("  -V m|b         Specify variable ordering strategy:")
+    print("                   m: Move-major")
     print("                   b: Bucket-major")
     print("  -p N1:N2:..Nk  Specify bucket profile")
     print("  -r ROOT        Specify root name for files.  Will generate ROOT.qcnf, ROOT.order, and ROOT.buckets")
@@ -220,8 +220,8 @@ class Manager:
     def finish(self):
         self.writer.finish()
 
-# Manage single ply of game
-class Ply:
+# Manage single move of game
+class Move:
 
     # Ways to encode bucket states
     encodingUnary, encodingObject = range(2)
@@ -577,32 +577,32 @@ class Ply:
 class Nim:
 
     # Variable ordering strategies
-    plyMajor, bucketMajor = range(2)
+    moveMajor, bucketMajor = range(2)
 
 
     manager = None
     profile = None
     bucketCount = 0
-    plyList = []
-    plyCount = 0
+    moveList = []
+    moveCount = 0
     winnerVars = None
 
     def __init__(self, manager, profile, encoding):
         self.manager = manager
         self.profile = profile
         self.bucketCount = len(profile)
-        self.plyCount = sum(profile)
-        pply = Ply(manager, 1, profile, None, encoding)
-        self.plyList = [pply]
-        for l in range(2, self.plyCount+1):
-            nply = Ply(manager, l, profile, pply.itemPresentVars, encoding)
-            self.plyList.append(nply)
-            pply = nply
+        self.moveCount = sum(profile)
+        pmove = Move(manager, 1, profile, None, encoding)
+        self.moveList = [pmove]
+        for l in range(2, self.moveCount+1):
+            nmove = Move(manager, l, profile, pmove.itemPresentVars, encoding)
+            self.moveList.append(nmove)
+            pmove = nmove
         self.doWinnerVars()
 
     def doWinnerVars(self):
         self.winnerVars = {}
-        for l in unitRange(self.plyCount):
+        for l in unitRange(self.moveCount):
             if l % 2 == 0:
                 continue
             v = self.manager.createTseitinVariable(l+1, "win[%d]" % l, False)
@@ -620,20 +620,20 @@ class Nim:
         for lastl in wkeys:
             self.manager.doComment("Win in %d steps" % lastl)
             for l in unitRange(lastl):
-                vlist = [self.winnerVars[lastl], self.plyList[l-1].movedVar]
+                vlist = [self.winnerVars[lastl], self.moveList[l-1].movedVar]
                 self.manager.doClause(vlist, [0, 1])
-            if lastl < self.plyCount:
-                vlist = [self.winnerVars[lastl], self.plyList[lastl].movedVar]
+            if lastl < self.moveCount:
+                vlist = [self.winnerVars[lastl], self.moveList[lastl].movedVar]
                 self.manager.doClause(vlist, [0, 0])            
 
     def doVariables(self):
-        for ply in self.plyList:
-            ply.emitVariables()
+        for move in self.moveList:
+            move.emitVariables()
 
 
     def doClauses(self):
-        for ply in self.plyList:
-            ply.doClauses()
+        for move in self.moveList:
+            move.doClauses()
         self.doWinnerClauses()
 
     def buildQcnf(self):
@@ -642,41 +642,41 @@ class Nim:
         self.doClauses()
         self.manager.finish()
 
-    def listVariablesPlyMajor(self, writer):
-        for l in unitRange(self.plyCount):
+    def listVariablesMoveMajor(self, writer):
+        for l in unitRange(self.moveCount):
             vlist = []
-            vlist += self.plyList[l-1].listTopVariables()
+            vlist += self.moveList[l-1].listTopVariables()
             if l-1 in self.winnerVars:
                 # Winner variable belongs to next higher level
                 vlist.append(self.winnerVars[l-1].id)
-            if l == self.plyCount and l in self.winnerVars:
+            if l == self.moveCount and l in self.winnerVars:
                 # Final winner variable belongs in last level
                 vlist.append(self.winnerVars[l].id)
             writer.doOrder(vlist)
-            writer.doOrder(self.plyList[l-1].listMiddleVariables(bucket = None))
-            writer.doOrder(self.plyList[l-1].listBottomVariables(bucket = None))
+            writer.doOrder(self.moveList[l-1].listMiddleVariables(bucket = None))
+            writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = None))
         return vlist
 
     def listVariablesBucketMajor(self, writer):
-        for l in unitRange(self.plyCount):
+        for l in unitRange(self.moveCount):
             vlist = []
-            vlist += self.plyList[l-1].listTopVariables()
+            vlist += self.moveList[l-1].listTopVariables()
             if l-1 in self.winnerVars:
                 # Winner variable belongs to next higher level
                 vlist.append(self.winnerVars[l-1].id)
-            if l == self.plyCount and l in self.winnerVars:
+            if l == self.moveCount and l in self.winnerVars:
                 # Final winner variable belongs in last level
                 vlist.append(self.winnerVars[l].id)
             writer.doOrder(vlist)
         for i in unitRange(self.bucketCount):
-            for l in unitRange(self.plyCount):
-                writer.doOrder(self.plyList[l-1].listMiddleVariables(bucket = i))
-                writer.doOrder(self.plyList[l-1].listBottomVariables(bucket = i))
+            for l in unitRange(self.moveCount):
+                writer.doOrder(self.moveList[l-1].listMiddleVariables(bucket = i))
+                writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = i))
         return vlist
     
     def listVariables(self, mode, writer):
-        if mode == self.plyMajor:
-            self.listVariablesPlyMajor(writer)
+        if mode == self.moveMajor:
+            self.listVariablesMoveMajor(writer)
         elif mode == self.bucketMajor:
             self.listVariablesBucketMajor(writer)
         else:
@@ -689,7 +689,7 @@ def run(name, args):
     root = None
     verbose = False
     tseitinMode = Manager.tseitinEnd
-    encodingMode = Ply.encodingUnary
+    encodingMode = Move.encodingUnary
     variableMode = None
     optlist, args = getopt.getopt(args, "hve:t:V:p:r:")
     for (opt, val) in optlist:
@@ -700,9 +700,9 @@ def run(name, args):
             verbose = True
         elif opt == '-e':
             if val == 'u':
-                encodingMode = Ply.encodingUnary
+                encodingMode = Move.encodingUnary
             elif val == 'o':
-                encodingMode = Ply.encodingObject
+                encodingMode = Move.encodingObject
             else:
                 print("Unknown Tseitin bucket encoding mode '%s'" % val)
                 usage(name)
@@ -719,12 +719,12 @@ def run(name, args):
                 usage(name)
                 return
         elif opt == '-V':
-            if val == 'p':
-                variableMode = Nim.plyMajor
+            if val == 'm':
+                variableMode = Nim.moveMajor
             elif val == 'b':
                 variableMode = Nim.bucketMajor
             else:
-                print("Unknown Tseitin variable ordering strategy '%s'" % val)
+                print("Unknown variable ordering strategy '%s'" % val)
                 usage(name)
                 return
         elif opt == '-p':
