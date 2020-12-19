@@ -42,6 +42,7 @@ nimu-$(PROFILE)-sab.data:
 		-p nimu-$(PROFILE)-sab.order \
 		-L nimu-$(PROFILE)-sab.data
 	$(CHECK) -m s -i nimu-$(PROFILE)-sab.qcnf -p nimu-$(PROFILE)-sab.qproof | tee -a nimu-$(PROFILE)-sab.data
+	rm -f nimu-$(PROFILE)-sab.qproof
 
 nimu-$(PROFILE)-rab.data:
 	$(GEN) -e u -t a -V b -p $(PROFILE) -r nimu-$(PROFILE)-rab
@@ -51,6 +52,7 @@ nimu-$(PROFILE)-rab.data:
 		-p nimu-$(PROFILE)-rab.order \
 		-L nimu-$(PROFILE)-rab.data
 	$(CHECK) -m r -i nimu-$(PROFILE)-rab.qcnf -p nimu-$(PROFILE)-rab.qproof | tee -a nimu-$(PROFILE)-rab.data
+	rm -f nimu-$(PROFILE)-rab.qproof
 
 nimu-$(PROFILE)-sap.data:
 	$(GEN) -e u -t a -V p -p $(PROFILE) -r nimu-$(PROFILE)-sap
@@ -60,6 +62,7 @@ nimu-$(PROFILE)-sap.data:
 		-p nimu-$(PROFILE)-sap.order \
 		-L nimu-$(PROFILE)-sap.data
 	$(CHECK) -m s -i nimu-$(PROFILE)-sap.qcnf -p nimu-$(PROFILE)-sap.qproof | tee -a nimu-$(PROFILE)-sap.data
+	rm -f nimu-$(PROFILE)-sap.qproof
 
 nimu-$(PROFILE)-rap.data:
 	$(GEN) -e u -t a -V p -p $(PROFILE) -r nimu-$(PROFILE)-rap
@@ -69,6 +72,7 @@ nimu-$(PROFILE)-rap.data:
 		-p nimu-$(PROFILE)-rap.order \
 		-L nimu-$(PROFILE)-rap.data
 	$(CHECK) -m r -i nimu-$(PROFILE)-rap.qcnf -p nimu-$(PROFILE)-rap.qproof | tee -a nimu-$(PROFILE)-rap.data
+	rm -f nimu-$(PROFILE)-rap.qproof
 
 nimo-$(PROFILE)-sab.data:
 	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo-$(PROFILE)-sab
@@ -78,6 +82,8 @@ nimo-$(PROFILE)-sab.data:
 		-p nimo-$(PROFILE)-sab.order \
 		-L nimo-$(PROFILE)-sab.data
 	$(CHECK) -m s -i nimo-$(PROFILE)-sab.qcnf -p nimo-$(PROFILE)-sab.qproof | tee -a nimo-$(PROFILE)-sab.data
+	rm -f nimo-$(PROFILE)-sab.qproof
+
 
 nimo-$(PROFILE)-rab.data:
 	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo-$(PROFILE)-rab
@@ -87,6 +93,7 @@ nimo-$(PROFILE)-rab.data:
 		-p nimo-$(PROFILE)-rab.order \
 		-L nimo-$(PROFILE)-rab.data
 	$(CHECK) -m r -i nimo-$(PROFILE)-rab.qcnf -p nimo-$(PROFILE)-rab.qproof | tee -a nimo-$(PROFILE)-rab.data
+	rm -f nimo-$(PROFILE)-rab.qproof
 
 
 clean:
