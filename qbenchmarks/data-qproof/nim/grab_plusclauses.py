@@ -60,7 +60,7 @@ def firstNumber(fields):
             continue
     return -1
 
-# Extract clause data from log.  Turn into something useable for other tools
+# Extract clause data from log.  Turn into something usable for other tools
 def extract(fname):
     # Try to find size from file name:
     fields = ddSplit(fname)
@@ -92,13 +92,17 @@ def usage(name):
     sys.exit(0)
 
 def run(name, args):
+    vdict = {}
     if len(args) < 1:
         usage(name)
     for fname in args:
         vlist = extract(fname)
         if vlist is not None:
-            slist = [str(v) for v in vlist]
-            print(",".join(slist))
+            vdict[vlist[0]] = vlist
+    for k in sorted(vdict.keys()):
+        vlist = vdict[k]
+        slist = [str(v) for v in vlist]
+        print(",".join(slist))
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
