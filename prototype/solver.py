@@ -145,15 +145,22 @@ class Term:
 
     # Generate conjunction of two terms
     def combine(self, other):
+        validation = None
         antecedents = [self.validation, other.validation]
         newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
-        if implication != resolver.tautologyId:
-            antecedents += [implication]
         if newRoot == self.manager.leaf0:
             comment = "Validation of Empty clause"
         else:
             comment = "Validation of %s" % newRoot.label()
-        validation = self.manager.prover.createClause([newRoot.id], antecedents, comment)
+        if implication == resolver.tautologyId:
+            if newRoot == self.root:
+                validation = self.validation
+            elif newRoot == other.root:
+                validation = other.validation
+        else:
+            antecedents += [implication]
+        if validation is None:
+            validation = self.manager.prover.createClause([newRoot.id], antecedents, comment)
         return Term(self.manager, newRoot, validation)
 
     def quantify(self, literals, prover):
