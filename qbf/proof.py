@@ -104,14 +104,21 @@ class Prover:
 
     def deleteClauses(self, clauseList):
         if self.mode == ProverMode.refProof:
-            for id in clauseList:
-                del self.clauseDict[id]
-            middle = ['d']
-            rest = clauseList + [0]
-            ilist = [self.clauseCount] + middle + rest
-            slist = [str(i) for i in ilist]
-            istring = " ".join(slist)
-            self.file.write(istring + '\n')
+            if self.doQrat:
+                for id in clauseList:
+ 	            self.file.write('d ')
+                    for lit in self.clauseDict[id]:
+ 	                self.file.write(str(lit) + ' ')
+                    self.file.write('0\n')
+            else:
+                 for id in clauseList:
+                     del self.clauseDict[id]
+                 middle = ['d']
+                 rest = clauseList + [0]
+                 ilist = [self.clauseCount] + middle + rest
+                 slist = [str(i) for i in ilist]
+                 istring = " ".join(slist)
+                 self.file.write(istring + '\n')
         else:
             for id in clauseList:
                 middle = ['d']
