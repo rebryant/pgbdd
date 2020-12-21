@@ -144,6 +144,9 @@ class Prover:
 
     # Declare variable levels when not default
     def generateLevels(self, varList):
+        if self.doQrat:
+            # No level shifting in qrat
+            return
         levelDict = {}
         for (v, l, e) in varList:
             if l in levelDict:
@@ -176,7 +179,8 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-	self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+        if self.doQrat:
+	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         afields = [str(a) for a in antecedent]
         cmd =  'ar' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
@@ -202,7 +206,8 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-	self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+        if self.doQrat:
+	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
         if self.mode == ProverMode.refProof:
@@ -245,7 +250,8 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-	self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+        if self.doQrat:
+	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         fields = ['a'] + rfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
@@ -253,8 +259,8 @@ class Prover:
 
     def proveDeleteResolution(self, id, antecedent = None, comment = None):
         lfields = [str(lit) for lit in self.clauseDict[id]]
-	self.file.write('q d ' + ' '.join(lfields) + ' 0\n')
         if self.doQrat:
+	    self.file.write('q d ' + ' '.join(lfields) + ' 0\n')
             return self.proveDelete([id], comment)
         if antecedent is None:
             antecedent = self.antecedentDict[id]
@@ -268,14 +274,15 @@ class Prover:
 
     def proveDeleteDavisPutnam(self, var, deleteIdList, causeIdList, comment = None):
         dlist = [str(id) for id in deleteIdList]
-        for id in deleteIdList:
-            for lit in self.clauseDict[id]:
-                if abs(lit) == var:
- 	            self.file.write('q d ' + str(lit) + ' ')
-            for lit in self.clauseDict[id]:
-                if abs(lit) != var:
- 	            self.file.write(str(lit) + ' ')
-            self.file.write('0\n')
+        if self.doQrat:
+            for id in deleteIdList:
+                for lit in self.clauseDict[id]:
+                    if abs(lit) == var:
+ 	                self.file.write('q d ' + str(lit) + ' ')
+                for lit in self.clauseDict[id]:
+                    if abs(lit) != var:
+ 	                self.file.write(str(lit) + ' ')
+                self.file.write('0\n')
 
         clist = [str(id) for id in causeIdList]
         fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
