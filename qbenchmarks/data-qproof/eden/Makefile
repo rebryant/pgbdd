@@ -116,7 +116,7 @@ data:
 	$(GRABBER) goe-plain-*x03-VBC.data > goe-plain-x03-VBC.csv
 
 clean:
-	rm -f *~ 
+	rm -f *~
 
 
 superclean: clean

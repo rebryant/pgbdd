@@ -166,7 +166,7 @@ class Term:
             antecedents = [shannon0, implication0]
             comment = "Resolve with upward implication for N%d" % self.root.id
             up0 = prover.proveAddResolution([litid, self.root.id], antecedents, comment)
-        
+
         antecedents = [up1, up0]
         comment = "Deletion of clause [%d] during existential quantfication" % self.root.id
         prover.proveDeleteResolution(self.validation, antecedents, comment)

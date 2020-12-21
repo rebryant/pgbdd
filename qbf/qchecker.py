@@ -61,11 +61,11 @@ def usage(name):
 
 ### Satisfaction proofs
 
-# Id a Lit* 0 
+# Id a Lit* 0
 #    Add clause C[Id] = [Lit*].
 
 # - dr Id Id+ 0
-#    Delete clause C[Id] by resolution. 
+#    Delete clause C[Id] by resolution.
 #    Also incorporates subsumption, i.e., if C' subset C, the C' ==> C.
 #    Must check that antecedents resolve to to clause C' that is
 #     (perhaps improper) subset of C[Id]
