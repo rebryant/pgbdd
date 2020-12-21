@@ -99,6 +99,15 @@ nimo$(CAT)-$(PROFILE)-rab.data:
 	$(CHECK) -m r -i nimo$(CAT)-$(PROFILE)-rab.qcnf -p nimo$(CAT)-$(PROFILE)-rab.qproof | tee -a nimo$(CAT)-$(PROFILE)-rab.data
 	rm -f nimo$(CAT)-$(PROFILE)-rab.qproof
 
+data:
+	$(GRAB) nimo-b2-*.data > nim-b2.csv
+	$(GRAB) nimo-b3-*.data > nim-b3.csv
+	$(GRAB) nimo-b5-*.data > nim-b5.csv
+	$(GRAB) nimo-s2-*.data > nim-s2.csv
+	$(GRAB) nimo-s3-*.data > nim-s3.csv
+	$(GRAB) nimo-m2-*.data > nim-m2.csv
+	$(GRAB) nimo-m3-*.data > nim-m3.csv
+
 clean:
 	rm -f *~ 
 
