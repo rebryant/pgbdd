@@ -68,19 +68,25 @@ class Term:
 
     # Generate conjunction of two terms
     def combine(self, other):
+        validation = None
         if self.mode == proof.ProverMode.refProof:
             antecedents = [self.validation, other.validation]
             newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
-            if implication != resolver.tautologyId:
-                antecedents += [implication]
             if newRoot == self.manager.leaf0:
-                comment = "Validation of Empty clause"
+                comment = "Conjunction: Validation of Empty clause"
             else:
-                comment = "Validation of %s" % newRoot.label()
-            validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
+                comment = "Conjunction: Validation of %s" % newRoot.label()
+            if implication == resolver.tautologyId:
+                if newRoot == self.root:
+                    validation = self.validation
+                elif newRoot == other.root:
+                    validation = other.validation
+            else:
+                antecedents += [implication]
+            if validation is None:
+                validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
         else:
             newRoot = self.manager.applyAnd(self.root, other.root)
-            validation = None
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
     def equantify(self, literals, prover):
@@ -93,7 +99,7 @@ class Term:
                 raise bdd.BddException("Implication failed %s -/-> %s" % (self.root.label(), newRoot.label()))
             if implication != resolver.tautologyId:
                 antecedents += [implication]
-            validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "Validation of %s" % newRoot.label())
+            validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "EQuant: Validation of %s" % newRoot.label())
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
     def uquantify(self, literals, prover):
@@ -110,9 +116,9 @@ class Term:
         if newRoot == self.manager.leaf1:
             return None
         elif newRoot == self.manager.leaf0:
-            comment = "Validation of Empty clause"
+            comment = "Restrict: Validation of Empty clause"
         else:
-            comment = "Validation of %s" % newRoot.label()
+            comment = "Restrict: Validation of %s" % newRoot.label()
         ulit = literal.variable.id
         if literal.high == self.manager.leaf1:
             ulit = -ulit
