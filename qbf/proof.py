@@ -1,5 +1,6 @@
 # Resolution Prover for QBF solver
 
+import sys
 import bdd
 import resolver
 
@@ -223,7 +224,7 @@ class Prover:
         fields = ['d'] + ilist + ['0']
         self.generateStepQP(fields, False, comment)
         for id in idList:
-            self.clauseDict[id] = None
+            del self.clauseDict[id]
             if id in self.antecedentDict:
                 del self.antecedentDict[id]
 

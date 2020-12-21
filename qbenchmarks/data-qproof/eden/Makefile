@@ -108,12 +108,20 @@ data:
 #	$(GRABBER) goe-plain-*-vBC.data > goe-plain-vBC.csv
 #	$(GRABBER) goe-plain-*-VbC.data > goe-plain-VbC.csv
 #	$(GRABBER) goe-plain-*-VBc.data > goe-plain-VBc.csv
-	$(GRABBER) goe-plain-01x*-VBC.data > goe-plain-01x-VBC.csv
-	$(GRABBER) goe-plain-*x01-VBC.data > goe-plain-x01-VBC.csv
-	$(GRABBER) goe-plain-02x*-VBC.data > goe-plain-02x-VBC.csv
-	$(GRABBER) goe-plain-*x02-VBC.data > goe-plain-x02-VBC.csv
-	$(GRABBER) goe-plain-03x*-VBC.data > goe-plain-03x-VBC.csv
-	$(GRABBER) goe-plain-*x03-VBC.data > goe-plain-x03-VBC.csv
+#
+#	$(GRABBER) goe-plain-01x*-VBC.data > goe-plain-01x-VBC.csv
+#	$(GRABBER) goe-plain-*x01-VBC.data > goe-plain-x01-VBC.csv
+#	$(GRABBER) goe-plain-02x*-VBC.data > goe-plain-02x-VBC.csv
+#	$(GRABBER) goe-plain-*x02-VBC.data > goe-plain-x02-VBC.csv
+#	$(GRABBER) goe-plain-03x*-VBC.data > goe-plain-03x-VBC.csv
+#	$(GRABBER) goe-plain-*x03-VBC.data > goe-plain-x03-VBC.csv
+	$(GRABBER) goe-plain-01x*-UBC.data > goe-plain-01x-UBC.csv
+#	$(GRABBER) goe-plain-*x01-UBC.data > goe-plain-x01-UBC.csv
+	$(GRABBER) goe-plain-02x*-UBC.data > goe-plain-02x-UBC.csv
+#	$(GRABBER) goe-plain-*x02-UBC.data > goe-plain-x02-UBC.csv
+	$(GRABBER) goe-plain-03x*-UBC.data > goe-plain-03x-UBC.csv
+#	$(GRABBER) goe-plain-*x03-UBC.data > goe-plain-x03-UBC.csv
+	$(GRABBER) goe-plain-04x*-UBC.data > goe-plain-04x-UBC.csv
 
 clean:
 	rm -f *~

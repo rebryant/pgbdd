@@ -6,7 +6,8 @@ import getopt
 import datetime
 
 def usage(name):
-    print("Usage: %s [-S] [-v] -i FILE.qcnf -p FILE.qproof" % name)
+    print("Usage: %s [-S] [-v] [-m (s|r)] -i FILE.qcnf -p FILE.qproof" % name)
+    print("   -m MODE   Set proof mode (s = satisfaction, r = refutation)")
     print("   -S        Satisfaction proof")
     print("   -v        Print more helpful diagnostic information if there is an error")
 
@@ -744,8 +745,10 @@ class Prover:
                 idx2 += 1
         while idx1 < len(ls1):
             ls1not2.append(ls1[idx1])
+            idx1 += 1
         while idx2 < len(ls2):
             ls2not1.append(ls2[idx2])
+            idx2 += 1
         return (ls1not2, ls2not1)
 
     # Make sure shifted variables compatible with original
@@ -1095,13 +1098,20 @@ def run(name, args):
     proofName = None
     refutation = True
     verbose = False
-    optList, args = getopt.getopt(args, "hSvi:p:")
+    optList, args = getopt.getopt(args, "hm:vi:p:")
     for (opt, val) in optList:
         if opt == '-h':
             usage(name)
             return
-        elif opt == '-S':
-            refutation = False
+        elif opt == '-m':
+            if val == 's':
+                refutation = False
+            elif val == 'r':
+                refutation = True
+            else:
+                print("Unknown proof mode '%s'" % val)
+                usage(name)
+                return
         elif opt == '-v':
             verbose = True
         elif opt == '-i':
