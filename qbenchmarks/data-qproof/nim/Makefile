@@ -33,6 +33,9 @@ urab: nimu$(CAT)-$(PROFILE)-rab.data
 usam: nimu$(CAT)-$(PROFILE)-sam.data
 uram: nimu$(CAT)-$(PROFILE)-ram.data
 
+useb: nimu$(CAT)-$(PROFILE)-seb.data
+ureb: nimu$(CAT)-$(PROFILE)-reb.data
+
 osab: nimo$(CAT)-$(PROFILE)-sab.data
 orab: nimo$(CAT)-$(PROFILE)-rab.data
 
@@ -78,6 +81,27 @@ nimu$(CAT)-$(PROFILE)-ram.data:
 	$(CHECK) -m r -i nimu$(CAT)-$(PROFILE)-ram.qcnf -p nimu$(CAT)-$(PROFILE)-ram.qproof | tee -a nimu$(CAT)-$(PROFILE)-ram.data
 	rm -f nimu$(CAT)-$(PROFILE)-ram.qproof
 
+nimu$(CAT)-$(PROFILE)-seb.data:
+	$(GEN) -e u -t e -V b -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-seb
+	$(SOLVE) -v $(VLEVEL) -m s -b \
+		-i nimu$(CAT)-$(PROFILE)-seb.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-seb.qproof \
+		-p nimu$(CAT)-$(PROFILE)-seb.order \
+		-L nimu$(CAT)-$(PROFILE)-seb.data
+	$(CHECK) -m s -i nimu$(CAT)-$(PROFILE)-seb.qcnf -p nimu$(CAT)-$(PROFILE)-seb.qproof | tee -a nimu$(CAT)-$(PROFILE)-seb.data
+	rm -f nimu$(CAT)-$(PROFILE)-seb.qproof
+
+nimu$(CAT)-$(PROFILE)-reb.data:
+	$(GEN) -e u -t e -V b -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-reb
+	$(SOLVE) -v $(VLEVEL) -m r -b \
+		-i nimu$(CAT)-$(PROFILE)-reb.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-reb.qproof \
+		-p nimu$(CAT)-$(PROFILE)-reb.order \
+		-L nimu$(CAT)-$(PROFILE)-reb.data
+	$(CHECK) -m r -i nimu$(CAT)-$(PROFILE)-reb.qcnf -p nimu$(CAT)-$(PROFILE)-reb.qproof | tee -a nimu$(CAT)-$(PROFILE)-reb.data
+	rm -f nimu$(CAT)-$(PROFILE)-reb.qproof
+
+
 nimo$(CAT)-$(PROFILE)-sab.data:
 	$(GEN) -e o -t a -V b -p $(PROFILE) -r nimo$(CAT)-$(PROFILE)-sab
 	$(SOLVE) -v $(VLEVEL) -m s -b \
@@ -102,11 +126,16 @@ nimo$(CAT)-$(PROFILE)-rab.data:
 data:
 	$(GRAB) nimo-b2-*.data > nim-b2.csv
 	$(GRAB) nimo-b3-*.data > nim-b3.csv
+	$(GRAB) nimo-b4-*.data > nim-b4.csv
 	$(GRAB) nimo-b5-*.data > nim-b5.csv
 	$(GRAB) nimo-s2-*.data > nim-s2.csv
 	$(GRAB) nimo-s3-*.data > nim-s3.csv
+	$(GRAB) nimo-s4-*.data > nim-s4.csv
+	$(GRAB) nimo-s5-*.data > nim-s5.csv
 	$(GRAB) nimo-m2-*.data > nim-m2.csv
 	$(GRAB) nimo-m3-*.data > nim-m3.csv
+	$(GRAB) nimo-m4-*.data > nim-m4.csv
+	$(GRAB) nimu-b3-*.data > nimu-b3.csv
 
 clean:
 	rm -f *~ 
