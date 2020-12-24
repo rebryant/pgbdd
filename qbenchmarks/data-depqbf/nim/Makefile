@@ -14,7 +14,7 @@ SDIR=$(BDIR)/../qbf
 WRAP = $(BDIR)/wrap.py
 DDIR = ../../../../depqbf
 DEPQBF= $(DDIR)/depqbf
-TLIM=1800
+TLIM=3600
 
 GEN=$(NDIR)/gen_nim.py
 SOLVE=$(INTERP) $(WRAP) $(TLIM) $(DEPQBF)
