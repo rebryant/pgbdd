@@ -124,7 +124,7 @@ data:
 	$(GRABBER) goe-plain-04x*-UBC.data > goe-plain-04x-UBC.csv
 
 clean:
-	rm -f *~ 
+	rm -f *~
 
 
 superclean: clean

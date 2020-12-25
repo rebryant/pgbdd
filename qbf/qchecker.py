@@ -6,7 +6,7 @@ import getopt
 import datetime
 
 def usage(name):
-    print("Usage: %s [-S] [-v] [-m (s|r)] -i FILE.qcnf -p FILE.qproof" % name)
+    print("Usage: %s [-S] [-v] -m (s|r) -i FILE.qcnf -p FILE.qproof" % name)
     print("   -m MODE   Set proof mode (s = satisfaction, r = refutation)")
     print("   -S        Satisfaction proof")
     print("   -v        Print more helpful diagnostic information if there is an error")
@@ -62,11 +62,11 @@ def usage(name):
 
 ### Satisfaction proofs
 
-# Id a Lit* 0 
+# Id a Lit* 0
 #    Add clause C[Id] = [Lit*].
 
 # - dr Id Id+ 0
-#    Delete clause C[Id] by resolution. 
+#    Delete clause C[Id] by resolution.
 #    Also incorporates subsumption, i.e., if C' subset C, the C' ==> C.
 #    Must check that antecedents resolve to to clause C' that is
 #     (perhaps improper) subset of C[Id]
@@ -1096,7 +1096,7 @@ class SatisfactionProver(Prover):
 def run(name, args):
     qcnfName = None
     proofName = None
-    refutation = True
+    refutation = None
     verbose = False
     optList, args = getopt.getopt(args, "hm:vi:p:")
     for (opt, val) in optList:
@@ -1126,6 +1126,9 @@ def run(name, args):
         return
     if proofName is None:
         print("Need proof file name")
+        return
+    if refutation is None:
+        print("Need to specify whether refutation or satisfaction proof")
         return
     start = datetime.datetime.now()
     qreader = QcnfReader(qcnfName)
