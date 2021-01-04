@@ -7,7 +7,7 @@ import writer
 
 
 def usage(name):
-    print("Usage: %s: [-h][-v] [-e u|o] [-t b|a|i] [-V m|b] -p N1+N2+..+Nk -r ROOT")
+    print("Usage: %s: [-h][-v] [-e u|o] [-t b|a|i] [-V m|b|o] -p N1+N2+..+Nk -r ROOT")
     print("  -h             Print this message")
     print("  -v             Include comments in output")
     print("  -e u|o         Specify encoding of buckets::")    
@@ -17,11 +17,12 @@ def usage(name):
     print("                   b: before their defining variables (when possible, otherwise after)")
     print("                   a: after their defining variables")
     print("                   e: at end of quantifier string")
-    print("  -V m|b         Specify variable ordering strategy:")
+    print("  -V m|b|o       Specify variable ordering strategy:")
     print("                   m: Move-major")
     print("                   b: Bucket-major")
+    print("                   o: Object-major")
     print("  -p N1:N2:..Nk  Specify bucket profile")
-    print("  -r ROOT        Specify root name for files.  Will generate ROOT.qcnf, ROOT.order, and ROOT.buckets")
+    print("  -r ROOT        Specify root name for files.  Will generate ROOT.qcnf, ROOT.order")
 
 # Generate QBF and other files for game of NIM
 
@@ -556,7 +557,8 @@ class Move:
         
     # Provide ordered list of variables that depend on i, j, and t
     # If bucket specified, then only those for indicated bucket
-    def listBottomVariables(self, bucket = None):
+    # If obj is specified, then only those for indicated object within bucket
+    def listBottomVariables(self, bucket = None, obj = None):
         #   itemRemoved[i,j,t]: 1<=i<=k, 1<=j<=Ni, 1<=t<=N
         #   itemPresent[i,j,t]: 1<=i<=k, 1<=j<=Ni, 1<=t<=N
         #   itemAvailable[i,j,t]: 1<=i<=k, 1<=j<=Ni, 2<=t<=N
@@ -567,17 +569,21 @@ class Move:
                     vlist += [self.itemRemovedVars[(i,j)].id, self.itemPresentVars[(i,j)].id]
                     if self.level > 1:
                         vlist += [self.itemAvailableVars[(i,j)].id]
-        else:
+        elif obj is None:
             for j in unitRange(self.profile[bucket-1]):
                 vlist += [self.itemRemovedVars[(bucket,j)].id, self.itemPresentVars[(bucket,j)].id]
                 if self.level > 1:
                     vlist += [self.itemAvailableVars[(bucket,j)].id]
+        else:
+            vlist += [self.itemRemovedVars[(bucket,obj)].id, self.itemPresentVars[(bucket,obj)].id]
+            if self.level > 1:
+                vlist += [self.itemAvailableVars[(bucket,obj)].id]
         return vlist
 
 class Nim:
 
     # Variable ordering strategies
-    moveMajor, bucketMajor = range(2)
+    moveMajor, bucketMajor, objectMajor = range(3)
 
 
     manager = None
@@ -655,7 +661,6 @@ class Nim:
             writer.doOrder(vlist)
             writer.doOrder(self.moveList[l-1].listMiddleVariables(bucket = None))
             writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = None))
-        return vlist
 
     def listVariablesBucketMajor(self, writer):
         for l in unitRange(self.moveCount):
@@ -672,13 +677,31 @@ class Nim:
             for l in unitRange(self.moveCount):
                 writer.doOrder(self.moveList[l-1].listMiddleVariables(bucket = i))
                 writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = i))
-        return vlist
-    
+
+    def listVariablesObjectMajor(self, writer):
+        for l in unitRange(self.moveCount):
+            vlist = []
+            vlist += self.moveList[l-1].listTopVariables()
+            if l-1 in self.winnerVars:
+                # Winner variable belongs to next higher level
+                vlist.append(self.winnerVars[l-1].id)
+            if l == self.moveCount and l in self.winnerVars:
+                # Final winner variable belongs in last level
+                vlist.append(self.winnerVars[l].id)
+            writer.doOrder(vlist)
+            writer.doOrder(self.moveList[l-1].listMiddleVariables())
+        for i in unitRange(self.bucketCount):
+            for j in unitRange(self.profile[i-1]):
+                for l in unitRange(self.moveCount):
+                    writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = i, obj = j))
+                
     def listVariables(self, mode, writer):
         if mode == self.moveMajor:
             self.listVariablesMoveMajor(writer)
         elif mode == self.bucketMajor:
             self.listVariablesBucketMajor(writer)
+        elif mode == self.objectMajor:
+            self.listVariablesObjectMajor(writer)
         else:
             msg = "Unknown variable ordering mode %s" % str(mode)
             raise Exception(msg)
@@ -723,6 +746,8 @@ def run(name, args):
                 variableMode = Nim.moveMajor
             elif val == 'b':
                 variableMode = Nim.bucketMajor
+            elif val == 'o':
+                variableMode = Nim.objectMajor
             else:
                 print("Unknown variable ordering strategy '%s'" % val)
                 usage(name)
