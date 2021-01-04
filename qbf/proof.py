@@ -106,9 +106,9 @@ class Prover:
         if self.mode == ProverMode.refProof:
             if self.doQrat:
                 for id in clauseList:
- 	            self.file.write('d ')
+                    self.file.write('d ')
                     for lit in self.clauseDict[id]:
- 	                self.file.write(str(lit) + ' ')
+                        self.file.write(str(lit) + ' ')
                     self.file.write('0\n')
             else:
                  for id in clauseList:
@@ -180,7 +180,7 @@ class Prover:
             return result
         rfields = [str(r) for r in result]
         if self.doQrat:
-	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+            self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         afields = [str(a) for a in antecedent]
         cmd =  'ar' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
@@ -207,7 +207,7 @@ class Prover:
             return result
         rfields = [str(r) for r in result]
         if self.doQrat:
-	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+            self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
         if self.mode == ProverMode.refProof:
@@ -251,7 +251,7 @@ class Prover:
             return result
         rfields = [str(r) for r in result]
         if self.doQrat:
-	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+            self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         fields = ['a'] + rfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
@@ -260,7 +260,7 @@ class Prover:
     def proveDeleteResolution(self, id, antecedent = None, comment = None):
         lfields = [str(lit) for lit in self.clauseDict[id]]
         if self.doQrat:
-	    self.file.write('q d ' + ' '.join(lfields) + ' 0\n')
+            self.file.write('q d ' + ' '.join(lfields) + ' 0\n')
             return self.proveDelete([id], comment)
         if antecedent is None:
             antecedent = self.antecedentDict[id]
@@ -278,10 +278,10 @@ class Prover:
             for id in deleteIdList:
                 for lit in self.clauseDict[id]:
                     if abs(lit) == var:
- 	                self.file.write('q d ' + str(lit) + ' ')
+                        self.file.write('q d ' + str(lit) + ' ')
                 for lit in self.clauseDict[id]:
                     if abs(lit) != var:
- 	                self.file.write(str(lit) + ' ')
+                        self.file.write(str(lit) + ' ')
                 self.file.write('0\n')
 
         clist = [str(id) for id in causeIdList]
