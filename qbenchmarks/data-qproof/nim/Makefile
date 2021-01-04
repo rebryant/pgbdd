@@ -10,6 +10,7 @@ INTERP=python3
 # Variable ordering
 #   m: move-major
 #   b: bucket-major
+#   o: object-major
 
 BDIR=../..
 NDIR=$(BDIR)/nim
@@ -33,12 +34,17 @@ urab: nimu$(CAT)-$(PROFILE)-rab.data
 usam: nimu$(CAT)-$(PROFILE)-sam.data
 uram: nimu$(CAT)-$(PROFILE)-ram.data
 
+usao: nimu$(CAT)-$(PROFILE)-sao.data
+urao: nimu$(CAT)-$(PROFILE)-rao.data
+
 useb: nimu$(CAT)-$(PROFILE)-seb.data
 ureb: nimu$(CAT)-$(PROFILE)-reb.data
 
 osab: nimo$(CAT)-$(PROFILE)-sab.data
 orab: nimo$(CAT)-$(PROFILE)-rab.data
 
+osao: nimo$(CAT)-$(PROFILE)-sao.data
+orao: nimo$(CAT)-$(PROFILE)-rao.data
 
 
 nimu$(CAT)-$(PROFILE)-sab.data:
@@ -80,6 +86,27 @@ nimu$(CAT)-$(PROFILE)-ram.data:
 		-L nimu$(CAT)-$(PROFILE)-ram.data
 	$(CHECK) -m r -i nimu$(CAT)-$(PROFILE)-ram.qcnf -p nimu$(CAT)-$(PROFILE)-ram.qproof | tee -a nimu$(CAT)-$(PROFILE)-ram.data
 	rm -f nimu$(CAT)-$(PROFILE)-ram.qproof
+
+nimu$(CAT)-$(PROFILE)-sao.data:
+	$(GEN) -e u -t a -V o -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-sao
+	$(SOLVE) -v $(VLEVEL) -m s -b \
+		-i nimu$(CAT)-$(PROFILE)-sao.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-sao.qproof \
+		-p nimu$(CAT)-$(PROFILE)-sao.order \
+		-L nimu$(CAT)-$(PROFILE)-sao.data
+	$(CHECK) -m s -i nimu$(CAT)-$(PROFILE)-sao.qcnf -p nimu$(CAT)-$(PROFILE)-sao.qproof | tee -a nimu$(CAT)-$(PROFILE)-sao.data
+	rm -f nimu$(CAT)-$(PROFILE)-sao.qproof
+
+nimu$(CAT)-$(PROFILE)-rao.data:
+	$(GEN) -e u -t a -V o -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-rao
+	$(SOLVE) -v $(VLEVEL) -m r -b \
+		-i nimu$(CAT)-$(PROFILE)-rao.qcnf \
+		-o nimu$(CAT)-$(PROFILE)-rao.qproof \
+		-p nimu$(CAT)-$(PROFILE)-rao.order \
+		-L nimu$(CAT)-$(PROFILE)-rao.data
+	$(CHECK) -m r -i nimu$(CAT)-$(PROFILE)-rao.qcnf -p nimu$(CAT)-$(PROFILE)-rao.qproof | tee -a nimu$(CAT)-$(PROFILE)-rao.data
+	rm -f nimu$(CAT)-$(PROFILE)-rao.qproof
+
 
 nimu$(CAT)-$(PROFILE)-seb.data:
 	$(GEN) -e u -t e -V b -p $(PROFILE) -r nimu$(CAT)-$(PROFILE)-seb
@@ -123,23 +150,46 @@ nimo$(CAT)-$(PROFILE)-rab.data:
 	$(CHECK) -m r -i nimo$(CAT)-$(PROFILE)-rab.qcnf -p nimo$(CAT)-$(PROFILE)-rab.qproof | tee -a nimo$(CAT)-$(PROFILE)-rab.data
 	rm -f nimo$(CAT)-$(PROFILE)-rab.qproof
 
+nimo$(CAT)-$(PROFILE)-sao.data:
+	$(GEN) -e o -t a -V o -p $(PROFILE) -r nimo$(CAT)-$(PROFILE)-sao
+	$(SOLVE) -v $(VLEVEL) -m s -b \
+		-i nimo$(CAT)-$(PROFILE)-sao.qcnf \
+		-o nimo$(CAT)-$(PROFILE)-sao.qproof \
+		-p nimo$(CAT)-$(PROFILE)-sao.order \
+		-L nimo$(CAT)-$(PROFILE)-sao.data
+	$(CHECK) -m s -i nimo$(CAT)-$(PROFILE)-sao.qcnf -p nimo$(CAT)-$(PROFILE)-sao.qproof | tee -a nimo$(CAT)-$(PROFILE)-sao.data
+	rm -f nimo$(CAT)-$(PROFILE)-sao.qproof
+
+
+nimo$(CAT)-$(PROFILE)-rao.data:
+	$(GEN) -e o -t a -V o -p $(PROFILE) -r nimo$(CAT)-$(PROFILE)-rao
+	$(SOLVE) -v $(VLEVEL) -m r -b \
+		-i nimo$(CAT)-$(PROFILE)-rao.qcnf \
+		-o nimo$(CAT)-$(PROFILE)-rao.qproof \
+		-p nimo$(CAT)-$(PROFILE)-rao.order \
+		-L nimo$(CAT)-$(PROFILE)-rao.data
+	$(CHECK) -m r -i nimo$(CAT)-$(PROFILE)-rao.qcnf -p nimo$(CAT)-$(PROFILE)-rao.qproof | tee -a nimo$(CAT)-$(PROFILE)-rao.data
+	rm -f nimo$(CAT)-$(PROFILE)-rao.qproof
+
+
 data:
-	$(GRAB) nimo-b2-*.data > nim-b2.csv
-	$(GRAB) nimo-b3-*.data > nim-b3.csv
-	$(GRAB) nimo-b4-*.data > nim-b4.csv
-	$(GRAB) nimo-b5-*.data > nim-b5.csv
-	$(GRAB) nimo-s2-*.data > nim-s2.csv
-	$(GRAB) nimo-s3-*.data > nim-s3.csv
-	$(GRAB) nimo-s4-*.data > nim-s4.csv
-	$(GRAB) nimo-s5-*.data > nim-s5.csv
-	$(GRAB) nimo-m2-*.data > nim-m2.csv
-	$(GRAB) nimo-m3-*.data > nim-m3.csv
-	$(GRAB) nimo-m4-*.data > nim-m4.csv
-	$(GRAB) nimu-b3-*.data > nimu-b3.csv
+	$(GRAB) nimo-b2-*b.data > nim-b2b.csv
+	$(GRAB) nimo-b3-*b.data > nim-b3b.csv
+	$(GRAB) nimo-b3-*o.data > nim-b3o.csv
+	$(GRAB) nimo-b4-*b.data > nim-b4b.csv
+	$(GRAB) nimo-b5-*b.data > nim-b5b.csv
+	$(GRAB) nimo-s2-*b.data > nim-s2b.csv
+	$(GRAB) nimo-s3-*b.data > nim-s3b.csv
+	$(GRAB) nimo-s4-*b.data > nim-s4b.csv
+	$(GRAB) nimo-s5-*b.data > nim-s5b.csv
+	$(GRAB) nimo-m2-*b.data > nim-m2b.csv
+	$(GRAB) nimo-m3-*b.data > nim-m3b.csv
+	$(GRAB) nimo-m4-*b.data > nim-m4b.csv
+	$(GRAB) nimu-b3-*b.data > nimu-b3b.csv
 
 clean:
 	rm -f *~ 
 
 
 superclean: clean
-	rm -f *.qcnf *.order *.data *.qproof
+	rm -f *.qcnf *.order *b.data *.qproof
