@@ -20,7 +20,8 @@ GEN=$(NDIR)/gen_nim.py
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) $(SDIR)/qchecker.py
 
-GRAB=./grab_plusclauses.py
+CGRAB=../grab_plusclauses.py
+TGRAB=../grab_plustime.py
 
 VLEVEL=1
 PROFILE=4+3+2
@@ -173,19 +174,23 @@ nimo$(CAT)-$(PROFILE)-rao.data:
 
 
 data:
-	$(GRAB) nimo-b2-*b.data > nim-b2b.csv
-	$(GRAB) nimo-b3-*b.data > nim-b3b.csv
-	$(GRAB) nimo-b3-*o.data > nim-b3o.csv
-	$(GRAB) nimo-b4-*b.data > nim-b4b.csv
-	$(GRAB) nimo-b5-*b.data > nim-b5b.csv
-	$(GRAB) nimo-s2-*b.data > nim-s2b.csv
-	$(GRAB) nimo-s3-*b.data > nim-s3b.csv
-	$(GRAB) nimo-s4-*b.data > nim-s4b.csv
-	$(GRAB) nimo-s5-*b.data > nim-s5b.csv
-	$(GRAB) nimo-m2-*b.data > nim-m2b.csv
-	$(GRAB) nimo-m3-*b.data > nim-m3b.csv
-	$(GRAB) nimo-m4-*b.data > nim-m4b.csv
-	$(GRAB) nimu-b3-*b.data > nimu-b3b.csv
+#	$(CGRAB) nimo-b2-*b.data > nimo-pgbddq-b2b-clauses.csv
+	$(CGRAB) nimo-b3-*b.data > nimo-pgbddq-b3b-clauses.csv
+	$(CGRAB) nimo-b3-*o.data > nimo-pgbddq-b3o-clauses.csv
+#	$(CGRAB) nimo-b4-*b.data > nimo-pgbddq-b4b-clauses.csv
+#	$(CGRAB) nimo-b5-*b.data > nimo-pgbddq-b5b-clauses.csv
+#	$(CGRAB) nimo-s2-*b.data > nimo-pgbddq-s2b-clauses.csv
+#	$(CGRAB) nimo-s3-*b.data > nimo-pgbddq-s3b-clauses.csv
+#	$(CGRAB) nimo-s4-*b.data > nimo-pgbddq-s4b-clauses.csv
+#	$(CGRAB) nimo-s5-*b.data > nimo-pgbddq-s5b-clauses.csv
+#	$(CGRAB) nimo-m2-*b.data > nimo-pgbddq-m2b-clauses.csv
+#	$(CGRAB) nimo-m3-*b.data > nimo-pgbddq-m3b-clauses.csv
+#	$(CGRAB) nimo-m4-*b.data > nimo-pgbddq-m4b-clauses.csv
+	$(CGRAB) nimu-b3-*b.data > nimu-pgbddq-b3b-clauses.csv
+	$(CGRAB) nimo-f4-*-rab.data > nimo-pgbddq-f4b-clauses.csv
+	$(CGRAB) nimo-t4-*-sab.data > nimo-pgbddq-t4b-clauses.csv
+	$(TGRAB) nimo-f4-*-rab.data > nimo-pgbddq-f4b-seconds.csv
+	$(TGRAB) nimo-t4-*-sab.data > nimo-pgbddq-t4b-seconds.csv
 
 clean:
 	rm -f *~ 

@@ -37,3 +37,8 @@ make osao CAT='-b3' PROFILE=6+6+7
 make osao CAT='-b3' PROFILE=6+7+7
 # N = 21
 make osao CAT='-b3' PROFILE=7+7+7
+make osao CAT='-b3' PROFILE=8+8+8
+make osao CAT='-b3' PROFILE=9+9+9
+make osao CAT='-b3' PROFILE=10+10+10
+make osao CAT='-b3' PROFILE=11+11+11
+

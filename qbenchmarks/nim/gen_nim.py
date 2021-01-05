@@ -118,6 +118,9 @@ def usage(name):
 def unitRange(n):
     return list(range(1,n+1))
 
+def unitRangeReverse(n):
+    return list(range(n,0,-1))
+
 class Variable:
     name = None
     id = None
@@ -694,6 +697,26 @@ class Nim:
             for j in unitRange(self.profile[i-1]):
                 for l in unitRange(self.moveCount):
                     writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = i, obj = j))
+
+    # 01/05/2020: Tried flipping variables.  Found that it did slightly worse
+    def listVariablesObjectMajorReverse(self, writer):
+        for i in unitRange(self.bucketCount):
+            for j in unitRange(self.profile[i-1]):
+                for l in unitRange(self.moveCount):
+                    writer.doOrder(self.moveList[l-1].listBottomVariables(bucket = i, obj = j))
+
+        for l in unitRange(self.moveCount):
+            writer.doOrder(self.moveList[l-1].listMiddleVariables())
+            vlist = []
+            vlist += self.moveList[l-1].listTopVariables()
+            if l-1 in self.winnerVars:
+                # Winner variable belongs to next higher level
+                vlist.append(self.winnerVars[l-1].id)
+            if l == self.moveCount and l in self.winnerVars:
+                # Final winner variable belongs in last level
+                vlist.append(self.winnerVars[l].id)
+            writer.doOrder(vlist)
+
                 
     def listVariables(self, mode, writer):
         if mode == self.moveMajor:
