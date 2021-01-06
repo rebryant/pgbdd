@@ -50,10 +50,14 @@ ldom$(CAT)-$(N)-ra.data:
 	rm -f ldom$(CAT)-$(N)-ra.qproof
 
 data:
+	$(CGRAB) *-sa.data > ldom-qproof-sa-clauses.csv
+	$(CGRAB) *-ra.data > ldom-qproof-ra-clauses.csv
+	$(TGRAB) *-sa.data > ldom-qproof-sa-seconds.csv
+	$(TGRAB) *-ra.data > ldom-qproof-ra-seconds.csv
 
 clean:
 	rm -f *~ 
 
 
 superclean: clean
-	rm -f *.qcnf *.order *b.data *.qproof
+	rm -f *.qcnf *.order *.data *.qproof
