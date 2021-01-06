@@ -7,9 +7,10 @@ import writer
 
 
 def usage(name):
-    print("Usage: %s: [-h][-v][-n N][-t b|a|i] -r ROOT")
+    print("Usage: %s: [-h][-v][-i][-n N][-t b|a|i] -r ROOT")
     print("  -h             Print this message")
     print("  -v             Include comments in output")
+    print("  -i             Invert formula")
     print("  -n N           Specify number of squares")
     print("  -t b|a|e       Specify position of Tseitin variables:")
     print("                   b: before their defining variables (when possible, otherwise after)")
@@ -93,11 +94,18 @@ def usage(name):
 
 # Global Constraints.  
 
-# Winning scenarios
+# Winning scenarios (Normal)
 # w[t] --> AND_(t'<=t) moved[t'] & !moved[t+1]  All odd t
 #
 # Winning
 # OR_odd_t w[t]
+
+# Winning scenarios (Inverted)
+# w[t] --> AND_(t'<=t) moved[t'] & !moved[t+1]  All even t>=0
+#
+# Winning
+# OR_even_t w[t]
+
 
 def unitRange(n):
     return list(range(1,n+1))
@@ -238,9 +246,9 @@ class Move:
     #    Legal move took place
     movedVar = None
 
-    def __init__(self, manager, level, N, prevVars):
+    def __init__(self, manager, level, N, invert, prevVars):
         self.level = level
-        self.isExistential = level % 2 == 1
+        self.isExistential = level % 2 == (0 if invert else 1)
         self.manager = manager
         self.N = N
         self.prevVars = prevVars
@@ -469,23 +477,25 @@ class Domino:
     moveCount = 0
     moveList = []
     winnerVars = None
+    invert = False
 
-    def __init__(self, manager, N):
+    def __init__(self, manager, N, invert):
         self.manager = manager
         self.N = N
         self.moveCount = N // 2
-        pmove = Move(manager, 1, N, None)
+        self.invert = invert
+        pmove = Move(manager, 1, N, invert, None)
         self.moveList = [pmove]
         for l in range(2, self.moveCount+1):
-            nmove = Move(manager, l, N, pmove.edgePresentVars)
+            nmove = Move(manager, l, N, invert, pmove.edgePresentVars)
             self.moveList.append(nmove)
             pmove = nmove
         self.doWinnerVars()
 
     def doWinnerVars(self):
         self.winnerVars = {}
-        for l in unitRange(self.moveCount):
-            if l % 2 == 0:
+        for l in range(self.moveCount+1):
+            if l % 2 == (1 if self.invert else 0):
                 continue
             v = self.manager.createTseitinVariable(l+1, "win[%d]" % l, False)
             self.winnerVars[l] = v
@@ -494,7 +504,8 @@ class Domino:
 
 
     def doWinnerClauses(self):
-        self.manager.doComment("Must have win in an odd number of steps")
+        condition = "even" if self.invert else "odd"
+        self.manager.doComment("Must have win in an %s number of steps" % condition)
         wkeys = sorted(self.winnerVars.keys())
         vlist = [self.winnerVars[l] for l in wkeys]
         plist = [1] * len(wkeys)
@@ -543,14 +554,17 @@ def run(name, args):
     N = 2
     root = None
     verbose = False
+    invert = False
     tseitinMode = Manager.tseitinEnd
-    optlist, args = getopt.getopt(args, "hvt:n:r:")
+    optlist, args = getopt.getopt(args, "hvit:n:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-i':
+            invert = True
         elif opt == '-t':
             if val == 'b':
                 tseitinMode = Manager.tseitinBefore
@@ -572,7 +586,7 @@ def run(name, args):
         return
     qwrite = writer.QcnfWriter(root)
     manager = Manager(qwrite, verbose, tseitinMode)
-    domino = Domino(manager, N)
+    domino = Domino(manager, N, invert)
     domino.buildQcnf()
     vwrite = writer.OrderWriter(manager.variableCount, root, verbose=verbose)
     domino.listVariables(vwrite)
