@@ -26,14 +26,20 @@ N=5
 all: a
 
 a: ldoma-$(N).data
+ia: ildoma-$(N).data
 
 
 ldoma-$(N).data:
 	$(GEN) -t a -n $(N) -r ldoma-$(N)
 	$(SOLVE) ldoma-$(N).qcnf | tee ldoma-$(N).data
 
+ildoma-$(N).data:
+	$(GEN) -i -t a -n $(N) -r ildoma-$(N)
+	$(SOLVE) ildoma-$(N).qcnf | tee ildoma-$(N).data
+
 data:
 	$(TGRAB) ldoma-*.data > ldom-depqbf-a-seconds.csv
+	$(TGRAB) ildoma-*.data > ildom-depqbf-a-seconds.csv
 
 clean:
 	rm -f *~  *.order

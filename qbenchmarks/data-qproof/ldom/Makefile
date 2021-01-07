@@ -21,39 +21,65 @@ TGRAB=../grab_plustime.py
 
 VLEVEL=1
 N=5
-CAT=
 
 all: sa
 
-sa: ldom$(CAT)-$(N)-sa.data
-ra: ldom$(CAT)-$(N)-ra.data
+sa: ldom-$(N)-sa.data
+ra: ldom-$(N)-ra.data
 
+isa: ildom-$(N)-sa.data
+ira: ildom-$(N)-ra.data
 
-ldom$(CAT)-$(N)-sa.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-sa
+ldom-$(N)-sa.data:
+	$(GEN) -t a -n $(N) -r ldom-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i ldom$(CAT)-$(N)-sa.qcnf \
-		-o ldom$(CAT)-$(N)-sa.qproof \
-		-p ldom$(CAT)-$(N)-sa.order \
-		-L ldom$(CAT)-$(N)-sa.data
-	$(CHECK) -m s -i ldom$(CAT)-$(N)-sa.qcnf -p ldom$(CAT)-$(N)-sa.qproof | tee -a ldom$(CAT)-$(N)-sa.data
-	rm -f ldom$(CAT)-$(N)-sa.qproof
+		-i ldom-$(N)-sa.qcnf \
+		-o ldom-$(N)-sa.qproof \
+		-p ldom-$(N)-sa.order \
+		-L ldom-$(N)-sa.data
+	$(CHECK) -m s -i ldom-$(N)-sa.qcnf -p ldom-$(N)-sa.qproof | tee -a ldom-$(N)-sa.data
+	rm -f ldom-$(N)-sa.qproof
 
-ldom$(CAT)-$(N)-ra.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
+ldom-$(N)-ra.data:
+	$(GEN) -t a -n $(N) -r ldom-$(N)-ra
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i ldom$(CAT)-$(N)-ra.qcnf \
-		-o ldom$(CAT)-$(N)-ra.qproof \
-		-p ldom$(CAT)-$(N)-ra.order \
-		-L ldom$(CAT)-$(N)-ra.data
-	$(CHECK) -m r -i ldom$(CAT)-$(N)-ra.qcnf -p ldom$(CAT)-$(N)-ra.qproof | tee -a ldom$(CAT)-$(N)-ra.data
-	rm -f ldom$(CAT)-$(N)-ra.qproof
+		-i ldom-$(N)-ra.qcnf \
+		-o ldom-$(N)-ra.qproof \
+		-p ldom-$(N)-ra.order \
+		-L ldom-$(N)-ra.data
+	$(CHECK) -m r -i ldom-$(N)-ra.qcnf -p ldom-$(N)-ra.qproof | tee -a ldom-$(N)-ra.data
+	rm -f ldom-$(N)-ra.qproof
+
+ildom-$(N)-sa.data:
+	$(GEN) -i -t a -n $(N) -r ildom-$(N)-sa
+	$(SOLVE) -v $(VLEVEL) -m s -b \
+		-i ildom-$(N)-sa.qcnf \
+		-o ildom-$(N)-sa.qproof \
+		-p ildom-$(N)-sa.order \
+		-L ildom-$(N)-sa.data
+	$(CHECK) -m s -i ildom-$(N)-sa.qcnf -p ildom-$(N)-sa.qproof | tee -a ildom-$(N)-sa.data
+	rm -f ildom-$(N)-sa.qproof
+
+ildom-$(N)-ra.data:
+	$(GEN) -i -t a -n $(N) -r ildom-$(N)-ra
+	$(SOLVE) -v $(VLEVEL) -m r -b \
+		-i ildom-$(N)-ra.qcnf \
+		-o ildom-$(N)-ra.qproof \
+		-p ildom-$(N)-ra.order \
+		-L ildom-$(N)-ra.data
+	$(CHECK) -m r -i ildom-$(N)-ra.qcnf -p ildom-$(N)-ra.qproof | tee -a ildom-$(N)-ra.data
+	rm -f ildom-$(N)-ra.qproof
+
 
 data:
-	$(CGRAB) *-sa.data > ldom-qproof-sa-clauses.csv
-	$(CGRAB) *-ra.data > ldom-qproof-ra-clauses.csv
-	$(TGRAB) *-sa.data > ldom-qproof-sa-seconds.csv
-	$(TGRAB) *-ra.data > ldom-qproof-ra-seconds.csv
+	$(CGRAB) ldom*-sa.data > ldom-qproof-sa-clauses.csv
+	$(CGRAB) ldom*-ra.data > ldom-qproof-ra-clauses.csv
+	$(TGRAB) ldom*-sa.data > ldom-qproof-sa-seconds.csv
+	$(TGRAB) ldom*-ra.data > ldom-qproof-ra-seconds.csv
+	$(CGRAB) ildom*-sa.data > ildom-qproof-sa-clauses.csv
+	$(CGRAB) ildom*-ra.data > ildom-qproof-ra-clauses.csv
+	$(TGRAB) ildom*-sa.data > ildom-qproof-sa-seconds.csv
+	$(TGRAB) ildom*-ra.data > ildom-qproof-ra-seconds.csv
 
 clean:
 	rm -f *~ 

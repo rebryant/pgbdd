@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+make ia N=04
+make ia N=05
+make ia N=06
+make ia N=07
+make ia N=08
+make ia N=09
+make ia N=10
+make ia N=11
+make ia N=12
+make ia N=13
+make ia N=14
+make ia N=15
+make ia N=16
+make ia N=17
+make ia N=18
+make ia N=19
+make ia N=20
+make ia N=21
+make ia N=22
+make ia N=23
+make ia N=24
+make ia N=25
+make ia N=26
+make ia N=27
+make ia N=28
+make ia N=29
+make ia N=30
+# Known false cases
+make ia N=35
+make ia N=39
+make ia N=43

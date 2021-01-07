@@ -25,6 +25,7 @@ N=5
 all: a
 
 a: ldoma-$(N).data
+ia: ildoma-$(N).data
 
 
 ldoma-$(N).data:
@@ -32,8 +33,15 @@ ldoma-$(N).data:
 	$(CONV) ldoma-$(N).qcnf -write-gq -o ldoma-$(N).gq 2>&1 | tee ldoma-$(N).data
 	$(GQBF) ldoma-$(N).gq -s-cnf -time-out $(TLIM) | tee -a ldoma-$(N).data
 
+ildoma-$(N).data:
+	$(GEN)  -i -t a -n $(N) -r ildoma-$(N)
+	$(CONV) ildoma-$(N).qcnf -write-gq -o ildoma-$(N).gq 2>&1 | tee ildoma-$(N).data
+	$(GQBF) ildoma-$(N).gq -s-cnf -time-out $(TLIM) | tee -a ildoma-$(N).data
+
+
 data:
 	$(TGRAB) ldoma-*.data > ldom-ghostq-a-seconds.csv
+	$(TGRAB) ildoma-*.data > ildom-ghostq-a-seconds.csv
 
 clean:
 	rm -f *~ *.order *.qcnf *.gq
