@@ -53,6 +53,7 @@ nimue-ldr$(CAT)-$(PROFILE).data:
 	$(SOLVE)  --long-dist-res --dep-man=simple nimue$(CAT)-$(PROFILE).qcnf | tee nimue-ldr$(CAT)-$(PROFILE).data
 
 data:
+	$(TGRAB) nimua-b3*.data > nimu-depqbf-b3.csv
 	$(TGRAB) nimua-t4*.data > nimu-depqbf-t4.csv
 	$(TGRAB) nimua-f4*.data > nimu-depqbf-f4.csv
 

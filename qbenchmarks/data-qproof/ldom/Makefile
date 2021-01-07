@@ -72,14 +72,14 @@ ildom-$(N)-ra.data:
 
 
 data:
-	$(CGRAB) ldom*-sa.data > ldom-qproof-sa-clauses.csv
-	$(CGRAB) ldom*-ra.data > ldom-qproof-ra-clauses.csv
-	$(TGRAB) ldom*-sa.data > ldom-qproof-sa-seconds.csv
-	$(TGRAB) ldom*-ra.data > ldom-qproof-ra-seconds.csv
-	$(CGRAB) ildom*-sa.data > ildom-qproof-sa-clauses.csv
-	$(CGRAB) ildom*-ra.data > ildom-qproof-ra-clauses.csv
-	$(TGRAB) ildom*-sa.data > ildom-qproof-sa-seconds.csv
-	$(TGRAB) ildom*-ra.data > ildom-qproof-ra-seconds.csv
+	$(CGRAB) ldom*-sa.data > ldom-bdd-sa-clauses.csv
+	$(CGRAB) ldom*-ra.data > ldom-bdd-ra-clauses.csv
+	$(TGRAB) ldom*-sa.data > ldom-bdd-sa-seconds.csv
+	$(TGRAB) ldom*-ra.data > ldom-bdd-ra-seconds.csv
+	$(CGRAB) ildom*-sa.data > ildom-bdd-sa-clauses.csv
+	$(CGRAB) ildom*-ra.data > ildom-bdd-ra-clauses.csv
+	$(TGRAB) ildom*-sa.data > ildom-bdd-sa-seconds.csv
+	$(TGRAB) ildom*-ra.data > ildom-bdd-ra-seconds.csv
 
 clean:
 	rm -f *~ 

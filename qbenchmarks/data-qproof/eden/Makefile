@@ -115,13 +115,13 @@ data:
 #	$(GRABBER) goe-plain-*x02-VBC.data > goe-plain-x02-VBC.csv
 #	$(GRABBER) goe-plain-03x*-VBC.data > goe-plain-03x-VBC.csv
 #	$(GRABBER) goe-plain-*x03-VBC.data > goe-plain-x03-VBC.csv
-	$(GRABBER) goe-plain-01x*-UBC.data > goe-plain-01x-UBC.csv
+	$(GRABBER) goe-plain-01x*-UBC.data > goe-plain-bdd-01x-UBC-clauses.csv
 #	$(GRABBER) goe-plain-*x01-UBC.data > goe-plain-x01-UBC.csv
-	$(GRABBER) goe-plain-02x*-UBC.data > goe-plain-02x-UBC.csv
+	$(GRABBER) goe-plain-02x*-UBC.data > goe-plain-bdd-02x-UBC-clauses.csv
 #	$(GRABBER) goe-plain-*x02-UBC.data > goe-plain-x02-UBC.csv
-	$(GRABBER) goe-plain-03x*-UBC.data > goe-plain-03x-UBC.csv
+	$(GRABBER) goe-plain-03x*-UBC.data > goe-plain-bdd-03x-UBC-clauses.csv
 #	$(GRABBER) goe-plain-*x03-UBC.data > goe-plain-x03-UBC.csv
-	$(GRABBER) goe-plain-04x*-UBC.data > goe-plain-04x-UBC.csv
+	$(GRABBER) goe-plain-04x*-UBC.data > goe-plain-bdd-04x-UBC-clauses.csv
 
 clean:
 	rm -f *~

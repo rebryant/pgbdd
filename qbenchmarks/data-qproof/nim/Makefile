@@ -175,26 +175,27 @@ nimo$(CAT)-$(PROFILE)-rao.data:
 
 data:
 #	$(CGRAB) nimo-b2-*b.data > nimo-pgbddq-b2b-clauses.csv
-	$(CGRAB) nimo-b3-*b.data > nimo-pgbddq-b3b-clauses.csv
-	$(CGRAB) nimo-b3-*o.data > nimo-pgbddq-b3o-clauses.csv
-#	$(CGRAB) nimo-b4-*b.data > nimo-pgbddq-b4b-clauses.csv
-#	$(CGRAB) nimo-b5-*b.data > nimo-pgbddq-b5b-clauses.csv
-#	$(CGRAB) nimo-s2-*b.data > nimo-pgbddq-s2b-clauses.csv
-#	$(CGRAB) nimo-s3-*b.data > nimo-pgbddq-s3b-clauses.csv
-#	$(CGRAB) nimo-s4-*b.data > nimo-pgbddq-s4b-clauses.csv
-#	$(CGRAB) nimo-s5-*b.data > nimo-pgbddq-s5b-clauses.csv
-#	$(CGRAB) nimo-m2-*b.data > nimo-pgbddq-m2b-clauses.csv
-#	$(CGRAB) nimo-m3-*b.data > nimo-pgbddq-m3b-clauses.csv
-#	$(CGRAB) nimo-m4-*b.data > nimo-pgbddq-m4b-clauses.csv
-	$(CGRAB) nimu-b3-*b.data > nimu-pgbddq-b3b-clauses.csv
-	$(CGRAB) nimo-f4-*-rab.data > nimo-pgbddq-f4b-clauses.csv
-	$(CGRAB) nimo-t4-*-sab.data > nimo-pgbddq-t4b-clauses.csv
-	$(TGRAB) nimo-f4-*-rab.data > nimo-pgbddq-f4b-seconds.csv
-	$(TGRAB) nimo-t4-*-sab.data > nimo-pgbddq-t4b-seconds.csv
+	$(CGRAB) nimo-b3-*b.data > nimo-bdd-b3b-clauses.csv
+	$(CGRAB) nimo-b3-*o.data > nimo-bdd-b3o-clauses.csv
+#	$(CGRAB) nimo-b4-*b.data > nimo-bdd-b4b-clauses.csv
+#	$(CGRAB) nimo-b5-*b.data > nimo-bdd-b5b-clauses.csv
+#	$(CGRAB) nimo-s2-*b.data > nimo-bdd-s2b-clauses.csv
+#	$(CGRAB) nimo-s3-*b.data > nimo-bdd-s3b-clauses.csv
+#	$(CGRAB) nimo-s4-*b.data > nimo-bdd-s4b-clauses.csv
+#	$(CGRAB) nimo-s5-*b.data > nimo-bdd-s5b-clauses.csv
+#	$(CGRAB) nimo-m2-*b.data > nimo-bdd-m2b-clauses.csv
+#	$(CGRAB) nimo-m3-*b.data > nimo-bdd-m3b-clauses.csv
+#	$(CGRAB) nimo-m4-*b.data > nimo-bdd-m4b-clauses.csv
+	$(CGRAB) nimu-b3-*b.data > nimu-bdd-b3b-clauses.csv
+	$(CGRAB) nimu-b3-*o.data > nimu-bdd-b3o-clauses.csv
+	$(CGRAB) nimo-f4-*-rao.data > nimo-bdd-f4o-clauses.csv
+	$(CGRAB) nimo-t4-*-sao.data > nimo-bdd-t4o-clauses.csv
+	$(TGRAB) nimo-f4-*-rao.data > nimo-bdd-f4o-seconds.csv
+	$(TGRAB) nimo-t4-*-sao.data > nimo-bdd-t4o-seconds.csv
 
 clean:
 	rm -f *~ 
 
 
 superclean: clean
-	rm -f *.qcnf *.order *b.data *.qproof
+	rm -f *.qcnf *.order *.data *.qproof
