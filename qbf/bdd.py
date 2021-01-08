@@ -4,6 +4,7 @@ from functools import total_ordering
 
 import sys
 import resolver
+import proof
 
 class BddException(Exception):
 
@@ -142,6 +143,14 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
+
+        if prover.mode == proof.ProverMode.noProof:
+            self.inferTrueUp = None
+            self.inferTrueDown = None
+            self.inferFalseUp = None
+            self.inferFalseDown = None
+            return
+
         hname = "ONE" if hid == resolver.tautologyId else "ZERO" if hid == -resolver.tautologyId else "N%d" % hid
         lname = "ONE" if lid == resolver.tautologyId else "ZERO" if lid == -resolver.tautologyId else "N%d" % lid
         prover.proveExtend(id, qlevel, "Define extension variable for node %s = ITE(%d, %s, %s).  Qlevel=%d" % (self.label(), vid, hname, lname, self.qlevel))
@@ -325,6 +334,14 @@ class Manager:
         self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
         return root, validation
     
+    # Construct BDD representation of clause
+    # without proof
+    def constructClauseNoProof(self, clauseId, literalList):
+        root = self.buildClause(literalList)
+        validation = None
+        return root, validation
+
+
     def deconstructClause(self, clause):
         lits = []
         while not clause.isLeaf():
@@ -367,6 +384,13 @@ class Manager:
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
+        return len(oneDict)
+
+    # Get combined size of set of nodes
+    def getCombinedSize(self, nodeList):
+        oneDict = {}
+        for node in oneDict:
+            self.buildInformation(node, lambda n:1, oneDict)
         return len(oneDict)
 
     def showLiteral(self, lit):

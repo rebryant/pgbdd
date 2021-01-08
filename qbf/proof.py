@@ -76,6 +76,8 @@ class Prover:
         self.inputClauseCount = self.clauseCount
 
     def comment(self, comment):
+        if self.mode == ProverMode.noProof:
+            return
         if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
