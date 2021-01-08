@@ -3,6 +3,7 @@ INTERP=python3
 # Proof types
 #   r: Refutation
 #   s: Satisfaction
+#   n: No proof
 # Tseitin variable placement
 #   e: End
 #   a: After defining variables 
@@ -46,6 +47,8 @@ orab: nimo$(CAT)-$(PROFILE)-rab.data
 
 osao: nimo$(CAT)-$(PROFILE)-sao.data
 orao: nimo$(CAT)-$(PROFILE)-rao.data
+
+onao: nimo$(CAT)-$(PROFILE)-nao.data
 
 
 nimu$(CAT)-$(PROFILE)-sab.data:
@@ -172,6 +175,12 @@ nimo$(CAT)-$(PROFILE)-rao.data:
 	$(CHECK) -m r -i nimo$(CAT)-$(PROFILE)-rao.qcnf -p nimo$(CAT)-$(PROFILE)-rao.qproof | tee -a nimo$(CAT)-$(PROFILE)-rao.data
 	rm -f nimo$(CAT)-$(PROFILE)-rao.qproof
 
+nimo$(CAT)-$(PROFILE)-nao.data:
+	$(GEN) -e o -t a -V o -p $(PROFILE) -r nimo$(CAT)-$(PROFILE)-nao
+	$(SOLVE) -v $(VLEVEL) -m n -b \
+		-i nimo$(CAT)-$(PROFILE)-nao.qcnf \
+		-p nimo$(CAT)-$(PROFILE)-nao.order \
+		-L nimo$(CAT)-$(PROFILE)-nao.data
 
 data:
 #	$(CGRAB) nimo-b2-*b.data > nimo-pgbddq-b2b-clauses.csv
