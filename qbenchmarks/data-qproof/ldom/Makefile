@@ -18,6 +18,7 @@ CHECK=$(INTERP) $(SDIR)/qchecker.py
 
 CGRAB=../grab_plusclauses.py
 TGRAB=../grab_plustime.py
+AGRAB=../grab_plusapplies.py
 
 VLEVEL=1
 N=5
@@ -63,21 +64,21 @@ ldom-$(N)-na.data:
 		-L ldom-$(N)-na.data
 
 ldom-$(N)-nae.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(GEN) -t a -n $(N) -r ldom-$(N)-nae
 	$(SOLVE) -v $(VLEVEL) -m n -l e -b \
 		-i ldom-$(N)-nae.qcnf \
 		-p ldom-$(N)-nae.order \
 		-L ldom-$(N)-nae.data
 
 ldom-$(N)-nau.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(GEN) -t a -n $(N) -r ldom-$(N)-nau
 	$(SOLVE) -v $(VLEVEL) -m n -l u -b \
 		-i ldom-$(N)-nau.qcnf \
 		-p ldom-$(N)-nau.order \
 		-L ldom-$(N)-nau.data
 
 ldom-$(N)-naeu.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(GEN) -t a -n $(N) -r ldom-$(N)-naeu
 	$(SOLVE) -v $(VLEVEL) -m n -l eu -b \
 		-i ldom-$(N)-naeu.qcnf \
 		-p ldom-$(N)-naeu.order \
@@ -120,6 +121,12 @@ data:
 	$(CGRAB) ildom*-ra.data > ildom-bdd-ra-clauses.csv
 	$(TGRAB) ildom*-sa.data > ildom-bdd-sa-seconds.csv
 	$(TGRAB) ildom*-ra.data > ildom-bdd-ra-seconds.csv
+	$(AGRAB) ldom*-ra.data > ldom-bdd-ra-applies.csv
+	$(AGRAB) ldom*-sa.data > ldom-bdd-sa-applies.csv
+	$(AGRAB) ldom*-na.data > ldom-bdd-na-applies.csv
+	$(AGRAB) ldom*-nae.data > ldom-bdd-nae-applies.csv
+	$(AGRAB) ldom*-nau.data > ldom-bdd-nau-applies.csv
+	$(AGRAB) ldom*-naeu.data > ldom-bdd-naeu-applies.csv
 
 clean:
 	rm -f *~ 
