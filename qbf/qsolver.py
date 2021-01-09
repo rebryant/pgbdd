@@ -16,8 +16,9 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-Q][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
+    sys.stderr.write("  -Q          Use classic (restriction + or) method for performing existential quantification")
     sys.stderr.write("  -m MODE     Set proof mode (n = no proof, s = satisfaction, r = refutation)\n")
     sys.stderr.write("  -l e|u|eu   Linearize quantifier blocks for existential (e) and/or universal (u) variables\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
@@ -50,7 +51,6 @@ class Term:
     size = 0
     validation = None # Clause id providing validation
     mode = None # What is type of proof is being generated
-    slowQuant = False # Should quantification be done using classic method?
 
     def __init__(self, manager, root, validation, mode = None):
         self.manager = manager
@@ -91,8 +91,8 @@ class Term:
             newRoot = self.manager.applyAnd(self.root, other.root)
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
-    def equantify(self, literals, prover):
-        newRoot = self.manager.equantSlow(self.root, literals) if self.slowQuant else self.manager.equant(self.root, literals)
+    def equantify(self, literals, prover, slowQuant = False):
+        newRoot = self.manager.equantSlow(self.root, literals) if slowQuant else self.manager.equant(self.root, literals)
         validation = None
         if self.mode == proof.ProverMode.refProof:
             antecedents = [self.validation]
@@ -242,6 +242,8 @@ class Solver:
     writer = None
     # Mapping from quantifier levels to tuple (vars,isExistential)
     quantMap = {}
+    # Use classic (restriction + or) method for equant
+    slowQuant = False
 
     def __init__(self, reader = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
@@ -359,7 +361,7 @@ class Solver:
         vstring = " ".join(sorted([str(v) for v in varList]))
         if self.verbLevel >= 3:
             print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount))
-        newTerm = term.equantify(clause, self.prover)
+        newTerm = term.equantify(clause, self.prover, self.slowQuant)
         if self.prover.mode == proof.ProverMode.refProof:
             comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
             self.prover.comment(comment)
@@ -625,16 +627,19 @@ def run(name, args):
     clusterFile = None
     stretchExistential = False
     stretchUniversal = False
+    slowQuant = False
 
 
 
-    optlist, args = getopt.getopt(args, "hbB:c:m:l:v:i:o:m:p:L:")
+    optlist, args = getopt.getopt(args, "hQbB:c:m:l:v:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         if opt == '-b':
             doBucket = True
+        elif opt == '-Q':
+            slowQuant = False
         elif opt == '-B':
             bpermuter = permutation.readPermutation(val)
             if bpermuter is None:
@@ -704,12 +709,12 @@ def run(name, args):
         prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
+    if slowQuant:
+        solver.slowQuant = True
 
     if clusterFile is None or solver.processClusters(clusterFile):
-        if doBucket:
-            solver.runQuantBucket()
-        else:
-            solver.runNoSchedule()
+        solver.runQuantBucket()
+
 
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
