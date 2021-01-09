@@ -764,7 +764,7 @@ def run(name, args):
         writer.write("Aborted: %s\n" % str(ex))
         return
     
-    if reader.stretched:
+    if reader.stretched and mode != proof.ProverMode.noProof:
         prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
