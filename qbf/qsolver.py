@@ -94,6 +94,8 @@ class Term:
     def equantify(self, literals, prover, slowQuant = False):
         if slowQuant:
             print("Slow quantification used")
+        else:
+            print("Regular quantification used")
         newRoot = self.manager.equantSlow(self.root, literals) if slowQuant else self.manager.equant(self.root, literals)
         validation = None
         if self.mode == proof.ProverMode.refProof:
