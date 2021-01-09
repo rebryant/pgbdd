@@ -811,18 +811,6 @@ class Manager:
         return newNode
 
     # Use clause to provide canonical list of nodes.  Should all be positive
-    # Does quantification by repeated applications of restrict and or.
-    def equantSlow(self, node, clause):
-        result = node
-        while not clause.isLeaf():
-            evar = clause.variable
-            r1 = self.applyRestrict(result, self.literal(evar, 1))
-            r0 = self.applyRestrict(result, self.literal(evar, 0))
-            result = self.applyOr(r1, r0)
-            clause = clause.low
-        return result
-
-    # Use clause to provide canonical list of nodes.  Should all be positive
     def uquant(self, node, clause, topLevel = True):
         if topLevel:
             nextc = clause
@@ -973,38 +961,6 @@ class Manager:
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
-
-    # Compute restriction on node.
-    # Variable and phase indicated by literal node
-    # No proof generated
-    def applyRestrict(self, u, literal):
-        if u.isLeaf():
-            return u
-        rvar = literal.variable
-        nvar = u.variable
-        phase1 = literal.high == self.leaf1
-        if rvar < nvar:
-            return u
-        elif rvar == nvar:
-            result = u.high if phase1 else u.low
-            return result
-        key = ("restr", u.id, literal.id)
-        if key in self.operationCache:
-            return self.operationCache[key][0]
-
-        uhigh = u.high
-        ulow = u.low
-        vhigh = self.applyRestrict(uhigh, literal)
-        vlow   = self.applyRestrict(ulow, literal)
-        
-        if vhigh == vlow:
-            v = vhigh
-        else:
-            v = self.findOrMake(nvar, vhigh, vlow)
-        self.operationCache[key] = [v, resolver.tautologyId, []]
-        self.cacheNoJustifyAdded += 1
-        return v
-    
     
     # Should a GC be triggered?
     def checkGC(self, generateClauses = True):
