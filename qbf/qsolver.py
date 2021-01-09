@@ -16,10 +16,11 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-b][-v LEVEL] [-m (n|s|r)] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-b][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -b          Use bucket elimination\n")
     sys.stderr.write("  -m MODE     Set proof mode (n = no proof, s = satisfaction, r = refutation)\n")
+    sys.stderr.write("  -l e|u|eu   Linearize quantifier blocks for existential (e) and/or universal (u) variables\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
@@ -686,8 +687,12 @@ def run(name, args):
     logName = None
     mode = proof.ProverMode.noProof
     clusterFile = None
+    stretchExistential = False
+    stretchUniversal = False
 
-    optlist, args = getopt.getopt(args, "hbB:c:m:v:i:o:m:p:L:")
+
+
+    optlist, args = getopt.getopt(args, "hbB:c:m:l:v:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -711,6 +716,16 @@ def run(name, args):
                 sys.stderr.write("Unknown proof mode '%s'\n" % val)
                 usage(name)
                 return
+        elif opt == '-l':
+            for v in val:
+                if v == 'e':
+                    stretchExistential = True
+                elif v == 'u':
+                    stretchUniversal = True
+                else:
+                    sys.stderr.write("Unknown linearization option '%s'\n" % v)
+                    usage(name)
+                    return
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -738,8 +753,10 @@ def run(name, args):
 
     start = datetime.datetime.now()
 
-    stretchExistential = mode == proof.ProverMode.satProof
-    stretchUniversal = mode == proof.ProverMode.refProof
+    if mode == proof.ProverMode.satProof:
+        stretchExistential = True
+    if mode == proof.ProverMode.refProof:
+        stretchUniversal = True
 
     try:
         reader = qreader.QcnfReader(cnfName, bpermuter, stretchExistential, stretchUniversal)
