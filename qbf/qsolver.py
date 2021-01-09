@@ -649,7 +649,7 @@ class Solver:
                         if newId < 0:
                             # Formula is False
                             if self.verbLevel >= 0:
-                                if self.proverMode == proof.ProverMode.satProof:
+                                if self.prover.mode == proof.ProverMode.satProof:
                                     self.writer.write("ERROR: Formula is FALSE\n")
                                 else:
                                     self.writer.write("Formula is FALSE\n")
