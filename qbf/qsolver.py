@@ -16,9 +16,8 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-b][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -b          Use bucket elimination\n")
     sys.stderr.write("  -m MODE     Set proof mode (n = no proof, s = satisfaction, r = refutation)\n")
     sys.stderr.write("  -l e|u|eu   Linearize quantifier blocks for existential (e) and/or universal (u) variables\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
@@ -51,6 +50,7 @@ class Term:
     size = 0
     validation = None # Clause id providing validation
     mode = None # What is type of proof is being generated
+    slowQuant = False # Should quantification be done using classic method?
 
     def __init__(self, manager, root, validation, mode = None):
         self.manager = manager
@@ -92,7 +92,7 @@ class Term:
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
     def equantify(self, literals, prover):
-        newRoot = self.manager.equant(self.root, literals)
+        newRoot = self.manager.equantSlow(self.root, literals) if self.slowQuant else self.manager.equant(self.root, literals)
         validation = None
         if self.mode == proof.ProverMode.refProof:
             antecedents = [self.validation]
@@ -308,11 +308,6 @@ class Solver:
         root = self.activeIds[id].root
         return root == self.manager.leaf1 or root == self.manager.leaf0
 
-    # Simplistic version of scheduling
-    def choosePair(self):
-        ids = sorted(self.activeIds.keys())
-        return ids[0], ids[1]
-
     def combineTerms(self, id1, id2):
         termA = self.activeIds[id1]
         termB = self.activeIds[id2]
@@ -523,65 +518,6 @@ class Solver:
             self.writer.write("Combined %d clauses to form %d clusters\n" % (clauseCount, clusterCount))
         infile.close()
         return True
-                
-
-    def runNoSchedule(self):
-        # Start by conjuncting all clauses to get single BDD
-        id = self.activeIds.keys()[0]
-        while (len(self.activeIds) > 1):
-            i, j = self.choosePair()
-            id = self.combineTerms(i, j)
-            if id < 0:
-                return
-        if self.verbLevel >= 2:
-            self.writer.write("Conjunction of clauses.  Size: %d\n" % (self.activeIds[id].size))
-        # Now handle all of the quantifications:
-        levels = sorted(self.quantMap.keys(), key = lambda x : -x)
-        for level in levels:
-     
-            if self.termIsConstant(id):
-                if self.verbLevel >= 3:
-                    self.writer.write("Encountered constant value before performing quantification level %d\n" % level)
-                break
-            vars, isExistential = self.quantMap[level]
-            if len(vars) == 0:
-                continue
-            if self.verbLevel >= 3:
-                self.writer.write("Quantifying %s level %d.  Vars = %s\n" % 
-                                  ("existential" if isExistential else "universal", level, str(vars)))
-            if self.prover.mode == proof.ProverMode.refProof:
-                if isExistential:
-                    id = self.equantifyTerm(id, vars)
-                else:
-                    # Must have single variable at this level
-                    v = vars[0]
-                    id = self.uquantifyTermSingle(id, v)
-                    if id < 0:
-                        return
-            else:
-                if isExistential:
-                    # Must have single variable as this level
-                    v = vars[0]
-                    id = self.equantifyTermSingle(id, v)
-                    if id < 0:
-                        break
-                else:
-                    id = self.uquantifyTerm(id, vars)
-
-                    if id < 0:
-                        return
-
-        # Get here only haven't hit 0
-        if self.prover.mode == proof.ProverMode.satProof:
-            # Make sure all clauses cleared away
-            self.prover.qcollect(1)
-        if self.verbLevel > 0:
-            if self.prover.mode == proof.ProverMode.refProof:
-                self.writer.write("ERROR: Formula is TRUE\n")
-            else:
-                self.writer.write("Formula TRUE\n")
-            self.manager.summarize()
-
         
     def placeInQuantBucket(self, buckets, id):
         term = self.activeIds[id]
@@ -682,7 +618,7 @@ def run(name, args):
     proofName = None
     permuter = None
     bpermuter = None
-    doBucket = False
+    doBucket = True
     verbLevel = 1
     logName = None
     mode = proof.ProverMode.noProof
