@@ -92,6 +92,8 @@ class Term:
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
     def equantify(self, literals, prover, slowQuant = False):
+        if slowQuant:
+            print("Slow quantification used")
         newRoot = self.manager.equantSlow(self.root, literals) if slowQuant else self.manager.equant(self.root, literals)
         validation = None
         if self.mode == proof.ProverMode.refProof:
@@ -639,7 +641,7 @@ def run(name, args):
         if opt == '-b':
             doBucket = True
         elif opt == '-Q':
-            slowQuant = False
+            slowQuant = True
         elif opt == '-B':
             bpermuter = permutation.readPermutation(val)
             if bpermuter is None:
