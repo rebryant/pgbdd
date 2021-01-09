@@ -26,9 +26,11 @@ all: sa
 
 sa: ldom-$(N)-sa.data
 ra: ldom-$(N)-ra.data
+na: ldom-$(N)-na.data
 
 isa: ildom-$(N)-sa.data
 ira: ildom-$(N)-ra.data
+ina: ildom-$(N)-na.data
 
 ldom-$(N)-sa.data:
 	$(GEN) -t a -n $(N) -r ldom-$(N)-sa
@@ -50,6 +52,13 @@ ldom-$(N)-ra.data:
 	$(CHECK) -m r -i ldom-$(N)-ra.qcnf -p ldom-$(N)-ra.qproof | tee -a ldom-$(N)-ra.data
 	rm -f ldom-$(N)-ra.qproof
 
+ldom-$(N)-na.data:
+	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(SOLVE) -v $(VLEVEL) -m n -b \
+		-i ldom-$(N)-na.qcnf \
+		-p ldom-$(N)-na.order \
+		-L ldom-$(N)-na.data
+
 ildom-$(N)-sa.data:
 	$(GEN) -i -t a -n $(N) -r ildom-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
@@ -70,6 +79,12 @@ ildom-$(N)-ra.data:
 	$(CHECK) -m r -i ildom-$(N)-ra.qcnf -p ildom-$(N)-ra.qproof | tee -a ildom-$(N)-ra.data
 	rm -f ildom-$(N)-ra.qproof
 
+ildom-$(N)-na.data:
+	$(GEN) -i -t a -n $(N) -r ildom-$(N)-na
+	$(SOLVE) -v $(VLEVEL) -m n -b \
+		-i ildom-$(N)-na.qcnf \
+		-p ildom-$(N)-na.order \
+		-L ildom-$(N)-na.data
 
 data:
 	$(CGRAB) ldom*-sa.data > ldom-bdd-sa-clauses.csv

@@ -1,0 +1,41 @@
+#!/usr/bin/bash
+
+make sa N=04
+make ra N=05
+make sa N=06
+make sa N=07
+make sa N=08
+make ra N=09
+make sa N=10
+make sa N=11
+make sa N=12
+make sa N=13
+make sa N=14
+make ra N=15
+make sa N=16
+make sa N=17
+make sa N=18
+make sa N=19
+make sa N=20
+make ra N=21
+make sa N=22
+make sa N=23
+make sa N=24
+make ra N=25
+make sa N=26
+make sa N=27
+make sa N=28
+make ra N=29
+make sa N=30
+# Known false cases
+make sa N=31
+make sa N=32
+make sa N=33
+make sa N=34
+make sa N=36
+make sa N=37
+make sa N=38
+make sa N=39
+make sa N=40
+make sa N=41
+make sa N=42
