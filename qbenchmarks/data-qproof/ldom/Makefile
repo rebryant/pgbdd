@@ -27,6 +27,9 @@ all: sa
 sa: ldom-$(N)-sa.data
 ra: ldom-$(N)-ra.data
 na: ldom-$(N)-na.data
+nae: ldom-$(N)-nae.data
+nau: ldom-$(N)-nau.data
+naeu: ldom-$(N)-naeu.data
 
 isa: ildom-$(N)-sa.data
 ira: ildom-$(N)-ra.data
@@ -58,6 +61,28 @@ ldom-$(N)-na.data:
 		-i ldom-$(N)-na.qcnf \
 		-p ldom-$(N)-na.order \
 		-L ldom-$(N)-na.data
+
+ldom-$(N)-nae.data:
+	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(SOLVE) -v $(VLEVEL) -m n -l e -b \
+		-i ldom-$(N)-nae.qcnf \
+		-p ldom-$(N)-nae.order \
+		-L ldom-$(N)-nae.data
+
+ldom-$(N)-nau.data:
+	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(SOLVE) -v $(VLEVEL) -m n -l u -b \
+		-i ldom-$(N)-nau.qcnf \
+		-p ldom-$(N)-nau.order \
+		-L ldom-$(N)-nau.data
+
+ldom-$(N)-naeu.data:
+	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+	$(SOLVE) -v $(VLEVEL) -m n -l eu -b \
+		-i ldom-$(N)-naeu.qcnf \
+		-p ldom-$(N)-naeu.order \
+		-L ldom-$(N)-naeu.data
+
 
 ildom-$(N)-sa.data:
 	$(GEN) -i -t a -n $(N) -r ildom-$(N)-sa
