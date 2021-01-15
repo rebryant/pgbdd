@@ -225,6 +225,7 @@ class Manager:
     cacheJustifyAdded = 0
     cacheNoJustifyAdded = 0
     applyCount = 0
+    auxApplyCount = 0
     nodeCount = 0
     maxLiveCount = 0
     variableCount = 0
@@ -252,6 +253,7 @@ class Manager:
         self.cacheJustifyAdded = 0
         self.cacheNoJustifyAdded = 0
         self.applyCount = 0
+        self.auxApplyCount = 0
         self.nodeCount = 0
         self.maxLiveCount = 0
         self.variableCount = 0
@@ -709,7 +711,7 @@ class Manager:
         return newNode
     
     def justifyImply(self, nodeA, nodeB):
-        self.applyCount += 1
+        self.auxApplyCount += 1
 
         # Special cases
         if nodeA == nodeB:
@@ -1043,7 +1045,8 @@ class Manager:
             self.writer.write("Total nodes: %d\n" % self.nodeCount)
             self.writer.write("Total nodes removed by gc: %d\n" % self.nodesRemoved)
             self.writer.write("Maximum live nodes: %d\n" % self.maxLiveCount)
-            self.writer.write("Total apply operations: %d\n" % self.applyCount)            
+            self.writer.write("Total apply operations: %d\n" % self.applyCount)
+            self.writer.write("Total auxilliary apply operations: %d\n" % self.auxApplyCount)            
             self.writer.write("Total cached results not requiring proofs: %d\n" % self.cacheNoJustifyAdded)
             self.writer.write("Total cached results requiring proofs: %d\n" % self.cacheJustifyAdded)
             self.writer.write("Total cache entries removed: %d\n" % self.cacheRemoved)
