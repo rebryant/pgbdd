@@ -4,6 +4,7 @@ from functools import total_ordering
 
 import sys
 import resolver
+import proof
 
 class BddException(Exception):
 
@@ -142,6 +143,14 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
+
+        if prover.mode == proof.ProverMode.noProof:
+            self.inferTrueUp = None
+            self.inferTrueDown = None
+            self.inferFalseUp = None
+            self.inferFalseDown = None
+            return
+
         hname = "ONE" if hid == resolver.tautologyId else "ZERO" if hid == -resolver.tautologyId else "N%d" % hid
         lname = "ONE" if lid == resolver.tautologyId else "ZERO" if lid == -resolver.tautologyId else "N%d" % lid
         prover.proveExtend(id, qlevel, "Define extension variable for node %s = ITE(%d, %s, %s).  Qlevel=%d" % (self.label(), vid, hname, lname, self.qlevel))
@@ -216,6 +225,7 @@ class Manager:
     cacheJustifyAdded = 0
     cacheNoJustifyAdded = 0
     applyCount = 0
+    auxApplyCount = 0
     nodeCount = 0
     maxLiveCount = 0
     variableCount = 0
@@ -243,6 +253,7 @@ class Manager:
         self.cacheJustifyAdded = 0
         self.cacheNoJustifyAdded = 0
         self.applyCount = 0
+        self.auxApplyCount = 0
         self.nodeCount = 0
         self.maxLiveCount = 0
         self.variableCount = 0
@@ -325,6 +336,14 @@ class Manager:
         self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
         return root, validation
     
+    # Construct BDD representation of clause
+    # without proof
+    def constructClauseNoProof(self, clauseId, literalList):
+        root = self.buildClause(literalList)
+        validation = None
+        return root, validation
+
+
     def deconstructClause(self, clause):
         lits = []
         while not clause.isLeaf():
@@ -367,6 +386,13 @@ class Manager:
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
+        return len(oneDict)
+
+    # Get combined size of set of nodes
+    def getCombinedSize(self, nodeList):
+        oneDict = {}
+        for node in oneDict:
+            self.buildInformation(node, lambda n:1, oneDict)
         return len(oneDict)
 
     def showLiteral(self, lit):
@@ -685,7 +711,7 @@ class Manager:
         return newNode
     
     def justifyImply(self, nodeA, nodeB):
-        self.applyCount += 1
+        self.auxApplyCount += 1
 
         # Special cases
         if nodeA == nodeB:
@@ -916,7 +942,6 @@ class Manager:
             ruleIndex["VHX"] = v.inferTrueDown
             ruleIndex["VLX"] = v.inferFalseDown
         
-        
         targetClause = resolver.cleanClause([-rvar.id if phase1 else rvar.id, u.id, -v.id])
         if targetClause == resolver.tautologyId:
             justification, clauseList = resolver.tautologyId, []
@@ -938,7 +963,6 @@ class Manager:
         self.operationCache[key] = (v, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (v, justification)
-
     
     # Should a GC be triggered?
     def checkGC(self, generateClauses = True):
@@ -1021,7 +1045,8 @@ class Manager:
             self.writer.write("Total nodes: %d\n" % self.nodeCount)
             self.writer.write("Total nodes removed by gc: %d\n" % self.nodesRemoved)
             self.writer.write("Maximum live nodes: %d\n" % self.maxLiveCount)
-            self.writer.write("Total apply operations: %d\n" % self.applyCount)            
+            self.writer.write("Total apply operations: %d\n" % self.applyCount)
+            self.writer.write("Total auxilliary apply operations: %d\n" % self.auxApplyCount)            
             self.writer.write("Total cached results not requiring proofs: %d\n" % self.cacheNoJustifyAdded)
             self.writer.write("Total cached results requiring proofs: %d\n" % self.cacheJustifyAdded)
             self.writer.write("Total cache entries removed: %d\n" % self.cacheRemoved)

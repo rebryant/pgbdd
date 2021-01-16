@@ -16,9 +16,10 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (s|r)] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -m MODE     Set proof mode (s = satisfaction, r = refutation)\n")
+    sys.stderr.write("  -m MODE     Set proof mode (n = no proof, s = satisfaction, r = refutation)\n")
+    sys.stderr.write("  -l e|u|eu   Linearize quantifier blocks for existential (e) and/or universal (u) variables\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (QRAT or QPROOF format)\n")
@@ -291,7 +292,9 @@ class Solver:
         for clause in reader.clauses:
             self.termCount += 1
             litList = [self.litMap[v] for v in clause]
-            if self.prover.mode == proof.ProverMode.refProof:
+            if self.prover.mode == proof.ProverMode.noProof:
+                root, validation = self.manager.constructClauseNoProof(self.termCount, litList)
+            elif self.prover.mode == proof.ProverMode.refProof:
                 root, validation = self.manager.constructClause(self.termCount, litList)
             else:
                 root, validation = self.manager.constructClauseReverse(self.termCount, litList)
@@ -303,11 +306,6 @@ class Solver:
     def termIsConstant(self, id):
         root = self.activeIds[id].root
         return root == self.manager.leaf1 or root == self.manager.leaf0
-
-    # Simplistic version of scheduling
-    def choosePair(self):
-        ids = sorted(self.activeIds.keys())
-        return ids[0], ids[1]
 
     def combineTerms(self, id1, id2):
         termA = self.activeIds[id1]
@@ -350,7 +348,7 @@ class Solver:
             return -1
         return self.termCount
 
-    # Used in refutation proofs
+    # Used in refutation proofs, and when no proof
     def equantifyTerm(self, id, varList):
         term = self.activeIds[id]
         del self.activeIds[id]
@@ -361,13 +359,14 @@ class Solver:
         if self.verbLevel >= 3:
             print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount))
         newTerm = term.equantify(clause, self.prover)
-        comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
-        self.prover.comment(comment)
-        if self.verbLevel >= 3:
-            print(comment)
+        if self.prover.mode == proof.ProverMode.refProof:
+            comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
+            self.prover.comment(comment)
+            if self.verbLevel >= 3:
+                print(comment)
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
-        clauseList = self.manager.checkGC()
+        clauseList = self.manager.checkGC(generateClauses = self.prover.mode != proof.ProverMode.noProof)
         if len(clauseList) > 0:
             self.prover.deleteClauses(clauseList)
         return self.termCount
@@ -453,7 +452,7 @@ class Solver:
 
 
 
-    # Used in satisfaction proofs
+    # Used in satisfaction proofs, and when no proof
     def uquantifyTerm(self, id, varList):
         term = self.activeIds[id]
         del self.activeIds[id]
@@ -470,15 +469,16 @@ class Solver:
             self.manager.summarize()
             return -1
         self.termCount += 1
-        comment = "T%d (Node %s) UQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
-        newTerm.validation = self.manager.prover.proveAdd([newTerm.root.id], comment)
-        antecedents = [newTerm.validation]
-        check, implication = self.manager.justifyImply(newTerm.root, term.root)
-        if not check:
-            raise bdd.BddException("Implication failed %s -/-> %s" % (newTerm.root.label(), term.root.label()))
-        if implication != resolver.tautologyId:
-            antecedents += [implication]
-        self.manager.prover.proveDeleteResolution(term.validation, antecedents, "Delete unit clause for T%d" % (id))
+        if self.prover.mode == proof.ProverMode.satProof:
+            comment = "T%d (Node %s) UQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
+            newTerm.validation = self.manager.prover.proveAdd([newTerm.root.id], comment)
+            antecedents = [newTerm.validation]
+            check, implication = self.manager.justifyImply(newTerm.root, term.root)
+            if not check:
+                raise bdd.BddException("Implication failed %s -/-> %s" % (newTerm.root.label(), term.root.label()))
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            self.manager.prover.proveDeleteResolution(term.validation, antecedents, "Delete unit clause for T%d" % (id))
         self.activeIds[self.termCount] = newTerm
         # This could be a good time for garbage collection
         self.manager.checkGC(generateClauses = False)
@@ -517,64 +517,6 @@ class Solver:
             self.writer.write("Combined %d clauses to form %d clusters\n" % (clauseCount, clusterCount))
         infile.close()
         return True
-                
-
-    def runNoSchedule(self):
-        # Start by conjuncting all clauses to get single BDD
-        id = self.activeIds.keys()[0]
-        while (len(self.activeIds) > 1):
-            i, j = self.choosePair()
-            id = self.combineTerms(i, j)
-            if id < 0:
-                return
-        if self.verbLevel >= 2:
-            self.writer.write("Conjunction of clauses.  Size: %d\n" % (self.activeIds[id].size))
-        # Now handle all of the quantifications:
-        levels = sorted(self.quantMap.keys(), key = lambda x : -x)
-        for level in levels:
-            if self.termIsConstant(id):
-                if self.verbLevel >= 3:
-                    self.writer.write("Encountered constant value before performing quantification level %d\n" % level)
-                break
-            vars, isExistential = self.quantMap[level]
-            if len(vars) == 0:
-                continue
-            if self.verbLevel >= 3:
-                self.writer.write("Quantifying %s level %d.  Vars = %s\n" % 
-                                  ("existential" if isExistential else "universal", level, str(vars)))
-            if self.prover.mode == proof.ProverMode.refProof:
-                if isExistential:
-                    id = self.equantifyTerm(id, vars)
-                else:
-                    # Must have single variable at this level
-                    v = vars[0]
-                    id = self.uquantifyTermSingle(id, v)
-                    if id < 0:
-                        return
-            else:
-                if isExistential:
-                    # Must have single variable as this level
-                    v = vars[0]
-                    id = self.equantifyTermSingle(id, v)
-                    if id < 0:
-                        break
-                else:
-                    id = self.uquantifyTerm(id, vars)
-
-                    if id < 0:
-                        return
-
-        # Get here only haven't hit 0
-        if self.prover.mode == proof.ProverMode.satProof:
-            # Make sure all clauses cleared away
-            self.prover.qcollect(1)
-        if self.verbLevel > 0:
-            if self.prover.mode == proof.ProverMode.refProof:
-                self.writer.write("ERROR: Formula is TRUE\n")
-            else:
-                self.writer.write("Formula TRUE\n")
-            self.manager.summarize()
-
 
     def placeInQuantBucket(self, buckets, id):
         term = self.activeIds[id]
@@ -611,10 +553,7 @@ class Solver:
                 if blevel > 0 and len(buckets[blevel]) > 0:
                     id = buckets[blevel][0]
                     buckets[blevel] = []
-                    if self.prover.mode == proof.ProverMode.refProof:
-                        newId = self.equantifyTerm(id, vars)
-                        self.placeInQuantBucket(buckets, newId)
-                    else:
+                    if self.prover.mode == proof.ProverMode.satProof:
                         # Satisfaction
                         if len(vars) > 1:
                             raise SolverException("Must serialize existential quantifiers")
@@ -622,7 +561,12 @@ class Solver:
                         newId = self.equantifyTermSingle(id, var)
                         if newId >= 0:
                             self.placeInQuantBucket(buckets, newId)
+                    else:
+                        # Refutation, or no proof
+                        newId = self.equantifyTerm(id, vars)
+                        self.placeInQuantBucket(buckets, newId)
             else:
+                # Universal quantification
                 if self.prover.mode == proof.ProverMode.refProof:
                     # Require vars to be single variable
                     if len(vars) > 1:
@@ -635,13 +579,16 @@ class Solver:
                             return
                         self.placeInQuantBucket(buckets, newId)
                 else:
-                    # Satisfaction
+                    # Satisfaction, or no proof
                     for id in buckets[blevel]:
                         newId = self.uquantifyTerm(id, vars)
                         if newId < 0:
                             # Formula is False
                             if self.verbLevel >= 0:
-                                self.writer.write("ERROR: Formula is FALSE\n")
+                                if self.prover.mode == proof.ProverMode.satProof:
+                                    self.writer.write("ERROR: Formula is FALSE\n")
+                                else:
+                                    self.writer.write("Formula is FALSE\n")
                                 return
                         self.placeInQuantBucket(buckets, newId)
 
@@ -670,13 +617,15 @@ def run(name, args):
     proofName = None
     permuter = None
     bpermuter = None
-    doBucket = False
+    doBucket = True
     verbLevel = 1
     logName = None
     mode = proof.ProverMode.noProof
     clusterFile = None
+    stretchExistential = False
+    stretchUniversal = False
 
-    optlist, args = getopt.getopt(args, "hbB:c:m:v:i:o:m:p:L:")
+    optlist, args = getopt.getopt(args, "hbB:c:m:l:v:i:o:m:p:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -694,10 +643,22 @@ def run(name, args):
                 mode = proof.ProverMode.satProof
             elif val == 'r':
                 mode = proof.ProverMode.refProof
+            elif val == 'n':
+                mode = proof.ProverMode.noProof
             else:
                 sys.stderr.write("Unknown proof mode '%s'\n" % val)
                 usage(name)
                 return
+        elif opt == '-l':
+            for v in val:
+                if v == 'e':
+                    stretchExistential = True
+                elif v == 'u':
+                    stretchUniversal = True
+                else:
+                    sys.stderr.write("Unknown linearization option '%s'\n" % v)
+                    usage(name)
+                    return
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -725,8 +686,10 @@ def run(name, args):
 
     start = datetime.datetime.now()
 
-    stretchExistential = mode == proof.ProverMode.satProof
-    stretchUniversal = mode == proof.ProverMode.refProof
+    if mode == proof.ProverMode.satProof:
+        stretchExistential = True
+    if mode == proof.ProverMode.refProof:
+        stretchUniversal = True
 
     try:
         reader = qreader.QcnfReader(cnfName, bpermuter, stretchExistential, stretchUniversal)
@@ -734,16 +697,14 @@ def run(name, args):
         writer.write("Aborted: %s\n" % str(ex))
         return
     
-    if reader.stretched:
+    if reader.stretched and mode != proof.ProverMode.noProof:
         prover.generateLevels(reader.varList)
 
     solver = Solver(reader, prover = prover, permuter = permuter, verbLevel = verbLevel)
 
     if clusterFile is None or solver.processClusters(clusterFile):
-        if doBucket:
-            solver.runQuantBucket()
-        else:
-            solver.runNoSchedule()
+        solver.runQuantBucket()
+
 
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds

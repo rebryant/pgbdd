@@ -61,10 +61,10 @@ kbf-$(T)-ran-$(SEED).data:
 
 data:
 #	$(GRABBER) kbf-*-vo.data > kbf-vo.csv
-	$(GRABBER) kbf-*-rvo.data > kbf-rvo.csv
+	$(GRABBER) kbf-*-rvo.data > kbf-bdd-rvo-clauses.csv
 #	$(GRABBER) kbf-*-qo.data > kbf-qo.csv
-	$(GRABBER) kbf-*-rqo.data > kbf-rqo.csv
-	$(GRABBER) kbf-*-ran-*.data > kbf-ran.csv
+	$(GRABBER) kbf-*-rqo.data > kbf-bdd-rqo-clauses.csv
+	$(GRABBER) kbf-*-ran-*.data > kbf-bdd-ran-clauses.csv
 
 clean:
 	rm -f *~

@@ -41,6 +41,10 @@ def usage(name):
 # Id ar Lit* 0 Id+ 0
 #    Add clause C[Id] = [Lit*] by resolution.
 #    Must check that antecedents resolve to clause
+#    Also incorporates subsumption, i.e., if C' subset C, the C' ==> C.
+#    Must check that antecedents resolve to clause C' that is
+#     (perhaps improper) subset of C[Id]
+
 
 # Id ab Lit+ 0 -Id* 0
 #    Add blocked clause C[Id] = [Lit+].  Blocking literal L must be first
@@ -68,7 +72,7 @@ def usage(name):
 # - dr Id Id+ 0
 #    Delete clause C[Id] by resolution.
 #    Also incorporates subsumption, i.e., if C' subset C, the C' ==> C.
-#    Must check that antecedents resolve to to clause C' that is
+#    Must check that antecedents resolve to clause C' that is
 #     (perhaps improper) subset of C[Id]
 
 # - dd Var Id+ 0 Id* 0
@@ -875,6 +879,7 @@ class RefutationProver(Prover):
 
     def __init__(self, qreader, verbose):
         Prover.__init__(self, qreader, verbose)
+        self.subsetOK = True
         self.addedEmpty = False
 
     def doAddBlocked(self, id, rest):

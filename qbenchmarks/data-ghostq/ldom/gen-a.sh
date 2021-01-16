@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+make a N=04
+make a N=05
+make a N=06
+make a N=07
+make a N=08
+make a N=09
+make a N=10
+make a N=11
+make a N=12
+make a N=13
+make a N=14
+make a N=15
+make a N=16
+make a N=17
+make a N=18
+make a N=19
+make a N=20
+make a N=21
+make a N=22
+make a N=23
+make a N=24
+make a N=25
+make a N=26
+make a N=27
+make a N=28
+make a N=29
+make a N=30
+# Known false cases
+make a N=35
+make a N=39
+make a N=43

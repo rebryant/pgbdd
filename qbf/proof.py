@@ -75,6 +75,8 @@ class Prover:
         self.inputClauseCount = self.clauseCount
 
     def comment(self, comment):
+        if self.mode == ProverMode.noProof:
+            return
         if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
@@ -105,9 +107,9 @@ class Prover:
         if self.mode == ProverMode.refProof:
             if self.doQrat:
                 for id in clauseList:
- 	            self.file.write('d ')
+                    self.file.write('d ')
                     for lit in self.clauseDict[id]:
- 	                self.file.write(str(lit) + ' ')
+                        self.file.write(str(lit) + ' ')
                     self.file.write('0\n')
             else:
                  for id in clauseList:
@@ -201,7 +203,7 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
- #       if self.doQrat:
+#       if self.doQrat:
 #	    self.file.write(' '.join(rfields) + ' 0\n')
         cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
@@ -278,7 +280,7 @@ class Prover:
  	                self.file.write('d ' + str(lit) + ' ')
                 for lit in self.clauseDict[id]:
                     if abs(lit) != var:
- 	                self.file.write(str(lit) + ' ')
+                        self.file.write(str(lit) + ' ')
                 self.file.write('0\n')
         else:
             clist = [str(id) for id in causeIdList]
