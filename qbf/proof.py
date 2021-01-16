@@ -42,7 +42,6 @@ class Prover:
     evarQlevels = {}
     # Restrict justifications that encounter degenerate case
     restrictDegeneracies = set([])
-    
 
     def __init__(self, fname = None, writer = None, mode = None, verbLevel = 1):
         if mode is None:
@@ -137,7 +136,8 @@ class Prover:
             fields = [str(self.clauseCount)] + fields
         else:
             fields = ['-'] + fields
-        self.file.write(' '.join(fields) + '\n')
+        if self.doQrat is False:
+            self.file.write(' '.join(fields) + '\n')
         return self.clauseCount
 
     ## Refutation and satisfaction steps
@@ -159,9 +159,6 @@ class Prover:
             self.file.write(' '.join(fields) + '\n')
 
     def proveExtend(self, var, level, comment = None):
-        if self.doQrat:
-            # Don't need to declare extension variables
-            return
         fields = ['x', str(level), str(var), '0']
         if level not in self.qlevelEvars:
             self.qlevelEvars[level] = {}
@@ -172,15 +169,7 @@ class Prover:
     ## Refutation and satisfaction steps, but with different actions
 
     def proveAddResolution(self, result, antecedent, comment = None):
-        if self.doQrat:
-            return self.createClause(result, antecedent, comment)
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            self.comment(comment)
-            return result
         rfields = [str(r) for r in result]
-        if self.doQrat:
-	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
         afields = [str(a) for a in antecedent]
         cmd =  'ar' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
@@ -194,20 +183,26 @@ class Prover:
                 self.qlevelClauses[qlevel].append(stepNumber)
             else:
                 self.qlevelClauses[qlevel] = [stepNumber]
+        result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
         self.clauseDict[stepNumber] = result
         self.antecedentDict[stepNumber] = antecedent
+        if self.doQrat:
+	    self.file.write(' '.join(rfields) + ' 0\n')
+#        if self.doQrat:
+#            return self.createClause(result, antecedent, comment)
         return stepNumber
 
     def proveAddBlocked(self, clause, blockers, comment = None):
-        if self.doQrat:
-            return self.createClause(clause, blockers, comment)
         result = resolver.cleanClause(clause)
         if result == resolver.tautologyId:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-        if self.doQrat:
-	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
+ #       if self.doQrat:
+#	    self.file.write(' '.join(rfields) + ' 0\n')
         cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
         if self.mode == ProverMode.refProof:
@@ -219,6 +214,8 @@ class Prover:
         # Record defining clause
         qlevel = self.evarQlevels[var]
         self.qlevelEvars[qlevel][var].append(stepNumber)
+        if self.doQrat:
+            return self.createClause(clause, blockers, comment)
         return stepNumber
 
     ## Refutation-only steps
@@ -243,24 +240,24 @@ class Prover:
     ## Satisfaction-only steps
 
     def proveAdd(self, result, comment = None):
-        if self.doQrat:
-            return self.createClause(result, comment)
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-        if self.doQrat:
-	    self.file.write('q ' + ' '.join(rfields) + ' 0\n')
-        fields = ['a'] + rfields + ['0']
+#        if self.doQrat:
+#	    self.file.write(' '.join(rfields) + ' 0\n')
+	fields = ['a'] + rfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
+        if self.doQrat:
+            return self.createClause(result, comment)
         return stepNumber
 
     def proveDeleteResolution(self, id, antecedent = None, comment = None):
-        lfields = [str(lit) for lit in self.clauseDict[id]]
         if self.doQrat:
-	    self.file.write('q d ' + ' '.join(lfields) + ' 0\n')
+            lfields = [str(lit) for lit in self.clauseDict[id]]
+	    self.file.write('d ' + ' '.join(lfields) + ' 0\n')
             return self.proveDelete([id], comment)
         if antecedent is None:
             antecedent = self.antecedentDict[id]
@@ -278,31 +275,35 @@ class Prover:
             for id in deleteIdList:
                 for lit in self.clauseDict[id]:
                     if abs(lit) == var:
- 	                self.file.write('q d ' + str(lit) + ' ')
+ 	                self.file.write('d ' + str(lit) + ' ')
                 for lit in self.clauseDict[id]:
                     if abs(lit) != var:
  	                self.file.write(str(lit) + ' ')
                 self.file.write('0\n')
-
-        clist = [str(id) for id in causeIdList]
-        fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
-        self.generateStepQP(fields, False, comment)
+        else:
+            clist = [str(id) for id in causeIdList]
+            fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
+            self.generateStepQP(fields, False, comment)
         for id in deleteIdList:
             del self.clauseDict[id]
             if id in self.antecedentDict:
                 del self.antecedentDict[id]
 
     def qcollect(self, qlevel):
+        # self.file.write("QCOLLECT\n");
         # Delete all clauses for qlevels >= qlevel
         qlevels = sorted(self.qlevelClauses.keys(), key=lambda q:-q)
         for q in qlevels:
+            # self.file.write ("level?\n")
             if q < qlevel:
                 break
             idList = self.qlevelClauses[q]
             idList.reverse()
             comment = "Deleting resolution clauses with qlevel %d" % q
             for id in idList:
+                # self.file.write ("clause\n")
                 if id in self.antecedentDict:
+                    # self.file.write ("true\n")
                     self.proveDeleteResolution(id, self.antecedentDict[id], comment)
                     comment = None
             self.qlevelClauses[q] = []

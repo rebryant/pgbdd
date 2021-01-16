@@ -187,7 +187,7 @@ class Term:
             newRoot = root0
             prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
             validation = self.manager.prover.proveAdd([newRoot.id])
-        else:            
+        else:
             comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
             distid = prover.proveAdd([root1.id, root0.id], comment = comment)
             comment = "Delete Shannon expansion clauses"
@@ -532,7 +532,6 @@ class Solver:
         # Now handle all of the quantifications:
         levels = sorted(self.quantMap.keys(), key = lambda x : -x)
         for level in levels:
-     
             if self.termIsConstant(id):
                 if self.verbLevel >= 3:
                     self.writer.write("Encountered constant value before performing quantification level %d\n" % level)
@@ -576,7 +575,7 @@ class Solver:
                 self.writer.write("Formula TRUE\n")
             self.manager.summarize()
 
-        
+
     def placeInQuantBucket(self, buckets, id):
         term = self.activeIds[id]
         level = term.root.qlevel-1
