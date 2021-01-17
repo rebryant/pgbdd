@@ -6,9 +6,8 @@ import getopt
 import datetime
 
 def usage(name):
-    print("Usage: %s [-S] [-v] -m (s|r) -i FILE.qcnf -p FILE.qproof" % name)
+    print("Usage: %s [-v] -m (s|r) -i FILE.qcnf -p FILE.qproof" % name)
     print("   -m MODE   Set proof mode (s = satisfaction, r = refutation)")
-    print("   -S        Satisfaction proof")
     print("   -v        Print more helpful diagnostic information if there is an error")
 
 ######################################################################################
