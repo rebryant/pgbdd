@@ -23,6 +23,7 @@ CHECK=$(INTERP) $(SDIR)/qchecker.py
 
 CGRAB=../grab_plusclauses.py
 TGRAB=../grab_plustime.py
+VGRAB=../grab_solve_v_check.py
 
 VLEVEL=1
 PROFILE=4+3+2
@@ -201,6 +202,7 @@ data:
 	$(CGRAB) nimo-t4-*-sao.data > nimo-bdd-t4o-clauses.csv
 	$(TGRAB) nimo-f4-*-rao.data > nimo-bdd-f4o-seconds.csv
 	$(TGRAB) nimo-t4-*-sao.data > nimo-bdd-t4o-seconds.csv
+	$(VGRAB) *-{r,s}a*.data | grep -v ERR > nim-solve-check.csv
 
 clean:
 	rm -f *~ 

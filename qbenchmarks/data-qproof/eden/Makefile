@@ -15,6 +15,7 @@ UVARIABLE=$(INTERP) $(GDIR)/gen-uvariable.py
 REVERSE=$(INTERP) $(BDIR)/reverse.py
 CLUSTER=$(INTERP) $(GDIR)/gen-cluster.py
 GRABBER = $(INTERP) ./grab_xclauses.py
+VGRAB=../grab_solve_v_check.py
 GEN=$(GDIR)/gen-goe-$(MODE)
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) $(SDIR)/qchecker.py
@@ -129,6 +130,7 @@ data:
 	$(GRABBER) goe-plain-03x*-UBC.data > goe-plain-bdd-03x-UBC-clauses.csv
 #	$(GRABBER) goe-plain-*x03-UBC.data > goe-plain-x03-UBC.csv
 	$(GRABBER) goe-plain-04x*-UBC.data > goe-plain-bdd-04x-UBC-clauses.csv
+	$(VGRAB) *.data | grep -v ERR > eden-solve-check.csv
 
 clean:
 	rm -f *~

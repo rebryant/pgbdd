@@ -19,6 +19,7 @@ CHECK=$(INTERP) $(SDIR)/qchecker.py
 CGRAB=../grab_plusclauses.py
 TGRAB=../grab_plustime.py
 AGRAB=../grab_plusapplies.py
+VGRAB=../grab_solve_v_check.py
 
 VLEVEL=1
 N=5
@@ -127,6 +128,8 @@ data:
 	$(AGRAB) ldom*-nae.data > ldom-bdd-nae-applies.csv
 	$(AGRAB) ldom*-nau.data > ldom-bdd-nau-applies.csv
 	$(AGRAB) ldom*-naeu.data > ldom-bdd-naeu-applies.csv
+	$(VGRAB) *.data | grep -v ERR > ldom-solve-check.csv
+
 
 clean:
 	rm -f *~ 

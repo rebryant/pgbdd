@@ -11,6 +11,8 @@ RANDOMIZER = ../../../benchmarks/randomizer.py
 SOLVER = $(INTERP) ../../../qbf/qsolver.py
 CHECKER = $(INTERP) ../../../qbf/qchecker.py
 GRABBER = $(INTERP) ../../../benchmarks/grab_clauses.py
+VGRAB=../grab_solve_v_check.py
+
 EXTENSION = qproof
 
 vo: kbf-$(T)-vo.data
@@ -65,6 +67,8 @@ data:
 #	$(GRABBER) kbf-*-qo.data > kbf-qo.csv
 	$(GRABBER) kbf-*-rqo.data > kbf-bdd-rqo-clauses.csv
 	$(GRABBER) kbf-*-ran-*.data > kbf-bdd-ran-clauses.csv
+	$(VGRAB) *.data | grep -v ERR > kbf-solve-check.csv
+
 
 clean:
 	rm -f *~
