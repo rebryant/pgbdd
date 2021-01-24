@@ -11,13 +11,13 @@ INTERP=python3
 BDIR=../..
 NDIR=$(BDIR)/ldominoes
 SDIR=$(BDIR)/../qbf
-QDIR=../../../qrat
+QDIR=../../../../qrat-trim
 TLIM=3600
 
 GEN=$(NDIR)/gen_ldom.py
 ALTERNATE=$(BDIR)/alternate.py
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
-CHECK=$(QDIR)/qrat-trim 
+CHECK=$(INTERP) ../../wrap.py $(TLIM) $(QDIR)/qrat-trim 
 
 CGRAB=../grab_plusclauses.py
 TGRAB=../grab_plustime.py
