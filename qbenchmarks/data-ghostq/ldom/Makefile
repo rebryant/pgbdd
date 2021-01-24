@@ -21,22 +21,23 @@ TGRAB=../grab_plustime.py
 
 GEN=$(NDIR)/gen_ldom.py
 N=5
+CAT=
 
 all: a
 
-a: ldoma-$(N).data
-ia: ildoma-$(N).data
+a: ldoma$(CAT)-$(N).data
+ia: ildoma$(CAT)-$(N).data
 
 
-ldoma-$(N).data:
-	$(GEN)  -t a -n $(N) -r ldoma-$(N)
-	$(CONV) ldoma-$(N).qcnf -write-gq -o ldoma-$(N).gq 2>&1 | tee ldoma-$(N).data
-	$(GQBF) ldoma-$(N).gq -s-cnf -time-out $(TLIM) | tee -a ldoma-$(N).data
+ldoma$(CAT)-$(N).data:
+	$(GEN)  -t a -n $(N) -r ldoma$(CAT)-$(N)
+	$(CONV) ldoma$(CAT)-$(N).qcnf -write-gq -o ldoma$(CAT)-$(N).gq 2>&1 | tee ldoma$(CAT)-$(N).data
+	$(GQBF) ldoma$(CAT)-$(N).gq -s-cnf -time-out $(TLIM) | tee -a ldoma$(CAT)-$(N).data
 
-ildoma-$(N).data:
-	$(GEN)  -i -t a -n $(N) -r ildoma-$(N)
-	$(CONV) ildoma-$(N).qcnf -write-gq -o ildoma-$(N).gq 2>&1 | tee ildoma-$(N).data
-	$(GQBF) ildoma-$(N).gq -s-cnf -time-out $(TLIM) | tee -a ildoma-$(N).data
+ildoma$(CAT)-$(N).data:
+	$(GEN)  -i -t a -n $(N) -r ildoma$(CAT)-$(N)
+	$(CONV) ildoma$(CAT)-$(N).qcnf -write-gq -o ildoma$(CAT)-$(N).gq 2>&1 | tee ildoma$(CAT)-$(N).data
+	$(GQBF) ildoma$(CAT)-$(N).gq -s-cnf -time-out $(TLIM) | tee -a ildoma$(CAT)-$(N).data
 
 
 data:

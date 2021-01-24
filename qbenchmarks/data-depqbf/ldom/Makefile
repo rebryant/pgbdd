@@ -21,21 +21,21 @@ TGRAB=../grab_plustime.py
 GEN=$(NDIR)/gen_ldom.py
 SOLVE=$(INTERP) $(WRAP) $(TLIM) $(DEPQBF)
 N=5
-
+CAT=
 
 all: a
 
-a: ldoma-$(N).data
-ia: ildoma-$(N).data
+a: ldoma$(CAT)-$(N).data
+ia: ildoma$(CAT)-$(N).data
 
 
-ldoma-$(N).data:
-	$(GEN) -t a -n $(N) -r ldoma-$(N)
-	$(SOLVE) ldoma-$(N).qcnf | tee ldoma-$(N).data
+ldoma$(CAT)-$(N).data:
+	$(GEN) -t a -n $(N) -r ldoma$(CAT)-$(N)
+	$(SOLVE) ldoma$(CAT)-$(N).qcnf | tee ldoma$(CAT)-$(N).data
 
-ildoma-$(N).data:
-	$(GEN) -i -t a -n $(N) -r ildoma-$(N)
-	$(SOLVE) ildoma-$(N).qcnf | tee ildoma-$(N).data
+ildoma$(CAT)-$(N).data:
+	$(GEN) -i -t a -n $(N) -r ildoma$(CAT)-$(N)
+	$(SOLVE) ildoma$(CAT)-$(N).qcnf | tee ildoma$(CAT)-$(N).data
 
 data:
 	$(TGRAB) ldoma-*.data > ldom-depqbf-a-seconds.csv

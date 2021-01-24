@@ -23,95 +23,96 @@ VGRAB=../grab_solve_v_check.py
 
 VLEVEL=1
 N=5
+CAT=
 
 all: sa
 
-sa: ldom-$(N)-sa.data
-ra: ldom-$(N)-ra.data
-na: ldom-$(N)-na.data
-nae: ldom-$(N)-nae.data
-nau: ldom-$(N)-nau.data
-naeu: ldom-$(N)-naeu.data
+sa: ldom$(CAT)-$(N)-sa.data
+ra: ldom$(CAT)-$(N)-ra.data
+na: ldom$(CAT)-$(N)-na.data
+nae: ldom$(CAT)-$(N)-nae.data
+nau: ldom$(CAT)-$(N)-nau.data
+naeu: ldom$(CAT)-$(N)-naeu.data
 
-isa: ildom-$(N)-sa.data
-ira: ildom-$(N)-ra.data
-ina: ildom-$(N)-na.data
+isa: ildom$(CAT)-$(N)-sa.data
+ira: ildom$(CAT)-$(N)-ra.data
+ina: ildom$(CAT)-$(N)-na.data
 
-ldom-$(N)-sa.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-sa
+ldom$(CAT)-$(N)-sa.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i ldom-$(N)-sa.qcnf \
-		-o ldom-$(N)-sa.qproof \
-		-p ldom-$(N)-sa.order \
-		-L ldom-$(N)-sa.data
-	$(CHECK) -m s -i ldom-$(N)-sa.qcnf -p ldom-$(N)-sa.qproof | tee -a ldom-$(N)-sa.data
-	rm -f ldom-$(N)-sa.qproof
+		-i ldom$(CAT)-$(N)-sa.qcnf \
+		-o ldom$(CAT)-$(N)-sa.qproof \
+		-p ldom$(CAT)-$(N)-sa.order \
+		-L ldom$(CAT)-$(N)-sa.data
+	$(CHECK) -m s -i ldom$(CAT)-$(N)-sa.qcnf -p ldom$(CAT)-$(N)-sa.qproof | tee -a ldom$(CAT)-$(N)-sa.data
+	rm -f ldom$(CAT)-$(N)-sa.qproof
 
-ldom-$(N)-ra.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-ra
+ldom$(CAT)-$(N)-ra.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i ldom-$(N)-ra.qcnf \
-		-o ldom-$(N)-ra.qproof \
-		-p ldom-$(N)-ra.order \
-		-L ldom-$(N)-ra.data
-	$(CHECK) -m r -i ldom-$(N)-ra.qcnf -p ldom-$(N)-ra.qproof | tee -a ldom-$(N)-ra.data
-	rm -f ldom-$(N)-ra.qproof
+		-i ldom$(CAT)-$(N)-ra.qcnf \
+		-o ldom$(CAT)-$(N)-ra.qproof \
+		-p ldom$(CAT)-$(N)-ra.order \
+		-L ldom$(CAT)-$(N)-ra.data
+	$(CHECK) -m r -i ldom$(CAT)-$(N)-ra.qcnf -p ldom$(CAT)-$(N)-ra.qproof | tee -a ldom$(CAT)-$(N)-ra.data
+	rm -f ldom$(CAT)-$(N)-ra.qproof
 
-ldom-$(N)-na.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-na
+ldom$(CAT)-$(N)-na.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-na
 	$(SOLVE) -v $(VLEVEL) -m n -b \
-		-i ldom-$(N)-na.qcnf \
-		-p ldom-$(N)-na.order \
-		-L ldom-$(N)-na.data
+		-i ldom$(CAT)-$(N)-na.qcnf \
+		-p ldom$(CAT)-$(N)-na.order \
+		-L ldom$(CAT)-$(N)-na.data
 
-ldom-$(N)-nae.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-nae
+ldom$(CAT)-$(N)-nae.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-nae
 	$(SOLVE) -v $(VLEVEL) -m n -l e -b \
-		-i ldom-$(N)-nae.qcnf \
-		-p ldom-$(N)-nae.order \
-		-L ldom-$(N)-nae.data
+		-i ldom$(CAT)-$(N)-nae.qcnf \
+		-p ldom$(CAT)-$(N)-nae.order \
+		-L ldom$(CAT)-$(N)-nae.data
 
-ldom-$(N)-nau.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-nau
+ldom$(CAT)-$(N)-nau.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-nau
 	$(SOLVE) -v $(VLEVEL) -m n -l u -b \
-		-i ldom-$(N)-nau.qcnf \
-		-p ldom-$(N)-nau.order \
-		-L ldom-$(N)-nau.data
+		-i ldom$(CAT)-$(N)-nau.qcnf \
+		-p ldom$(CAT)-$(N)-nau.order \
+		-L ldom$(CAT)-$(N)-nau.data
 
-ldom-$(N)-naeu.data:
-	$(GEN) -t a -n $(N) -r ldom-$(N)-naeu
+ldom$(CAT)-$(N)-naeu.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-naeu
 	$(SOLVE) -v $(VLEVEL) -m n -l eu -b \
-		-i ldom-$(N)-naeu.qcnf \
-		-p ldom-$(N)-naeu.order \
-		-L ldom-$(N)-naeu.data
+		-i ldom$(CAT)-$(N)-naeu.qcnf \
+		-p ldom$(CAT)-$(N)-naeu.order \
+		-L ldom$(CAT)-$(N)-naeu.data
 
 
-ildom-$(N)-sa.data:
-	$(GEN) -i -t a -n $(N) -r ildom-$(N)-sa
+ildom$(CAT)-$(N)-sa.data:
+	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
-		-i ildom-$(N)-sa.qcnf \
-		-o ildom-$(N)-sa.qproof \
-		-p ildom-$(N)-sa.order \
-		-L ildom-$(N)-sa.data
-	$(CHECK) -m s -i ildom-$(N)-sa.qcnf -p ildom-$(N)-sa.qproof | tee -a ildom-$(N)-sa.data
-	rm -f ildom-$(N)-sa.qproof
+		-i ildom$(CAT)-$(N)-sa.qcnf \
+		-o ildom$(CAT)-$(N)-sa.qproof \
+		-p ildom$(CAT)-$(N)-sa.order \
+		-L ildom$(CAT)-$(N)-sa.data
+	$(CHECK) -m s -i ildom$(CAT)-$(N)-sa.qcnf -p ildom$(CAT)-$(N)-sa.qproof | tee -a ildom$(CAT)-$(N)-sa.data
+	rm -f ildom$(CAT)-$(N)-sa.qproof
 
-ildom-$(N)-ra.data:
-	$(GEN) -i -t a -n $(N) -r ildom-$(N)-ra
+ildom$(CAT)-$(N)-ra.data:
+	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-ra
 	$(SOLVE) -v $(VLEVEL) -m r -b \
-		-i ildom-$(N)-ra.qcnf \
-		-o ildom-$(N)-ra.qproof \
-		-p ildom-$(N)-ra.order \
-		-L ildom-$(N)-ra.data
-	$(CHECK) -m r -i ildom-$(N)-ra.qcnf -p ildom-$(N)-ra.qproof | tee -a ildom-$(N)-ra.data
-	rm -f ildom-$(N)-ra.qproof
+		-i ildom$(CAT)-$(N)-ra.qcnf \
+		-o ildom$(CAT)-$(N)-ra.qproof \
+		-p ildom$(CAT)-$(N)-ra.order \
+		-L ildom$(CAT)-$(N)-ra.data
+	$(CHECK) -m r -i ildom$(CAT)-$(N)-ra.qcnf -p ildom$(CAT)-$(N)-ra.qproof | tee -a ildom$(CAT)-$(N)-ra.data
+	rm -f ildom$(CAT)-$(N)-ra.qproof
 
-ildom-$(N)-na.data:
-	$(GEN) -i -t a -n $(N) -r ildom-$(N)-na
+ildom$(CAT)-$(N)-na.data:
+	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-na
 	$(SOLVE) -v $(VLEVEL) -m n -b \
-		-i ildom-$(N)-na.qcnf \
-		-p ildom-$(N)-na.order \
-		-L ildom-$(N)-na.data
+		-i ildom$(CAT)-$(N)-na.qcnf \
+		-p ildom$(CAT)-$(N)-na.order \
+		-L ildom$(CAT)-$(N)-na.data
 
 data:
 	$(CGRAB) ldom*-sa.data > ldom-bdd-sa-clauses.csv
