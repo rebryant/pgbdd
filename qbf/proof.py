@@ -82,7 +82,7 @@ class Prover:
 
     def createClause(self, result, antecedent, comment = None, isInput = False, isUniversal = False):
         self.comment(comment)
-        result = resolver.cleanClause(result)
+#        result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
             return result
         self.clauseCount += 1
@@ -171,6 +171,7 @@ class Prover:
     ## Refutation and satisfaction steps, but with different actions
 
     def proveAddResolution(self, result, antecedent, comment = None):
+        result = resolver.cleanClause(result)
         rfields = [str(r) for r in result]
         afields = [str(a) for a in antecedent]
         cmd =  'ar' if self.mode == ProverMode.refProof else 'a'
@@ -217,7 +218,7 @@ class Prover:
         qlevel = self.evarQlevels[var]
         self.qlevelEvars[qlevel][var].append(stepNumber)
         if self.doQrat:
-            return self.createClause(clause, blockers, comment)
+            return self.createClause(result, blockers, comment)
         return stepNumber
 
     ## Refutation-only steps
