@@ -82,7 +82,7 @@ class Prover:
 
     def createClause(self, result, antecedent, comment = None, isInput = False, isUniversal = False):
         self.comment(comment)
-#        result = resolver.cleanClause(result)
+        result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
             return result
         self.clauseCount += 1
