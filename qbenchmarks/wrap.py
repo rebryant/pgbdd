@@ -26,7 +26,7 @@ def runprog(timelimit, path, arglist):
     delta = datetime.datetime.now() - start
     secs = delta.seconds + 1e-6 * delta.microseconds
     print("Program %s completed with exit code %d" % (path, p.returncode))
-    print("Elapsed time %.3f seconds" % secs)
+    print("Elapsed time: %.3f seconds" % secs)
     return
     
 def run(name, arglist):
