@@ -193,7 +193,7 @@ class Prover:
         self.clauseDict[stepNumber] = result
         self.antecedentDict[stepNumber] = antecedent
         if self.doQrat:
-	    self.file.write(' '.join(rfields) + ' 0\n')
+            self.file.write(' '.join(rfields) + ' 0\n')
 #        if self.doQrat:
 #            return self.createClause(result, antecedent, comment)
         return stepNumber
@@ -205,7 +205,7 @@ class Prover:
             return result
         rfields = [str(r) for r in result]
 #       if self.doQrat:
-#	    self.file.write(' '.join(rfields) + ' 0\n')
+#           self.file.write(' '.join(rfields) + ' 0\n')
         cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
         if self.mode == ProverMode.refProof:
@@ -249,8 +249,8 @@ class Prover:
             return result
         rfields = [str(r) for r in result]
 #        if self.doQrat:
-#	    self.file.write(' '.join(rfields) + ' 0\n')
-	fields = ['a'] + rfields + ['0']
+#           self.file.write(' '.join(rfields) + ' 0\n')
+        fields = ['a'] + rfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
         if self.doQrat:
@@ -260,7 +260,7 @@ class Prover:
     def proveDeleteResolution(self, id, antecedent = None, comment = None):
         if self.doQrat:
             lfields = [str(lit) for lit in self.clauseDict[id]]
-	    self.file.write('d ' + ' '.join(lfields) + ' 0\n')
+            self.file.write('d ' + ' '.join(lfields) + ' 0\n')
             return self.proveDelete([id], comment)
         if antecedent is None:
             antecedent = self.antecedentDict[id]
@@ -278,7 +278,7 @@ class Prover:
             for id in deleteIdList:
                 for lit in self.clauseDict[id]:
                     if abs(lit) == var:
- 	                self.file.write('d ' + str(lit) + ' ')
+                        self.file.write('d ' + str(lit) + ' ')
                 for lit in self.clauseDict[id]:
                     if abs(lit) != var:
                         self.file.write(str(lit) + ' ')
