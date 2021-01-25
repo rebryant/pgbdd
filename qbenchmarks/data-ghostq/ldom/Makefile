@@ -15,9 +15,9 @@ WRAP = $(BDIR)/wrap.py
 GDIR = ../../../../ghostq/bin
 CONV =  $(GDIR)/qcir-conv.py
 GQBF= $(GDIR)/ghostq
-TLIM=3600
+TLIM=4000
 
-TGRAB=../grab_plustime.py
+TGRAB=../grab_time.py
 
 GEN=$(NDIR)/gen_ldom.py
 N=5
@@ -41,8 +41,11 @@ ildoma$(CAT)-$(N).data:
 
 
 data:
-	$(TGRAB) ldoma-*.data > ldom-ghostq-a-seconds.csv
-	$(TGRAB) ildoma-*.data > ildom-ghostq-a-seconds.csv
+#	$(TGRAB) ldoma-*.data > ldom-ghostq-a-seconds.csv
+#	$(TGRAB) ildoma-*.data > ildom-ghostq-a-seconds.csv
+	$(TGRAB) *BY5S*.data > ldom-ghostq-sat-seconds.csv
+	$(TGRAB) *BY5R*.data > ldom-ghostq-ref-seconds.csv
+
 
 clean:
 	rm -f *~ *.order *.qcnf *.gq

@@ -115,22 +115,25 @@ ildom$(CAT)-$(N)-na.data:
 		-L ildom$(CAT)-$(N)-na.data
 
 data:
-	$(CGRAB) ldom*-sa.data > ldom-bdd-sa-clauses.csv
-	$(CGRAB) ldom*-ra.data > ldom-bdd-ra-clauses.csv
-	$(TGRAB) ldom*-sa.data > ldom-bdd-sa-seconds.csv
-	$(TGRAB) ldom*-ra.data > ldom-bdd-ra-seconds.csv
-	$(CGRAB) ildom*-sa.data > ildom-bdd-sa-clauses.csv
-	$(CGRAB) ildom*-ra.data > ildom-bdd-ra-clauses.csv
-	$(TGRAB) ildom*-sa.data > ildom-bdd-sa-seconds.csv
-	$(TGRAB) ildom*-ra.data > ildom-bdd-ra-seconds.csv
-	$(AGRAB) ldom*-ra.data > ldom-bdd-ra-applies.csv
-	$(AGRAB) ldom*-sa.data > ldom-bdd-sa-applies.csv
-	$(AGRAB) ldom*-na.data > ldom-bdd-na-applies.csv
-	$(AGRAB) ldom*-nae.data > ldom-bdd-nae-applies.csv
-	$(AGRAB) ldom*-nau.data > ldom-bdd-nau-applies.csv
-	$(AGRAB) ldom*-naeu.data > ldom-bdd-naeu-applies.csv
-	$(VGRAB) *.data | grep -v ERR > ldom-solve-check.csv
-
+#	$(CGRAB) ldom*-sa.data > ldom-bdd-sa-clauses.csv
+#	$(CGRAB) ldom*-ra.data > ldom-bdd-ra-clauses.csv
+#	$(TGRAB) ldom*-sa.data > ldom-bdd-sa-seconds.csv
+#	$(TGRAB) ldom*-ra.data > ldom-bdd-ra-seconds.csv
+#	$(CGRAB) ildom*-sa.data > ildom-bdd-sa-clauses.csv
+#	$(CGRAB) ildom*-ra.data > ildom-bdd-ra-clauses.csv
+#	$(TGRAB) ildom*-sa.data > ildom-bdd-sa-seconds.csv
+#	$(TGRAB) ildom*-ra.data > ildom-bdd-ra-seconds.csv
+#	$(AGRAB) ldom*-ra.data > ldom-bdd-ra-applies.csv
+#	$(AGRAB) ldom*-sa.data > ldom-bdd-sa-applies.csv
+#	$(AGRAB) ldom*-na.data > ldom-bdd-na-applies.csv
+#	$(AGRAB) ldom*-nae.data > ldom-bdd-nae-applies.csv
+#	$(AGRAB) ldom*-nau.data > ldom-bdd-nau-applies.csv
+#	$(AGRAB) ldom*-naeu.data > ldom-bdd-naeu-applies.csv
+#	$(VGRAB) *.data | grep -v ERR > ldom-solve-check.csv
+	$(CGRAB) *BY5S*.data > ldom-qproof-sat-clauses.csv
+	$(CGRAB) *BY5R*.data > ldom-qproof-ref-clauses.csv
+	$(VGRAB) *BY5S*.data > ldom-qproof-sat-seconds.csv
+	$(VGRAB) *BY5R*.data > ldom-qproof-ref-seconds.csv
 
 clean:
 	rm -f *~ 
