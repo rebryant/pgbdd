@@ -14,9 +14,10 @@ SDIR=$(BDIR)/../qbf
 WRAP = $(BDIR)/wrap.py
 DDIR = ../../../../depqbf
 DEPQBF= $(DDIR)/depqbf
-TLIM=3600
+TLIM=4000
 
 TGRAB=../grab_plustime.py
+WGRAB=../grab_wtime.py
 
 GEN=$(NDIR)/gen_ldom.py
 SOLVE=$(INTERP) $(WRAP) $(TLIM) $(DEPQBF)
@@ -38,8 +39,10 @@ ildoma$(CAT)-$(N).data:
 	$(SOLVE) ildoma$(CAT)-$(N).qcnf | tee ildoma$(CAT)-$(N).data
 
 data:
-	$(TGRAB) ldoma-*.data > ldom-depqbf-a-seconds.csv
-	$(TGRAB) ildoma-*.data > ildom-depqbf-a-seconds.csv
+#	$(TGRAB) ldoma-*.data > ldom-depqbf-a-seconds.csv
+#	$(TGRAB) ildoma-*.data > ildom-depqbf-a-seconds.csv
+	$(WGRAB) *BY5S*.data > ldom-depqbf-sat-seconds.csv
+	$(WGRAB) *BY5R*.data > ldom-depqbf-ref-seconds.csv
 
 clean:
 	rm -f *~  *.order
