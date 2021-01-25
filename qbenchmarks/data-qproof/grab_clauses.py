@@ -3,10 +3,10 @@
 import sys
 import re
 
-# For set of benchmarks, generate CSV file giving times for solver and for proof checker
-# Extract value of size parameter from file name
+# Generate csv of number specified on target line
+# Extracts problem size N from file name containing substrings of form -N-
 
-triggerPhrases = ["Elapsed time for SAT", "Elapsed time for check"]
+triggerPhrase = "Total Clauses"
 
 def trim(s):
     while len(s) > 0 and s[-1] == '\n':
@@ -30,54 +30,48 @@ def firstNumber(fields):
             continue
     return -1
 
-def firstFloat(fields):
-    for field in fields:
-        try:
-            val = float(field)
-            return val
-        except:
-            continue
-    return -1
-
-# Extract data from log.  Turn into something usable for other tools
+# Extract clause data from log.  Turn into something usable for other tools
 def extract(fname):
-    vals = [-2] * len(triggerPhrases)
+    # Try to find size from file name:
+    fields = ddSplit(fname)
+    n = firstNumber(fields)
+    if n < 0:
+        print("Couldn't extract problem size from file name '%s'" % fname)
+        return None
+    # Put sum at beginning
+    vlist = [n]
+
     try:
         f = open(fname, 'r')
     except:
         print("Couldn't open file '%s'" % fname)
         return None
-
     for line in f:
         line = trim(line)
-        for idx in range(len(triggerPhrases)):
-            phrase  = triggerPhrases[idx]
-            if phrase in line:
-                fields = lineSplit(line)
-                vals[idx] = firstFloat(fields)
+        if triggerPhrase in line:
+            fields = lineSplit(line)
+            val = firstNumber(fields)
+            f.close()
+            return vlist + [val]
     f.close()
-    n = firstNumber(ddSplit(fname))
-    vals = [n] + vals
-    return vals
+    return None
 
 def usage(name):
     print("Usage: %s file1 file2 ..." % name)
     sys.exit(0)
 
 def run(name, args):
+    vdict = {}
     if len(args) < 1:
         usage(name)
-    vdict = {}
     for fname in args:
         vlist = extract(fname)
-        if min(vlist) > 0:
+        if vlist is not None:
             vdict[vlist[0]] = vlist
-        else:
-            print("ERR: Got values [%s] from file %s" % (", ".join(slist), fname))
     for k in sorted(vdict.keys()):
-        slist = [str(v) for v in vdict[k]]
+        vlist = vdict[k]
+        slist = [str(v) for v in vlist]
         print(",".join(slist))
-
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
