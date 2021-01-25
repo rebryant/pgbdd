@@ -16,7 +16,7 @@ GEN=$(NDIR)/gen_ldom.py
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) $(SDIR)/qchecker.py
 
-CGRAB=../grab_plusclauses.py
+CGRAB=../grab_clauses.py
 TGRAB=../grab_plustime.py
 AGRAB=../grab_plusapplies.py
 VGRAB=../grab_solve_v_check.py
