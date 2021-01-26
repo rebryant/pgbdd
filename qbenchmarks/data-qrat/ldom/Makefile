@@ -19,6 +19,8 @@ GEN=$(NDIR)/gen_ldom.py
 ALTERNATE=$(BDIR)/alternate.py
 SOLVE=$(INTERP) $(SDIR)/qsolver.py
 CHECK=$(INTERP) ../../wrap.py $(TLIM) $(QDIR)/qrat-trim 
+QCHECK = $(QDIR)/qrat-trim 
+
 
 CGRAB=../grab_plusclauses.py
 TGRAB=../grab_plustime.py
@@ -32,6 +34,7 @@ all: sa
 
 sa: ldom$(CAT)-$(N)-sa.data
 ra: ldom$(CAT)-$(N)-ra.data
+qsa: ldom$(CAT)-$(N)-qsa.data
 
 isa: ildom$(CAT)-$(N)-sa.data
 ira: ildom$(CAT)-$(N)-ra.data
@@ -45,6 +48,16 @@ ldom$(CAT)-$(N)-sa.data:
 		-L ldom$(CAT)-$(N)-sa.data
 	$(CHECK) ldom$(CAT)-$(N)-sa.qcnf ldom$(CAT)-$(N)-sa.qrat -S -t $(TLIM) | tee -a ldom$(CAT)-$(N)-sa.data
 	rm -f ldom$(CAT)-$(N)-sa.qrat
+
+ldom$(CAT)-$(N)-qsa.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-qsa 
+	$(SOLVE) -v $(VLEVEL) -m s -b \
+		-i ldom$(CAT)-$(N)-qsa.qcnf \
+		-o ldom$(CAT)-$(N)-qsa.qrat \
+		-p ldom$(CAT)-$(N)-qsa.order \
+		-L ldom$(CAT)-$(N)-qsa.data
+	$(QCHECK) ldom$(CAT)-$(N)-qsa.qcnf ldom$(CAT)-$(N)-qsa.qrat -S -t $(TLIM) 
+#	rm -f ldom$(CAT)-$(N)-qsa.qrat
 
 ldom$(CAT)-$(N)-ra.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
