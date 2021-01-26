@@ -70,10 +70,7 @@ def run(name, args):
     vdict = {}
     for fname in args:
         vlist = extract(fname)
-        if min(vlist) > 0:
-            vdict[vlist[0]] = vlist
-        else:
-            print("ERR: Got values [%s] from file %s" % (", ".join(slist), fname))
+        vdict[vlist[0]] = vlist
     for k in sorted(vdict.keys()):
         slist = [str(v) for v in vdict[k]]
         print(",".join(slist))
