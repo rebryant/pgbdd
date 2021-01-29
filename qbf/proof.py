@@ -103,33 +103,19 @@ class Prover:
         self.antecedentDict[self.clauseCount] = antecedent
         return self.clauseCount
 
+    # Only called with refutation proofs
     def deleteClauses(self, clauseList):
-        if self.mode == ProverMode.refProof:
-            if self.doQrat:
-                for id in clauseList:
-                    self.file.write('d ')
-                    for lit in self.clauseDict[id]:
-                        self.file.write(str(lit) + ' ')
-                    self.file.write('0\n')
-            else:
-                 for id in clauseList:
-                     del self.clauseDict[id]
-                 middle = ['d']
-                 rest = clauseList + [0]
-                 ilist = [self.clauseCount] + middle + rest
-                 slist = [str(i) for i in ilist]
-                 istring = " ".join(slist)
-                 self.file.write(istring + '\n')
+        if self.doQrat:
+            for id in clauseList:
+                slist = ['d'] + [str(lit) for lit in self.clauseDict[id]] + ['0']
+                istring = ' '.join(slist)
+                self.file.write(istring + '\n')
         else:
             for id in clauseList:
-                middle = ['d']
-                rest = clauseList + [0] + self.antecedentDict[id] + [0]
-            ilist = [self.clauseCount] + middle + rest
-            slist = [str(i) for i in ilist]
+                del self.clauseDict[id]
+            slist = ['-', 'd'] + [str(id) for id in clauseList] + ['0']
             istring = " ".join(slist)
             self.file.write(istring + '\n')
-            del self.clauseDict[id]
-            del self.antecedentDict[id]
 
     def generateStepQP(self, fields, addNumber = True, comment = None):
         self.comment(comment)
@@ -194,8 +180,6 @@ class Prover:
         self.antecedentDict[stepNumber] = antecedent
         if self.doQrat:
             self.file.write(' '.join(rfields) + ' 0\n')
-#        if self.doQrat:
-#            return self.createClause(result, antecedent, comment)
         return stepNumber
 
     def proveAddBlocked(self, clause, blockers, comment = None):
@@ -204,8 +188,6 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-#       if self.doQrat:
-#           self.file.write(' '.join(rfields) + ' 0\n')
         cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
         fields = [cmd] + rfields + ['0']
         if self.mode == ProverMode.refProof:
@@ -231,15 +213,6 @@ class Prover:
         self.clauseDict[stepNumber] = nclause
         return stepNumber
 
-    def proveDelete(self, idList, comment = None):
-        ilist = [str(id) for id in idList]
-        fields = ['d'] + ilist + ['0']
-        self.generateStepQP(fields, False, comment)
-        for id in idList:
-            del self.clauseDict[id]
-            if id in self.antecedentDict:
-                del self.antecedentDict[id]
-
     ## Satisfaction-only steps
 
     def proveAdd(self, result, comment = None):
@@ -248,8 +221,6 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-#        if self.doQrat:
-#           self.file.write(' '.join(rfields) + ' 0\n')
         fields = ['a'] + rfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
@@ -261,7 +232,10 @@ class Prover:
         if self.doQrat:
             lfields = [str(lit) for lit in self.clauseDict[id]]
             self.file.write('d ' + ' '.join(lfields) + ' 0\n')
-            return self.proveDelete([id], comment)
+            del self.clauseDict[id]
+            if id in self.antecedentDict:
+                del self.antecedentDict[id]
+            return 
         if antecedent is None:
             antecedent = self.antecedentDict[id]
         afields = [str(a) for a in antecedent]
@@ -276,13 +250,10 @@ class Prover:
         dlist = [str(id) for id in deleteIdList]
         if self.doQrat:
             for id in deleteIdList:
-                for lit in self.clauseDict[id]:
-                    if abs(lit) == var:
-                        self.file.write('d ' + str(lit) + ' ')
-                for lit in self.clauseDict[id]:
-                    if abs(lit) != var:
-                        self.file.write(str(lit) + ' ')
-                self.file.write('0\n')
+                list1 = [lit for lit in self.clauseDict[id] if abs(lit) == var]
+                list2 = [lit for lit in self.clauseDict[id] if abs(lit) != var]
+                slist = [str(lit) for lit in (list1+list2)]
+                self.file.write('d ' + ' '.join(slist) + ' 0\n')
         else:
             clist = [str(id) for id in causeIdList]
             fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']

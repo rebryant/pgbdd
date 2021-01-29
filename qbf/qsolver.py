@@ -92,6 +92,8 @@ class Term:
 
     def equantify(self, literals, prover):
         newRoot = self.manager.equant(self.root, literals)
+        if newRoot == self.manager.leaf1:
+            return None
         validation = None
         if self.mode == proof.ProverMode.refProof:
             antecedents = [self.validation]
@@ -354,11 +356,14 @@ class Solver:
         del self.activeIds[id]
         litList = [self.litMap[v] for v in varList]
         clause = self.manager.buildClause(litList)
-        self.termCount += 1
         vstring = " ".join(sorted([str(v) for v in varList]))
         if self.verbLevel >= 3:
-            print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount))
+            print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount+1))
         newTerm = term.equantify(clause, self.prover)
+        if newTerm is None:
+            comment = "T%d (Node %s) EQuant(%s) --> ONE" % (id, term.root.label(), vstring)
+            return -1
+        self.termCount += 1
         if self.prover.mode == proof.ProverMode.refProof:
             comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
             self.prover.comment(comment)
@@ -406,7 +411,7 @@ class Solver:
             self.activeIds[id0] = term0
 
         if term1 is None and term0 is None:
-            msg = "Got C1 for both cofactors of %s" % (term.root.label())
+            msg = "Got ONE for both cofactors of %s" % (term.root.label())
             raise SolverException(msg)
 
         if term1 is None:
@@ -519,6 +524,8 @@ class Solver:
         return True
 
     def placeInQuantBucket(self, buckets, id):
+        if id < 0:
+            return
         term = self.activeIds[id]
         level = term.root.qlevel-1
         if level > 0:
