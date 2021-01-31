@@ -16,9 +16,9 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|d|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -m MODE     Set proof mode (n = no proof, s = satisfaction, r = refutation)\n")
+    sys.stderr.write("  -m MODE     Set proof mode (n = no proof, d = dual, s = satisfaction only, r = refutation only)\n")
     sys.stderr.write("  -l e|u|eu   Linearize quantifier blocks for existential (e) and/or universal (u) variables\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
@@ -70,7 +70,7 @@ class Term:
     # Generate conjunction of two terms
     def combine(self, other):
         validation = None
-        if self.mode == proof.ProverMode.refProof:
+        if self.mode in [proof.ProverMode.refProof, proof.ProverMode.dualProof]:
             antecedents = [self.validation, other.validation]
             newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
             if newRoot == self.manager.leaf0:
@@ -652,6 +652,8 @@ def run(name, args):
                 mode = proof.ProverMode.refProof
             elif val == 'n':
                 mode = proof.ProverMode.noProof
+            elif val == 'd':
+                mode = proof.ProverMode.dualProof
             else:
                 sys.stderr.write("Unknown proof mode '%s'\n" % val)
                 usage(name)
@@ -693,9 +695,9 @@ def run(name, args):
 
     start = datetime.datetime.now()
 
-    if mode == proof.ProverMode.satProof:
+    if mode in [proof.ProverMode.satProof, proof.ProverMode.dualProof]:
         stretchExistential = True
-    if mode == proof.ProverMode.refProof:
+    if mode in [proof.ProverMode.refProof, proof.ProverMode.dualProof]:
         stretchUniversal = True
 
     try:

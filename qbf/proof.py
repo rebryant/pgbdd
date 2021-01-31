@@ -14,8 +14,8 @@ class ProverException(Exception):
         return "Prover Exception: " + str(self.value)
 
 class ProverMode:
-    (noProof, refProof, satProof) = list(range(3))
-    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof"]
+    (noProof, refProof, satProof, dualProof) = list(range(3))
+    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof", "Dual Proof")
 
 class Prover:
 
@@ -89,7 +89,7 @@ class Prover:
         antecedent = list(antecedent)
         middle = ['u'] if isUniversal else []
         rest = result + [0]
-        if self.mode == ProverMode.refProof and not self.doQrat:
+        if self.mode == in [ProverMode.refProof ProverMode.dualProof] and not self.doQrat:
             rest += antecedent + [0]
         ilist = [self.clauseCount] if not self.doQrat else []
         ilist += middle + rest
@@ -160,13 +160,13 @@ class Prover:
         result = resolver.cleanClause(result)
         rfields = [str(r) for r in result]
         afields = [str(a) for a in antecedent]
-        cmd =  'ar' if self.mode == ProverMode.refProof else 'a'
+        cmd =  'ar' if self.mode in [ProverMode.refProof, ProverMode.dualProof] else 'a'
         fields = [cmd] + rfields + ['0']
-        if self.mode == ProverMode.refProof:
+        if self.mode in [ProverMode.refProof, ProverMode.dualProof]:
             afields = [str(a) for a in antecedent]
             fields += afields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
-        if self.mode == ProverMode.satProof:
+        if self.mode in [ProverMode.satProof, ProverMode.refProof]:
             qlevel = max([self.idToQlevel[abs(lit)] for lit in result])
             if qlevel in self.qlevelClauses:
                 self.qlevelClauses[qlevel].append(stepNumber)
@@ -188,9 +188,9 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-        cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
+        cmd =  'ab' if self.mode in [ProverMode.refProof, ProverMode.dualProof] else 'a'
         fields = [cmd] + rfields + ['0']
-        if self.mode == ProverMode.refProof:
+        if self.mode in [ProverMode.refProof, ProverMode.dualProof]:
             bfields = [str(-abs(b)) for b in blockers]
             fields += bfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
