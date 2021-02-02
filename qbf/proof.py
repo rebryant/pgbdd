@@ -14,8 +14,8 @@ class ProverException(Exception):
         return "Prover Exception: " + str(self.value)
 
 class ProverMode:
-    (noProof, refProof, satProof, dualProof) = list(range(3))
-    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof", "Dual Proof")
+    (noProof, refProof, satProof, dualProof) = list(range(4))
+    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof", "Dual Proof"]
 
 class Prover:
 
@@ -89,7 +89,7 @@ class Prover:
         antecedent = list(antecedent)
         middle = ['u'] if isUniversal else []
         rest = result + [0]
-        if self.mode == in [ProverMode.refProof ProverMode.dualProof] and not self.doQrat:
+        if self.mode in [ProverMode.refProof, ProverMode.dualProof] and not self.doQrat:
             rest += antecedent + [0]
         ilist = [self.clauseCount] if not self.doQrat else []
         ilist += middle + rest
@@ -158,6 +158,9 @@ class Prover:
 
     def proveAddResolution(self, result, antecedent, comment = None):
         result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
         rfields = [str(r) for r in result]
         afields = [str(a) for a in antecedent]
         cmd =  'ar' if self.mode in [ProverMode.refProof, ProverMode.dualProof] else 'a'
@@ -166,16 +169,12 @@ class Prover:
             afields = [str(a) for a in antecedent]
             fields += afields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
-        if self.mode in [ProverMode.satProof, ProverMode.refProof]:
+        if len(result) > 0 and self.mode in [ProverMode.satProof, ProverMode.refProof, ProverMode.dualProof]:
             qlevel = max([self.idToQlevel[abs(lit)] for lit in result])
             if qlevel in self.qlevelClauses:
                 self.qlevelClauses[qlevel].append(stepNumber)
             else:
                 self.qlevelClauses[qlevel] = [stepNumber]
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            self.comment(comment)
-            return result
         self.clauseDict[stepNumber] = result
         self.antecedentDict[stepNumber] = antecedent
         if self.doQrat:
@@ -259,6 +258,9 @@ class Prover:
             fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
             self.generateStepQP(fields, False, comment)
         for id in deleteIdList:
+            if id not in self.clauseDict:
+                print("INTERNAL ERROR.  Cannot delete clause #%d.  Not in clause dictionary" % id)
+                continue
             del self.clauseDict[id]
             if id in self.antecedentDict:
                 del self.antecedentDict[id]

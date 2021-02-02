@@ -217,7 +217,7 @@ class Manager:
     # How many quantifications had been performed by last GC?
     lastGC = 0
     # How many variables should be quantified to trigger GC?
-    gcThreshold = 4
+    gcThreshold = 1
     # Dictionary mapping variables to their IDs.
     # Used to determine when to trigger GC
     quantifiedVariableSet = None
@@ -335,6 +335,39 @@ class Manager:
         antecedents.append(validation)
         self.prover.proveDeleteResolution(clauseId, antecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
         return root, validation
+
+    # Construct BDD representation of clause
+    # plus proofs that BDD equivalent to clause
+    def constructClauseEquivalent(self, clauseId, literalList):
+        root = self.buildClause(literalList)
+        lits = self.deconstructClause(root)
+        # List antecedents in reverse order of resolution steps
+        upAntecedents = []
+        for node in lits:
+            positive = node.high == self.leaf1
+            if positive:
+                upAntecedents.append(node.inferTrueUp)
+                if node.low != self.leaf0:
+                    upAntecedents.append(node.inferFalseUp)
+            else:
+                upAntecedents.append(node.inferFalseUp)
+                if node.high != self.leaf0:
+                    upAntecedents.append(node.inferTrueUp)
+        upAntecedents.append(clauseId)
+        validation = self.prover.proveAddResolution([root.id], upAntecedents, "Validate clause %d entails node N%d" % (clauseId, root.id))
+        lits.reverse()
+        # List downAntecedents in reverse order of resolution steps
+        downAntecedents = []
+        for node in lits:
+            positive = node.high == self.leaf1
+            if positive:
+                downAntecedents.append(node.inferFalseDown)
+            else:
+                downAntecedents.append(node.inferTrueDown)
+        downAntecedents.append(validation)
+        self.prover.proveDeleteResolution(clauseId, downAntecedents, "Node N%d entails clause %d, and so can delete clause" % (root.id, clauseId))
+        return root, validation
+
     
     # Construct BDD representation of clause
     # without proof
