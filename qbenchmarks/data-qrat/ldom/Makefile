@@ -35,9 +35,13 @@ all: sa
 sa: ldom$(CAT)-$(N)-sa.data
 ra: ldom$(CAT)-$(N)-ra.data
 qsa: ldom$(CAT)-$(N)-qsa.data
+dsa: ldom$(CAT)-$(N)-dsa.data
+dra: ldom$(CAT)-$(N)-dra.data
 
 isa: ildom$(CAT)-$(N)-sa.data
 ira: ildom$(CAT)-$(N)-ra.data
+idsa: ildom$(CAT)-$(N)-dsa.data
+idra: ildom$(CAT)-$(N)-dra.data
 
 ldom$(CAT)-$(N)-sa.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-sa 
@@ -70,6 +74,28 @@ ldom$(CAT)-$(N)-ra.data:
 	$(CHECK) ldom$(CAT)-$(N)-ra-expand.qcnf ldom$(CAT)-$(N)-ra.qrat -t $(TLIM) | tee -a ldom$(CAT)-$(N)-ra.data
 	rm -f ldom$(CAT)-$(N)-ra.qrat
 
+ldom$(CAT)-$(N)-dsa.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-dsa 
+	$(SOLVE) -v $(VLEVEL) -m d -b \
+		-i ldom$(CAT)-$(N)-dsa.qcnf \
+		-o ldom$(CAT)-$(N)-dsa.qrat \
+		-p ldom$(CAT)-$(N)-dsa.order \
+		-L ldom$(CAT)-$(N)-dsa.data
+	$(CHECK) ldom$(CAT)-$(N)-dsa.qcnf ldom$(CAT)-$(N)-dsa.qrat -S -t $(TLIM) | tee -a ldom$(CAT)-$(N)-dsa.data
+	rm -f ldom$(CAT)-$(N)-dsa.qrat
+
+ldom$(CAT)-$(N)-dra.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-dra
+	$(ALTERNATE) -a -i ldom$(CAT)-$(N)-dra.qcnf -o ldom$(CAT)-$(N)-dra-expand.qcnf	
+	$(SOLVE) -v $(VLEVEL) -m r -b \
+		-i ldom$(CAT)-$(N)-dra.qcnf \
+		-o ldom$(CAT)-$(N)-dra.qrat \
+		-p ldom$(CAT)-$(N)-dra.order \
+		-L ldom$(CAT)-$(N)-dra.data
+	$(CHECK) ldom$(CAT)-$(N)-dra-expand.qcnf ldom$(CAT)-$(N)-dra.qrat -t $(TLIM) | tee -a ldom$(CAT)-$(N)-dra.data
+	rm -f ldom$(CAT)-$(N)-dra.qrat
+
+
 ildom$(CAT)-$(N)-sa.data:
 	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
@@ -90,6 +116,27 @@ ildom$(CAT)-$(N)-ra.data:
 		-L ildom$(CAT)-$(N)-ra.data
 	$(CHECK) ildom$(CAT)-$(N)-ra-expand.qcnf ildom$(CAT)-$(N)-ra.qrat -t $(TLIM) | tee -a ildom$(CAT)-$(N)-ra.data
 	rm -f ildom$(CAT)-$(N)-ra.qrat
+
+ildom$(CAT)-$(N)-dsa.data:
+	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-dsa
+	$(SOLVE) -v $(VLEVEL) -m d -b \
+		-i ildom$(CAT)-$(N)-dsa.qcnf \
+		-o ildom$(CAT)-$(N)-dsa.qrat \
+		-p ildom$(CAT)-$(N)-dsa.order \
+		-L ildom$(CAT)-$(N)-dsa.data
+	$(CHECK) ildom$(CAT)-$(N)-dsa.qcnf ildom$(CAT)-$(N)-dsa.qrat -S -t $(TLIM) | tee -a ildom$(CAT)-$(N)-dsa.data
+	rm -f ildom$(CAT)-$(N)-dsa.qrat
+
+ildom$(CAT)-$(N)-dra.data:
+	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-dra
+	$(ALTERNATE) -a -i ildom$(CAT)-$(N)-dra.qcnf -o ildom$(CAT)-$(N)-dra-expand.qcnf	
+	$(SOLVE) -v $(VLEVEL) -m d -b \
+		-i ildom$(CAT)-$(N)-dra.qcnf \
+		-o ildom$(CAT)-$(N)-dra.qrat \
+		-p ildom$(CAT)-$(N)-dra.order \
+		-L ildom$(CAT)-$(N)-dra.data
+	$(CHECK) ildom$(CAT)-$(N)-dra-expand.qcnf ildom$(CAT)-$(N)-dra.qrat -t $(TLIM) | tee -a ildom$(CAT)-$(N)-dra.data
+	rm -f ildom$(CAT)-$(N)-dra.qrat
 
 
 data:
