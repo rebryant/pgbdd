@@ -217,7 +217,7 @@ class Manager:
     # How many quantifications had been performed by last GC?
     lastGC = 0
     # How many variables should be quantified to trigger GC?
-    gcThreshold = 1
+    gcThreshold = 4
     # Dictionary mapping variables to their IDs.
     # Used to determine when to trigger GC
     quantifiedVariableSet = None
