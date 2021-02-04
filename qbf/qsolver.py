@@ -107,7 +107,7 @@ class Term:
             validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "EQuant: Validation of %s" % newRoot.label())
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
-    # No proof or satisfaction.  
+    # No proof or satisfaction.
     def uquantify(self, literals, prover):
         newRoot = self.manager.uquant(self.root, literals)
         validation = None
@@ -158,7 +158,7 @@ class Term:
             dclause = [-litid]
             antecedents = [downImplication1, self.validation]
             comment = "Restrict: Validation of empty clause"
-            down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)            
+            down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Restriction by -%d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
                 validation1 = self.manager.prover.createClause(dclause, [down1], comment = comment, isUniversal=True)
@@ -241,10 +241,10 @@ class Term:
         prover.proveDeleteResolution(self.validation, antecedents, comment)
         if up1Antecedents is not None:
             comment = "Delete upward implication of positive restriction"
-            prover.proveDeleteResolution(up1, up1Antecedents, comment)            
+            prover.proveDeleteResolution(up1, up1Antecedents, comment)
         if up0Antecedents is not None:
             comment = "Delete upward implication of negative restriction"
-            prover.proveDeleteResolution(up0, up0Antecedents, comment)            
+            prover.proveDeleteResolution(up0, up0Antecedents, comment)
 
         # Form conjunction of two restrictions
         if root1 == self.manager.leaf1:
@@ -927,8 +927,6 @@ class Solver:
         rootList += self.litMap.values()
         return rootList
 
-
-      
 def run(name, args):
     cnfName = None
     proofName = None
@@ -1015,7 +1013,7 @@ def run(name, args):
     except Exception as ex:
         writer.write("Aborted: %s\n" % str(ex))
         return
-    
+
     if reader.stretched and mode != proof.ProverMode.noProof:
         prover.generateLevels(reader.varList)
 
@@ -1031,10 +1029,8 @@ def run(name, args):
         writer.write("Elapsed time for SAT: %.2f seconds\n" % seconds)
     if writer != sys.stderr:
         writer.close()
-    
+
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
 
-    
 
-    

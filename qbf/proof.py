@@ -234,7 +234,7 @@ class Prover:
             del self.clauseDict[id]
             if id in self.antecedentDict:
                 del self.antecedentDict[id]
-            return 
+            return
         if antecedent is None:
             antecedent = self.antecedentDict[id]
         afields = [str(a) for a in antecedent]
