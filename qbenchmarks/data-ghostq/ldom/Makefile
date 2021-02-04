@@ -15,7 +15,7 @@ WRAP = $(BDIR)/wrap.py
 GDIR = ../../../../ghostq/bin
 CONV =  $(GDIR)/qcir-conv.py
 GQBF= $(GDIR)/ghostq
-TLIM=4000
+TLIM=7200
 
 TGRAB=../grab_time.py
 

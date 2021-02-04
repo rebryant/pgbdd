@@ -12,7 +12,7 @@ BDIR=../..
 NDIR=$(BDIR)/ldominoes
 SDIR=$(BDIR)/../qbf
 QDIR=../../../../qrat-trim
-TLIM=4000
+TLIM=10800
 CAT=BY5
 
 GEN=$(NDIR)/gen_ldom.py

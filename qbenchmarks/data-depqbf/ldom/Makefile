@@ -14,7 +14,7 @@ SDIR=$(BDIR)/../qbf
 WRAP = $(BDIR)/wrap.py
 DDIR = ../../../../depqbf
 DEPQBF= $(DDIR)/depqbf
-TLIM=4000
+TLIM=7200
 
 TGRAB=../grab_plustime.py
 WGRAB=../grab_wtime.py
