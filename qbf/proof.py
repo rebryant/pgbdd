@@ -80,7 +80,13 @@ class Prover:
         if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
-    def createClause(self, result, antecedent, comment = None, isInput = False, isUniversal = False):
+    def expungeClause(self, id):
+        if id in self.clauseDict:
+            del self.clauseDict[id]
+        if id in self.antecedentDict:
+            del self.antecedentDict[id]
+
+    def createClause(self, result, antecedent = [], comment = None, isInput = False, isUniversal = False, ulit = None):
         self.comment(comment)
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
@@ -99,8 +105,11 @@ class Prover:
             self.comment(istring)
         else:
             self.file.write(istring + '\n')
+        if isUniversal and ulit is not None:
+            result = [lit for lit in result if lit != ulit]
         self.clauseDict[self.clauseCount] = result
-        self.antecedentDict[self.clauseCount] = antecedent
+        if len(antecedent) > 0:
+            self.antecedentDict[self.clauseCount] = antecedent
         return self.clauseCount
 
     # Only called with refutation proofs
@@ -112,7 +121,7 @@ class Prover:
                 self.file.write(istring + '\n')
         else:
             for id in clauseList:
-                del self.clauseDict[id]
+                self.expungeClause(id)
             slist = ['-', 'd'] + [str(id) for id in clauseList] + ['0']
             istring = " ".join(slist)
             self.file.write(istring + '\n')
@@ -231,19 +240,14 @@ class Prover:
         if self.doQrat:
             lfields = [str(lit) for lit in self.clauseDict[id]]
             self.file.write('d ' + ' '.join(lfields) + ' 0\n')
-            del self.clauseDict[id]
-            if id in self.antecedentDict:
-                del self.antecedentDict[id]
+            self.expungeClause(id)
             return 
         if antecedent is None:
             antecedent = self.antecedentDict[id]
         afields = [str(a) for a in antecedent]
         fields = ['dr', str(id)] + afields + ['0']
         self.generateStepQP(fields, False, comment)
-        if id in self.clauseDict:
-            del self.clauseDict[id]
-        if id in self.antecedentDict:
-            del self.antecedentDict[id]
+        self.expungeClause(id)
 
     def proveDeleteDavisPutnam(self, var, deleteIdList, causeIdList, comment = None):
         dlist = [str(id) for id in deleteIdList]
@@ -261,9 +265,7 @@ class Prover:
             if id not in self.clauseDict:
                 print("INTERNAL ERROR.  Cannot delete clause #%d.  Not in clause dictionary" % id)
                 continue
-            del self.clauseDict[id]
-            if id in self.antecedentDict:
-                del self.antecedentDict[id]
+            self.expungeClause(id)
 
     def qcollect(self, qlevel):
         # self.file.write("QCOLLECT\n");
