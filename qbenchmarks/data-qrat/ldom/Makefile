@@ -12,8 +12,8 @@ BDIR=../..
 NDIR=$(BDIR)/ldominoes
 SDIR=$(BDIR)/../qbf
 QDIR=../../../../qrat-trim
-TLIM=10800
-CAT=BY5
+TLIM=7200
+CAT=
 
 GEN=$(NDIR)/gen_ldom.py
 ALTERNATE=$(BDIR)/alternate.py
