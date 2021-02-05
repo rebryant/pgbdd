@@ -61,7 +61,7 @@ ldom$(CAT)-$(N)-qsa.data:
 		-p ldom$(CAT)-$(N)-qsa.order \
 		-L ldom$(CAT)-$(N)-qsa.data
 	$(QCHECK) ldom$(CAT)-$(N)-qsa.qcnf ldom$(CAT)-$(N)-qsa.qrat -S -t $(TLIM) 
-#	rm -f ldom$(CAT)-$(N)-qsa.qrat
+	rm -f ldom$(CAT)-$(N)-qsa.qrat
 
 ldom$(CAT)-$(N)-ra.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
