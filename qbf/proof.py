@@ -240,15 +240,8 @@ class Prover:
         if self.doQrat:
             lfields = [str(lit) for lit in self.clauseDict[id]]
             self.file.write('d ' + ' '.join(lfields) + ' 0\n')
-<<<<<<< HEAD
-            del self.clauseDict[id]
-            if id in self.antecedentDict:
-                del self.antecedentDict[id]
-            return
-=======
             self.expungeClause(id)
-            return 
->>>>>>> 6fee2f831c057ca3b799c7157f99c7b52270ec21
+            return
         if antecedent is None:
             antecedent = self.antecedentDict[id]
         afields = [str(a) for a in antecedent]
