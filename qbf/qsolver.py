@@ -128,8 +128,8 @@ class Term:
         # Now apply universal reduction.
         comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
         if self.manager.prover.doQrat:
-            rule1 = self.manager.prover.createClause(rclause, antecedents, comment)
-            validation = self.manager.prover.createClause(rclause, [rule1], comment=None, isUniversal=True)
+            rule1 = self.manager.prover.createClause(rclause)
+            validation = self.manager.prover.createClause(rclause, isUniversal=True, ulit = ulit)
         else:
             rule1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
             validation = self.manager.prover.proveUniversal(ulit, rule1, None)
@@ -143,13 +143,13 @@ class Term:
         root1, downImplication1 = self.manager.applyRestrictDown(self.root, lit)
         root1, upImplication1 = self.manager.applyRestrictUp(self.root, lit)
         up1Antecedents = None
+        validation1 = None
         if root1 == self.manager.leaf1:
             # Down Implication will be tautology
             # Up Implication will be [-lit, self.root.id]
             # validation1 will be tautology
             # up1 will be [-lit, self.root.id]
             up1 = upImplication1
-            validation1 = None
         elif root1 == self.manager.leaf0:
             # Down Implication will be [-lit, -self.root.id]
             # Up Implication will be tautology
@@ -161,7 +161,7 @@ class Term:
             down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Restriction by -%d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
-                validation1 = self.manager.prover.createClause(dclause, [down1], comment = comment, isUniversal=True)
+                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
             else:
                 validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
             return None
@@ -177,12 +177,12 @@ class Term:
             # Apply universal reduction
             comment = "Apply universal reduction to eliminate variable %d" % litid
             if self.manager.prover.doQrat:
-                validation1 = self.manager.prover.createClause(dclause, [down1], comment = comment, isUniversal=True)
+                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
             else:
                 validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
-            # Now remove down1
-            comment = "Remove downward implication of positive restriction"
-            self.manager.prover.proveDeleteResolution(down1, antecedents, comment)
+                # Now remove down1
+                comment = "Remove downward implication of positive restriction"
+                self.manager.prover.proveDeleteResolution(down1, antecedents, comment)
             uclause = [-litid, self.root.id]
             up1Antecedents = [upImplication1, validation1]
             comment = "Resolve with upward implication for N%d" % self.root.id
@@ -191,13 +191,13 @@ class Term:
         root0, downImplication0 = self.manager.applyRestrictDown(self.root, nlit)
         root0, upImplication0 = self.manager.applyRestrictUp(self.root, nlit)
         up0Antecedents = None
+        validation0 = None
         if root0 == self.manager.leaf1:
             # Down Implication will be tautology
             # Up Implication will be [lit, self.root.id]
             # validation0 will be tautology
             # up0 will be [lit, self.root.id]
             up0 = upImplication0
-            validation0 = None
         elif root0 == self.manager.leaf0:
             # Down Implication will be [lit, -self.root.id]
             # Up Implication will be tautology
@@ -209,7 +209,7 @@ class Term:
             down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Restriction by %d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
-                validation0 = self.manager.prover.createClause(dclause, [down0], comment = comment, isUniversal=True)
+                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
             else:
                 validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
             return None
@@ -224,12 +224,12 @@ class Term:
             down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Apply universal reduction to eliminate variable %d" % litid
             if self.manager.prover.doQrat:
-                validation0 = self.manager.prover.createClause(dclause, [down0], comment = comment, isUniversal=True)
+                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
             else:
                 validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
-            # Now remove down0
-            comment = "Remove downward implication of negative restriction"
-            self.manager.prover.proveDeleteResolution(down0, antecedents, comment)
+                # Now remove down0
+                comment = "Remove downward implication of negative restriction"
+                self.manager.prover.proveDeleteResolution(down0, antecedents, comment)
             uclause = [litid, self.root.id]
             up0Antecedents = [upImplication0, validation0]
             comment = "Resolve with upward implication for N%d" % self.root.id
