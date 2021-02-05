@@ -8,6 +8,7 @@ class PermutationException(Exception):
     def __str__(self):
         return "Permutation Exception: " + str(self.value)
 
+# Permutations of 1..n
 
 class Permuter:
     forwardMap = {}
@@ -35,6 +36,12 @@ class Permuter:
             if v not in self.forwardMap:
                 raise PermutationException("Not permutation: %s does not map anything" % str(v))
             
+    # Flip order of permuted values
+    def mirror(self):
+        valueList = sorted(self.forwardMap.keys())
+        permutedList = [self.forwardMap[v] for v in valueList]
+        valueList.reverse()
+        return Permuter(valueList, permutedList)
             
     def forward(self, v):
         if v not in self.forwardMap:

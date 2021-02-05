@@ -129,7 +129,8 @@ class Term:
         comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
         if self.manager.prover.doQrat:
             rule1 = self.manager.prover.createClause(rclause)
-            validation = self.manager.prover.createClause(rclause, isUniversal=True, ulit = ulit)
+            validation = self.manager.prover.qratUniversal(rule1, ulit)
+#            validation = self.manager.prover.createClause(rclause, isUniversal=True, ulit = ulit)
         else:
             rule1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
             validation = self.manager.prover.proveUniversal(ulit, rule1, None)
@@ -161,7 +162,8 @@ class Term:
             down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)            
             comment = "Restriction by -%d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
-                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
+                validation1 = self.manager.prover.qratUniversal(down1, -litid)
+#                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
             else:
                 validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
             return None
@@ -177,7 +179,8 @@ class Term:
             # Apply universal reduction
             comment = "Apply universal reduction to eliminate variable %d" % litid
             if self.manager.prover.doQrat:
-                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
+                validation1 = self.manager.prover.qratUniversal(down1, -litid)
+#                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
             else:
                 validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
                 # Now remove down1
@@ -209,7 +212,8 @@ class Term:
             down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Restriction by %d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
-                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
+                validation0 = self.manager.prover.qratUniversal(down0, litid)
+#                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
             else:
                 validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
             return None
@@ -224,7 +228,8 @@ class Term:
             down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Apply universal reduction to eliminate variable %d" % litid
             if self.manager.prover.doQrat:
-                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
+                validation0 = self.manager.prover.qratUniversal(down0, litid)
+#                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
             else:
                 validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
                 # Now remove down0
@@ -994,6 +999,11 @@ def run(name, args):
             sys.stderr.write("Unknown option '%s'\n" % opt)
             usage(name)
             return
+
+    # If no quantification permuter specified, follow variable ordering
+    # This will cause the quantifications to be performed from the bottom of the BDDs upward
+    if bpermuter is None:
+        bpermuter = permuter
 
     writer = stream.Logger(logName)
 

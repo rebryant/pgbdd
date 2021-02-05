@@ -86,9 +86,18 @@ class Prover:
         if id in self.antecedentDict:
             del self.antecedentDict[id]
 
+    # Remove universal literal from clause in QRAT proof
+    def qratUniversal(self, id, ulit):
+        oclause = self.clauseDict[id]
+        nclause = [lit for lit in oclause if lit != ulit]
+        slist = ['u'] + [str(i) for i in ([ulit] + nclause + [0])]
+        self.file.write(" ".join(slist) + '\n')
+        self.clauseDict[id] = nclause
+        return id
+
     def createClause(self, result, antecedent = [], comment = None, isInput = False, isUniversal = False, ulit = None):
         self.comment(comment)
-        result = resolver.cleanClause(result)
+        result = resolver.cleanClause(result, nosort = isUniversal)
         if result == resolver.tautologyId:
             return result
         self.clauseCount += 1
