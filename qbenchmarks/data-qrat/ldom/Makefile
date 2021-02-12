@@ -88,7 +88,7 @@ ldom$(CAT)-$(N)-dsa.data:
 ldom$(CAT)-$(N)-dra.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-dra
 	$(ALTERNATE) -a -i ldom$(CAT)-$(N)-dra.qcnf -o ldom$(CAT)-$(N)-dra-expand.qcnf	
-	$(SOLVE) -v $(VLEVEL) -m r -b \
+	$(SOLVE) -v $(VLEVEL) -m d -b \
 		-i ldom$(CAT)-$(N)-dra.qcnf \
 		-o ldom$(CAT)-$(N)-dra.qrat \
 		-p ldom$(CAT)-$(N)-dra.order \
