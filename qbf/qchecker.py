@@ -1,5 +1,26 @@
 #!/usr/bin/python
 
+#####################################################################################
+# Copyright (c) 2021 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+# Last edit: Feb. 16, 2021
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+# associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+# OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+########################################################################################
+
+
 # Home-brewed checker for QBF proofs.
 import sys
 import getopt
@@ -35,7 +56,7 @@ def usage(name):
 #    Introduce extension variable(s) at specified quantification level
 #    Make sure each Var is not already defined, and that only existential variables are at this level
 
-### Refutation proofs
+### Refutation and dual proofs
 
 # Id ar Lit* 0 Id+ 0
 #    Add clause C[Id] = [Lit*] by resolution.
@@ -60,13 +81,12 @@ def usage(name):
 #      in C[Id']
 #    OK if Lit is not in clause
 
+### Refutation-only proofs
+
 # - d Id+ 0
 #    Delete clauses.  Must make sure they are live
 
-### Satisfaction proofs
-
-# Id a Lit* 0
-#    Add clause C[Id] = [Lit*].
+### Satisfaction and dual proofs
 
 # - dr Id Id+ 0
 #    Delete clause C[Id] by resolution.
@@ -76,11 +96,17 @@ def usage(name):
 
 # - dd Var Id+ 0 Id* 0
 #    Delete all clauses in first list by
-#    Davis-Putnam reduction on variable Var
+#    Davis-Putnam reduction on variable Var (Also called "Existential elimination")
 #    Second list consists of all resolvents from first list
 #      w.r.t. resolution variable Var
 #    No clauses other than those in first list can contain Var or -Var
 #    None of these can contain a universal literal > Var
+
+### Satisfaction-only proofs
+
+# Id a Lit* 0
+#    Add clause C[Id] = [Lit*].
+
 ######################################################################################
 
 def trim(s):
@@ -651,7 +677,6 @@ class Prover:
                 self.invalidCommand(cmd)
             if self.failed:
                 break
-#            print("Processed proof line #%d '%s'" % (self.lineNumber, trim(line)))
         pfile.close()
         self.checkProof()
             
