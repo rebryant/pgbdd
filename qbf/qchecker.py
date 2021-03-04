@@ -6,8 +6,8 @@ import getopt
 import datetime
 
 def usage(name):
-    print("Usage: %s [-v] -m (s|r) -i FILE.qcnf -p FILE.qproof" % name)
-    print("   -m MODE   Set proof mode (s = satisfaction, r = refutation)")
+    print("Usage: %s [-v] -m (s|r|d) -i FILE.qcnf -p FILE.qproof" % name)
+    print("   -m MODE   Set proof mode (s = satisfaction, r = refutation.  Default is to work either way)")
     print("   -v        Print more helpful diagnostic information if there is an error")
 
 ######################################################################################
@@ -369,6 +369,13 @@ class ClauseManager:
         self.totalClauseCount = 0
         self.liveClauseSet = set([])
 
+    def findClause(self, id):
+        if id not in self.clauseDict:
+            return (None, "Clause #%d never defined" % id)
+        elif self.clauseDict[id] is None:
+            return (None, "Clause #%d has been deleted" % id)
+        else:
+            return (self.clauseDict[id], "")
 
     # Add clause.  Should have been processed with cleanClause
     # Return (T/F, reason)
@@ -401,11 +408,9 @@ class ClauseManager:
     # Delete clause.
     # Return (T/F, reason)
     def deleteClause(self, id):
-        if id not in self.clauseDict:
-            return (False, "Cannot delete clause #%d.  Does not exist" % id)
-        if self.clauseDict[id] is None:
-            return (False, "Cannot delete clause #%d.  Already deleted" % id)
-        clause = self.clauseDict[id]
+        clause, msg = self.findClause(id)
+        if clause is None:
+            return (False, "Cannot delete clause %d: %s" % (id, msg))
         self.clauseDict[id] = None
         self.liveClauseCount -= 1
         if self.verbose:
@@ -424,11 +429,13 @@ class ClauseManager:
         rids.reverse()
         if rids[0] not in self.clauseDict:
             return (False, "Clause #%d does not exist" % rids[0])
-        rclause = self.clauseDict[rids[0]]
+        rclause, msg = self.findClause(rids[0])
+        if rclause is None:
+            return (False, "Resolution failed: %s" % msg)
         for nid in rids[1:]:
-            if nid not in self.clauseDict:
-                return (False, "Clause #%d does not exist" % nid)
-            nclause = self.clauseDict[nid]
+            nclause, msg = self.findClause(nid)
+            if nclause is None:
+                return (False, "Resolution failed: %s" % msg)
             try:
                 rclause = resolveClauses(rclause, nclause)
             except ResolveException as ex:
@@ -462,11 +469,9 @@ class ClauseManager:
             return (False, msg)
         for nid in blockList:
             id = abs(nid)
-            if id not in self.clauseDict:
-                return (False, "Clause #%d does not exist" % id)
-            bclause = self.clauseDict[id]
+            bclause, msg = self.findClause(id)
             if bclause is None:
-                return (False, "Clause #%d has been deleted" % id)
+                return (False, msg)
             found = False
             for clit in subclause:
                 if -clit in bclause:
@@ -482,11 +487,9 @@ class ClauseManager:
         plist = []
         nlist = []
         for id in sourceList:
-            if id not in self.clauseDict:
-                return (False, "Invalid clause Id %d" % id)
-            clause = self.clauseDict[id]
+            clause, msg = self.findClause(id)
             if clause is None:
-                return (False, "Clause #%d deleted" % id)
+                return (False, msg)
             # Check all universal variables in clause
             for clit in clause:
                 cvar = abs(clit)
@@ -515,11 +518,9 @@ class ClauseManager:
 
         checkList = []
         for id in resolventList:
-            if id not in self.clauseDict:
-                return (False, "Invalid clause Id %d" % id)
-            clause = self.clauseDict[id]
+            clause, msg = self.findClause(id)
             if clause is None:
-                return (False, "Clause #%d deleted" % id)
+                return (False, msg)
             checkList.append(clause)
 
         for pclause in plist:
@@ -812,8 +813,11 @@ class Prover:
             msg += ": " + reason
         print(msg)
 
-    def passProof(self):
-        print("PROOF SUCCESSFUL")
+    def passProof(self, name = None):
+        if name is not None:
+            print("%s PROOF SUCCESSFUL" % name)
+        else:
+            print("PROOF SUCCESSFUL")            
 
     def checkProof(self):
         self.failProof("This prover can't prove anything")
@@ -851,36 +855,15 @@ class Prover:
                 count += 1
         # Didn't get terminating zero
         return (None, slist, "Terminating zero not found")
-
-
-    # This version gets poor performance.  Speculate problem with repeated slicing
-    # Get integers until encounter 0.
-    # return (list of integers, rest of input list, message)
-    def getIntegerListPoor(self, slist):
-        ilist = []
-        msg = ""
-        while len(slist) > 0:
-            sval = slist[0]
-            slist = slist[1:]
-            try:
-                val = int(sval)
-            except:
-                return (None, slist, "'%s' not valid integer" % sval)
-            if val == 0:
-                return (ilist, slist, msg)
-            else:
-                ilist.append(val)
-        # Didn't get terminating zero
-        return (None, slist, "Terminating zero not found")
         
-            
-class RefutationProver(Prover):
+class DualProver(Prover):
+    addedEmpty = False
 
     def __init__(self, qreader, verbose):
         Prover.__init__(self, qreader, verbose)
         self.subsetOK = True
         self.addedEmpty = False
-
+    
     def doAddBlocked(self, id, rest):
         (clause, rest, msg) = self.getIntegerList(rest)
         if clause is None:
@@ -952,9 +935,9 @@ class RefutationProver(Prover):
         if oid not in self.cmgr.clauseDict:
             self.flagError("Clause #%d does not exist" % oid)
             return
-        oclause = self.cmgr.clauseDict[oid]
+        oclause, msg = self.cmgr.findClause(oid)
         if oclause is None:
-            self.flagError("Clause #%d inactive" % oid)
+            self.flagError(msg)
             return
         nclause = []
         for clit in oclause:
@@ -969,49 +952,6 @@ class RefutationProver(Prover):
                 self.flagError("Existential literal %d is too high (%d) in quantification order compared to universal literal %d (%d)" % (clit, qlevel, ulit, vlevel))
                 return
             nclause.append(clit)
-        (ok, msg) = self.cmgr.addClause(nclause, id)
-        if not ok:
-            self.flagError(msg)
-            return
-
-    def doDelete(self, rest):
-        (idList, rest, msg) = self.getIntegerList(rest)
-        if idList is None:
-            self.flagError(msg)
-            return
-        if len(rest) > 0:
-            self.flagError("Extraneous values at end of line")
-            return
-        for id in idList:
-            (ok, msg) = self.cmgr.deleteClause(id)
-            if not ok:
-                self.flagError(msg)
-                return
-    
-    def checkProof(self):
-        if self.failed:
-            self.failProof("")
-        elif self.cmgr.addedEmpty:
-            self.passProof()
-        else:
-            self.failProof("Have not added empty clause")
-        self.summarize()
-
-class SatisfactionProver(Prover):
-
-    def __init__(self, qreader, verbose):
-        Prover.__init__(self, qreader, verbose)
-        self.subsetOK = True
-
-    def doAdd(self, id, rest):
-        (clause, rest, msg) = self.getIntegerList(rest)
-        if clause is None:
-            self.flagError(msg)
-            return
-        if len(rest) > 0:
-            self.flagError("Extraneous values at end of line")
-            return
-        nclause = cleanClause(clause)
         (ok, msg) = self.cmgr.addClause(nclause, id)
         if not ok:
             self.flagError(msg)
@@ -1066,15 +1006,18 @@ class SatisfactionProver(Prover):
         if did not in self.cmgr.clauseDict:
             self.flagError("Nonexistent clause for deletion")
             return
-        dclause = self.cmgr.clauseDict[did]
+        dclause, msg = self.cmgr.findClause(did)
         if dclause is None:
-            self.flagError("Clause #%d already deleted" % did)
+            self.flagError(msg)
         (antecedents, rest, msg) = self.getIntegerList(rest[1:])
         if antecedents is None:
             self.flagError(msg)
             return
         if len(rest) > 0:
             self.flagError("Extraneous values at end of line")
+            return
+        if did in antecedents:
+            self.flagError("Resolvent cannot be in antecedent")
             return
         (ok, msg) = self.cmgr.checkResolution(dclause, antecedents, self.subsetOK)
         if not ok:
@@ -1084,12 +1027,81 @@ class SatisfactionProver(Prover):
         if not ok:
             self.flagError(msg)
             return
+
+    def checkProof(self):
+        if self.failed:
+            self.failProof("")
+        elif self.cmgr.addedEmpty:
+            self.passProof("REFUTATION")
+        elif self.cmgr.liveClauseCount == 0:
+            self.passProof("SATISFACTION")
+        else:
+            msg = "No empty clause has been added, and there are still %d live clauses" % (self.cmgr.liveClauseCount)
+            if self.verbose:
+                msg += ": %s" % (str(list(self.cmgr.liveClauseSet)))
+            self.failProof(msg)
+        self.summarize()
+
+            
+class RefutationProver(DualProver):
+
+    def __init__(self, qreader, verbose):
+        DualProver.__init__(self, qreader, verbose)
+
+    def doAdd(self, id, rest):
+        self.invalidCommand('a')
+
+    def doDelete(self, rest):
+        (idList, rest, msg) = self.getIntegerList(rest)
+        if idList is None:
+            self.flagError(msg)
+            return
+        if len(rest) > 0:
+            self.flagError("Extraneous values at end of line")
+            return
+        for id in idList:
+            (ok, msg) = self.cmgr.deleteClause(id)
+            if not ok:
+                self.flagError(msg)
+                return
+
+    def checkProof(self):
+        if self.failed:
+            self.failProof("")
+        elif self.cmgr.addedEmpty:
+            self.passProof("REFUTATION")
+        else:
+            self.failProof("Have not added empty clause")
+        self.summarize()
+
+class SatisfactionProver(DualProver):
+
+    def __init__(self, qreader, verbose):
+        DualProver.__init__(self, qreader, verbose)
+        self.subsetOK = True
+
+    def doDelete(self, rest):
+        self.invalidCommand('d')
+
+    def doAdd(self, id, rest):
+        (clause, rest, msg) = self.getIntegerList(rest)
+        if clause is None:
+            self.flagError(msg)
+            return
+        if len(rest) > 0:
+            self.flagError("Extraneous values at end of line")
+            return
+        nclause = cleanClause(clause)
+        (ok, msg) = self.cmgr.addClause(nclause, id)
+        if not ok:
+            self.flagError(msg)
+            return
     
     def checkProof(self):
         if self.failed:
             self.failProof("")
         elif self.cmgr.liveClauseCount == 0:
-            self.passProof()
+            self.passProof("SATISFACTION")
         else:
             msg = "There are still %d live clauses" % (self.cmgr.liveClauseCount)
             if self.verbose:
@@ -1100,7 +1112,8 @@ class SatisfactionProver(Prover):
 def run(name, args):
     qcnfName = None
     proofName = None
-    refutation = None
+    refutationOnly = False
+    satisfactionOnly = False
     verbose = False
     optList, args = getopt.getopt(args, "hm:vi:p:")
     for (opt, val) in optList:
@@ -1109,9 +1122,11 @@ def run(name, args):
             return
         elif opt == '-m':
             if val == 's':
-                refutation = False
+                satisfactionOnly = True
             elif val == 'r':
-                refutation = True
+                refutationOnly = True
+            elif val == 'd':
+                pass
             else:
                 print("Unknown proof mode '%s'" % val)
                 usage(name)
@@ -1131,19 +1146,18 @@ def run(name, args):
     if proofName is None:
         print("Need proof file name")
         return
-    if refutation is None:
-        print("Need to specify whether refutation or satisfaction proof")
-        return
     start = datetime.datetime.now()
     qreader = QcnfReader(qcnfName)
     if qreader.failed:
         print("Error reading QCNF file: %s" % qreader.errorMessage)
         print("PROOF FAILED")
         return
-    if refutation:
+    if refutationOnly:
         prover = RefutationProver(qreader, verbose)
-    else:
+    elif satisfactionOnly:
         prover = SatisfactionProver(qreader, verbose)
+    else:
+        prover = DualProver(qreader, verbose)
     prover.prove(proofName)
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds

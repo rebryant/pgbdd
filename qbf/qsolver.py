@@ -16,9 +16,9 @@ import proof
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h][-v LEVEL] [-m (n|d|s|r)] [-l e|u|eu] [-i CNF] [-o file.{qrat,qproof}] [-B BPERM] [-p VPERM] [-c CLUSTER] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
-    sys.stderr.write("  -m MODE     Set proof mode (n = no proof, s = satisfaction, r = refutation)\n")
+    sys.stderr.write("  -m MODE     Set proof mode (n = no proof, d = dual, s = satisfaction only, r = refutation only)\n")
     sys.stderr.write("  -l e|u|eu   Linearize quantifier blocks for existential (e) and/or universal (u) variables\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
@@ -68,9 +68,10 @@ class Term:
         return self.support
 
     # Generate conjunction of two terms
+    # All four modes
     def combine(self, other):
         validation = None
-        if self.mode == proof.ProverMode.refProof:
+        if self.mode in [proof.ProverMode.refProof, proof.ProverMode.dualProof]:
             antecedents = [self.validation, other.validation]
             newRoot, implication = self.manager.applyAndJustify(self.root, other.root)
             if newRoot == self.manager.leaf0:
@@ -90,8 +91,11 @@ class Term:
             newRoot = self.manager.applyAnd(self.root, other.root)
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
-    def equantify(self, literals, prover):
+    # No proof or refutation
+    def equantifySimple(self, literals, prover):
         newRoot = self.manager.equant(self.root, literals)
+        if newRoot == self.manager.leaf1:
+            return None
         validation = None
         if self.mode == proof.ProverMode.refProof:
             antecedents = [self.validation]
@@ -103,6 +107,7 @@ class Term:
             validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, "EQuant: Validation of %s" % newRoot.label())
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
+    # No proof or satisfaction.  
     def uquantify(self, literals, prover):
         newRoot = self.manager.uquant(self.root, literals)
         validation = None
@@ -116,10 +121,6 @@ class Term:
             antecedents += [implication]
         if newRoot == self.manager.leaf1:
             return None
-        elif newRoot == self.manager.leaf0:
-            comment = "Restrict: Validation of Empty clause"
-        else:
-            comment = "Restrict: Validation of %s" % newRoot.label()
         ulit = literal.variable.id
         if literal.high == self.manager.leaf1:
             ulit = -ulit
@@ -127,12 +128,174 @@ class Term:
         # Now apply universal reduction.
         comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
         if self.manager.prover.doQrat:
-            rule1 = self.manager.prover.createClause(rclause, antecedents, comment)
-            validation = self.manager.prover.createClause(rclause, [rule1], comment=None, isUniversal=True)
+            rule1 = self.manager.prover.createClause(rclause)
+            validation = self.manager.prover.qratUniversal(rule1, ulit)
+#            validation = self.manager.prover.createClause(rclause, isUniversal=True, ulit = ulit)
         else:
             rule1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
             validation = self.manager.prover.proveUniversal(ulit, rule1, None)
         return Term(self.manager, newRoot, validation, mode = self.mode)
+
+    # Dual proof.  Universal quantification
+    def uquantifyDual(self, lit, nlit, prover):
+        lname = str(lit.variable)
+        litid = lit.variable.id
+
+        root1, downImplication1 = self.manager.applyRestrictDown(self.root, lit)
+        root1, upImplication1 = self.manager.applyRestrictUp(self.root, lit)
+        up1Antecedents = None
+        validation1 = None
+        if root1 == self.manager.leaf1:
+            # Down Implication will be tautology
+            # Up Implication will be [-lit, self.root.id]
+            # validation1 will be tautology
+            # up1 will be [-lit, self.root.id]
+            up1 = upImplication1
+        elif root1 == self.manager.leaf0:
+            # Down Implication will be [-lit, -self.root.id]
+            # Up Implication will be tautology
+            # validation1 will be []
+            # up1 will be tautology
+            dclause = [-litid]
+            antecedents = [downImplication1, self.validation]
+            comment = "Restrict: Validation of empty clause"
+            down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)            
+            comment = "Restriction by -%d, followed by universal reduction yields empty clause" % litid
+            if self.manager.prover.doQrat:
+                validation1 = self.manager.prover.qratUniversal(down1, -litid)
+#                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
+            else:
+                validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
+            return None
+        else:
+            # Down Implication will be [-lit, -self.root.id, root1.id]
+            # Up Implication will be   [-lit, -root1.id, self.root.id]
+            # validation1 will be [root1.id]
+            # up1 will be [-lit, self.root.id]
+            dclause = [-litid, root1.id]
+            antecedents = [downImplication1, self.validation]
+            comment = "Restrict: Validation of positive restriction %s" % root1.label()
+            down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
+            # Apply universal reduction
+            comment = "Apply universal reduction to eliminate variable %d" % litid
+            if self.manager.prover.doQrat:
+                validation1 = self.manager.prover.qratUniversal(down1, -litid)
+#                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
+            else:
+                validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
+                # Now remove down1
+                comment = "Remove downward implication of positive restriction"
+                self.manager.prover.proveDeleteResolution(down1, antecedents, comment)
+            uclause = [-litid, self.root.id]
+            up1Antecedents = [upImplication1, validation1]
+            comment = "Resolve with upward implication for N%d" % self.root.id
+            up1 = prover.proveAddResolution(uclause, up1Antecedents, comment)
+
+        root0, downImplication0 = self.manager.applyRestrictDown(self.root, nlit)
+        root0, upImplication0 = self.manager.applyRestrictUp(self.root, nlit)
+        up0Antecedents = None
+        validation0 = None
+        if root0 == self.manager.leaf1:
+            # Down Implication will be tautology
+            # Up Implication will be [lit, self.root.id]
+            # validation0 will be tautology
+            # up0 will be [lit, self.root.id]
+            up0 = upImplication0
+        elif root0 == self.manager.leaf0:
+            # Down Implication will be [lit, -self.root.id]
+            # Up Implication will be tautology
+            # validation0 will be []
+            # up0 will be tautology
+            dclause = [litid]
+            antecedents = [downImplication0, self.validation]
+            comment = "Restrict: Validation of empty clause"
+            down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
+            comment = "Restriction by %d, followed by universal reduction yields empty clause" % litid
+            if self.manager.prover.doQrat:
+                validation0 = self.manager.prover.qratUniversal(down0, litid)
+#                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
+            else:
+                validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
+            return None
+        else:
+            # Down Implication will be [lit, -self.root.id, root1.id]
+            # Up Implication will be   [lit, -root1.id, self.root.id]
+            # validation0 will be [root1.id]
+            # up0 will be [lit, self.root.id]
+            dclause = [litid, root0.id]
+            antecedents = [downImplication0, self.validation]
+            comment = "Restrict: Validation of negative restriction %s" % root0.label()
+            down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
+            comment = "Apply universal reduction to eliminate variable %d" % litid
+            if self.manager.prover.doQrat:
+                validation0 = self.manager.prover.qratUniversal(down0, litid)
+#                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
+            else:
+                validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
+                # Now remove down0
+                comment = "Remove downward implication of negative restriction"
+                self.manager.prover.proveDeleteResolution(down0, antecedents, comment)
+            uclause = [litid, self.root.id]
+            up0Antecedents = [upImplication0, validation0]
+            comment = "Resolve with upward implication for N%d" % self.root.id
+            up0 = prover.proveAddResolution(uclause, up0Antecedents, comment)
+
+
+        antecedents = [up1, up0]
+        comment = "Deletion of clause #%d during universal quantfication" % self.validation
+        prover.proveDeleteResolution(self.validation, antecedents, comment)
+        if up1Antecedents is not None:
+            comment = "Delete upward implication of positive restriction"
+            prover.proveDeleteResolution(up1, up1Antecedents, comment)            
+        if up0Antecedents is not None:
+            comment = "Delete upward implication of negative restriction"
+            prover.proveDeleteResolution(up0, up0Antecedents, comment)            
+
+        # Form conjunction of two restrictions
+        if root1 == self.manager.leaf1:
+            newRoot = root0
+            validation = validation0
+        elif root0 == self.manager.leaf1:
+            newRoot = root1
+            validation = validation1
+        else:
+            validation = None
+            antecedents = [validation1, validation0]
+            newRoot, implication = self.manager.applyAndJustify(root1, root0)
+            if newRoot == self.manager.leaf0:
+                comment = "Conjunction of restrictions %s and %s: Validation of Empty clause" % (root1.label(), root0.label())
+            else:
+                comment = "Conjunction of restrictions %s and %s: Validation of %s" % (root1.label(), root0.label(), newRoot.label())
+            if implication == resolver.tautologyId:
+                if newRoot == root1:
+                    validation = validation1
+                elif newRoot == root0:
+                    validation = validation0
+            else:
+                antecedents += [implication]
+            if validation is None:
+                validation = self.manager.prover.proveAddResolution([newRoot.id], antecedents, comment)
+
+            justification1 = [validation]
+            impl1 = self.manager.justifyImply(newRoot, root1)[1]
+            if impl1 is not resolver.tautologyId:
+                justification1.append(impl1)
+            impl0 = self.manager.justifyImply(newRoot, root0)[1]
+            justification0 = [validation]
+            if impl0 is not resolver.tautologyId:
+                justification0.append(impl0)
+            if newRoot != root1:
+                comment = "Delete unit clause for positive restriction of N%d" % self.root.id
+                prover.proveDeleteResolution(validation1, justification1, comment)
+            if newRoot != root0:
+                comment = "Delete unit clauses for negative restriction of N%d" % self.root.id
+                prover.proveDeleteResolution(validation0, justification0, comment)
+
+        # Manager needs to be informed that quantification has completed
+        self.manager.markQuantified(lit.variable)
+
+        return Term(self.manager, newRoot, validation, mode = self.mode)
+
 
     # Satisfaction proof.  Existential quantification
     def equantifySatisfaction(self, lit, nlit, prover):
@@ -177,17 +340,17 @@ class Term:
         antecedents = [up1, up0]
         comment = "Deletion of clause [%d] during existential quantfication" % self.root.id
         prover.proveDeleteResolution(self.validation, antecedents, comment)
-        prover.qcollect(lit.variable.qlevel)
+        prover.qcollect(lit.variable.qlevel+1)
 
         comment = "Davis Putnam reduction of variable %s" % lname
         if root1 == self.manager.leaf1:
             newRoot = root1
             prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
-            validation = self.manager.prover.proveAdd([newRoot.id])
+            validation = resolver.tautologyId
         elif root0 == self.manager.leaf1:
             newRoot = root0
             prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
-            validation = self.manager.prover.proveAdd([newRoot.id])
+            validation = resolver.tautologyId
         else:
             comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
             distid = prover.proveAdd([root1.id, root0.id], comment = comment)
@@ -206,11 +369,124 @@ class Term:
             comment = "Remove intermediate disjunction"
             prover.proveDeleteResolution(distid, antecedents, comment)
 
+        # Manager needs to be informed that quantification has completed
+        self.manager.markQuantified(lit.variable)
+
         if newRoot == self.manager.leaf1:
             return None
 
+        return Term(self.manager, newRoot, validation, mode = self.mode)
+
+    # Dual proof.  Existential quantification
+    def equantifyDual(self, lit, nlit, prover):
+        lname = str(lit.variable)
+        litid = lit.variable.id
+
+        root1, downImplication1 = self.manager.applyRestrictDown(self.root, lit)
+        root1, upImplication1 = self.manager.applyRestrictUp(self.root, lit)
+        if root1 == self.manager.leaf1:
+            # Down Implication will be tautology
+            # Up Implication will be [-lit, self.root.id]
+            # Shannon will be tautology
+            up1 = upImplication1
+            shannon1 = None
+        elif root1 == self.manager.leaf0:
+            # Down Implication will be [-lit, -self.root.id]
+            # Up Implication will be tautology
+            # Shannon will be [-lit]
+            rclause = [-litid]
+            comment = "Shannon Expansion: Add !%s" % (lname)
+            antecedents = [downImplication1, self.validation]
+            shannon1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
+            up1 = shannon1
+        else:
+            # Down Implication will be [-lit, -self.root.id, root1.id]
+            # Up Implication will be   [-lit, -root1.id, self.root.id]
+            # Shannon will be [-lit, root1.id]
+            rclause = [-litid, root1.id]
+            antecedents = [downImplication1, self.validation]
+            comment = "Shannon Expansion: Add %s --> %s" % (lname, root1.label())
+            shannon1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
+            antecedents = [shannon1, upImplication1]
+            comment = "Resolve with upward implication for N%d" % self.root.id
+            up1 = prover.proveAddResolution([-litid, self.root.id], antecedents, comment)
+
+        root0, downImplication0 = self.manager.applyRestrictDown(self.root, nlit)
+        root0, upImplication0 = self.manager.applyRestrictUp(self.root, nlit)
+        if root0 == self.manager.leaf1:
+            # Down Implication will be tautology
+            # Up Implication will be [lit, self.root.id]
+            # Shannon will be tautology
+            up0 = upImplication0
+            shannon0 = None
+        elif root0 == self.manager.leaf0:
+            # Down Implication will be [lit, -self.root.id]
+            # Up Implication will be tautology
+            # Shannon will be [lit]
+            rclause = [litid]
+            antecedents = [downImplication0, self.validation]
+            comment = "Shannon Expansion: Add %s" % (lname)
+            shannon0 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
+            up0 = shannon0
+        else:
+            # Down Implication will be [lit, -self.root.id, root1.id]
+            # Up Implication will be   [lit, -root1.id, self.root.id]
+            # Shannon will be [lit, root1.id]
+            rclause = [litid, root0.id]
+            antecedents = [downImplication0, self.validation]
+            comment = "Shannon Expansion: Add -%s --> %s" % (lname, root0.label())
+            shannon0 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
+            antecedents = [shannon0, upImplication0]
+            comment = "Resolve with upward implication for N%d" % self.root.id
+            up0 = prover.proveAddResolution([litid, self.root.id], antecedents, comment)
+
+        antecedents = [up1, up0]
+        comment = "Deletion of clause [%d] during existential quantfication" % self.root.id
+        prover.proveDeleteResolution(self.validation, antecedents, comment)
+        prover.qcollect(lit.variable.qlevel+1)
+
+        comment = "Davis Putnam reduction of variable %s" % lname
+        if root1 == self.manager.leaf1:
+            newRoot = root1
+            prover.proveDeleteDavisPutnam(litid, [shannon0], [], comment)
+            validation = resolver.tautologyId
+        elif root0 == self.manager.leaf1:
+            newRoot = root0
+            prover.proveDeleteDavisPutnam(litid, [shannon1], [], comment)
+            validation = resolver.tautologyId
+        else:
+            antecedents = [shannon1, shannon0]
+            comment = "Introduce intermediate disjunction of %s and %s" % (root1.label(), root0.label())
+            distid = prover.proveAddResolution([root1.id, root0.id], antecedents, comment)
+            comment = "Delete Shannon expansion clauses"
+            prover.proveDeleteDavisPutnam(litid, [shannon1, shannon0], [distid], comment)
+            newRoot, justifyOr = self.manager.applyOrJustify(root1, root0)
+            deleteAntecedents = []
+            if justifyOr != resolver.tautologyId:
+                deleteAntecedents.append(justifyOr)
+            if newRoot != self.manager.leaf1:
+                addAntecedents = []
+                if root1 != self.manager.leaf0:
+                    check1, justify1 = self.manager.justifyImply(root1, newRoot)
+                    if justify1 != resolver.tautologyId:
+                        addAntecedents.append(justify1)
+                if root0 != self.manager.leaf0:
+                    check0, justify0 = self.manager.justifyImply(root0, newRoot)
+                    if justify0 != resolver.tautologyId:
+                        addAntecedents.append(justify0)
+                addAntecedents.append(distid)
+                comment = "Add unit clause for disjunction %s (= %s | %s)" % (newRoot.label(), root1.label(), root0.label())
+                validation = self.manager.prover.proveAddResolution([newRoot.id], addAntecedents, comment)
+                deleteAntecedents.append(validation)
+            comment = "Remove intermediate disjunction"
+            prover.proveDeleteResolution(distid, deleteAntecedents, comment)
+
         # Manager needs to be informed that quantification has completed
         self.manager.markQuantified(lit.variable)
+
+        if newRoot == self.manager.leaf1:
+            return None
+
         return Term(self.manager, newRoot, validation, mode = self.mode)
 
 
@@ -296,6 +572,8 @@ class Solver:
                 root, validation = self.manager.constructClauseNoProof(self.termCount, litList)
             elif self.prover.mode == proof.ProverMode.refProof:
                 root, validation = self.manager.constructClause(self.termCount, litList)
+            elif self.prover.mode == proof.ProverMode.dualProof:
+                root, validation = self.manager.constructClauseEquivalent(self.termCount, litList)
             else:
                 root, validation = self.manager.constructClauseReverse(self.termCount, litList)
             term = Term(self.manager, root, validation, mode = prover.mode)
@@ -307,6 +585,7 @@ class Solver:
         root = self.activeIds[id].root
         return root == self.manager.leaf1 or root == self.manager.leaf0
 
+    # Extract two terms, conjunct them and insert new term
     def combineTerms(self, id1, id2):
         termA = self.activeIds[id1]
         termB = self.activeIds[id2]
@@ -320,9 +599,15 @@ class Solver:
         if self.verbLevel >= 3:
             print("  T%d (Node N%d, QL=%d) support = %s" % (self.termCount, newTerm.root.id, newTerm.root.qlevel, self.manager.getSupportIds(newTerm.root)))
 
-        if self.prover.mode == proof.ProverMode.satProof:
-            comment = "Assertion of T%d (N%d)" % (self.termCount, newTerm.root.id)
-            newTerm.validation = self.prover.proveAdd([newTerm.root.id], comment)
+        if self.prover.mode in [proof.ProverMode.satProof, proof.ProverMode.dualProof]:
+            if self.prover.mode == proof.ProverMode.satProof:
+                if newTerm.root == termA.root:
+                    newTerm.validation = termA.validation
+                elif newTerm.root == termB.root:
+                    newTerm.validation = termB.validation
+                else:
+                    comment = "Assertion of T%d (N%d)" % (self.termCount, newTerm.root.id)
+                    newTerm.validation = self.prover.proveAdd([newTerm.root.id], comment)
             justificationA = [newTerm.validation]
             implA = self.manager.justifyImply(newTerm.root, termA.root)[1]
             if implA is not resolver.tautologyId:
@@ -331,9 +616,12 @@ class Solver:
             justificationB = [newTerm.validation]
             if implB is not resolver.tautologyId:
                 justificationB.append(implB)
-            comment = "Delete unit clauses for T%d and T%d" % (id1, id2)
-            self.prover.proveDeleteResolution(termA.validation, justificationA, comment)
-            self.prover.proveDeleteResolution(termB.validation, justificationB)
+            if newTerm.root != termA.root:
+                comment = "Delete unit clauses for T%d" % id1
+                self.prover.proveDeleteResolution(termA.validation, justificationA, comment)
+            if newTerm.root != termB.root:
+                comment = "Delete unit clauses for T%d" % id2
+                self.prover.proveDeleteResolution(termB.validation, justificationB, comment)
 
         del self.activeIds[id1]
         del self.activeIds[id2]
@@ -354,11 +642,14 @@ class Solver:
         del self.activeIds[id]
         litList = [self.litMap[v] for v in varList]
         clause = self.manager.buildClause(litList)
-        self.termCount += 1
         vstring = " ".join(sorted([str(v) for v in varList]))
         if self.verbLevel >= 3:
-            print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount))
-        newTerm = term.equantify(clause, self.prover)
+            print("Computing T%d (Node %s) EQuant(%s) --> T%d" % (id, term.root.label(), vstring, self.termCount+1))
+        newTerm = term.equantifySimple(clause, self.prover)
+        if newTerm is None:
+            comment = "T%d (Node %s) EQuant(%s) --> ONE" % (id, term.root.label(), vstring)
+            return -1
+        self.termCount += 1
         if self.prover.mode == proof.ProverMode.refProof:
             comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
             self.prover.comment(comment)
@@ -371,8 +662,32 @@ class Solver:
             self.prover.deleteClauses(clauseList)
         return self.termCount
 
+    # Used in dual proofs
+    def uquantifyTermDual(self, id, var):
+        term = self.activeIds[id]
+        del self.activeIds[id]
+        lit = self.litMap[var]
+        nlit = self.litMap[-var]
+        if self.verbLevel >= 3:
+            print("Computing T%d (Node %s) UQuant(%s)" % (id, term.root.label(), str(var)))
+            print("  lit = %s,  nlit = %s" % (lit.label(), nlit.label()))
+        newTerm = term.uquantifyDual(lit, nlit, self.prover)
+        if newTerm is None:
+            if self.verbLevel >= 1:
+                self.writer.write("Universal Quantification: Formula FALSE\n")
+            self.outcome = False
+            self.manager.summarize()
+            return -1
+        self.termCount += 1
+        self.activeIds[self.termCount] = newTerm
+        comment = "T%d (Node %s) UQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label())
+        self.prover.comment(comment)
+        # This could be a good time for garbage collection
+        self.manager.checkGC(generateClauses = False)
+        return self.termCount
+
     # Used in refutation proofs
-    def uquantifyTermSingle(self, id, var):
+    def uquantifyTermRefutation(self, id, var):
         term = self.activeIds[id]
         del self.activeIds[id]
         lit = self.litMap[var]
@@ -406,7 +721,7 @@ class Solver:
             self.activeIds[id0] = term0
 
         if term1 is None and term0 is None:
-            msg = "Got C1 for both cofactors of %s" % (term.root.label())
+            msg = "Got ONE for both cofactors of %s" % (term.root.label())
             raise SolverException(msg)
 
         if term1 is None:
@@ -423,8 +738,8 @@ class Solver:
             self.prover.deleteClauses(clauseList)
         return newId
 
-    # Used in satisfaction proofs
-    def equantifyTermSingle(self, id, var):
+    # Used in satisfaction and dual proofs
+    def equantifyTermDualSatisfaction(self, id, var):
         term = self.activeIds[id]
         del self.activeIds[id]
         lit = self.litMap[var]
@@ -432,14 +747,16 @@ class Solver:
         if self.verbLevel >= 3:
             print("Computing T%d (Node %s) EQuant(%s)" % (id, term.root.label(), str(var)))
             print("  lit = %s,  nlit = %s" % (lit.label(), nlit.label()))
-        newTerm = term.equantifySatisfaction(lit, nlit, self.prover)
+        if self.prover.mode == proof.ProverMode.satProof:
+            newTerm = term.equantifySatisfaction(lit, nlit, self.prover)
+        else:
+            newTerm = term.equantifyDual(lit, nlit, self.prover)
         newId = -1
         if newTerm is None:
             if self.verbLevel >= 3:
                 print("T%d (Node %s) EQuant(%s) --> ONE" % (id, term.root.label(), str(var)))
         else:
             self.termCount += 1
-
             comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), str(var), self.termCount, newTerm.root.label())
             self.prover.comment(comment)
             if self.verbLevel >= 3:
@@ -519,6 +836,8 @@ class Solver:
         return True
 
     def placeInQuantBucket(self, buckets, id):
+        if id < 0:
+            return
         term = self.activeIds[id]
         level = term.root.qlevel-1
         if level > 0:
@@ -553,12 +872,12 @@ class Solver:
                 if blevel > 0 and len(buckets[blevel]) > 0:
                     id = buckets[blevel][0]
                     buckets[blevel] = []
-                    if self.prover.mode == proof.ProverMode.satProof:
+                    if self.prover.mode in [proof.ProverMode.satProof, proof.ProverMode.dualProof]:
                         # Satisfaction
                         if len(vars) > 1:
                             raise SolverException("Must serialize existential quantifiers")
                         var = vars[0]
-                        newId = self.equantifyTermSingle(id, var)
+                        newId = self.equantifyTermDualSatisfaction(id, var)
                         if newId >= 0:
                             self.placeInQuantBucket(buckets, newId)
                     else:
@@ -567,13 +886,16 @@ class Solver:
                         self.placeInQuantBucket(buckets, newId)
             else:
                 # Universal quantification
-                if self.prover.mode == proof.ProverMode.refProof:
+                if self.prover.mode in [proof.ProverMode.refProof, proof.ProverMode.dualProof]:
                     # Require vars to be single variable
                     if len(vars) > 1:
                         raise SolverException("Must serialize universal quantifiers")
                     v = vars[0]
                     for id in buckets[blevel]:
-                        newId = self.uquantifyTermSingle(id, v)
+                        if self.prover.mode == proof.ProverMode.refProof:
+                            newId = self.uquantifyTermRefutation(id, v)
+                        else:
+                            newId = self.uquantifyTermDual(id, v)
                         if newId < 0:
                             # Formula is False
                             return
@@ -593,7 +915,7 @@ class Solver:
                         self.placeInQuantBucket(buckets, newId)
 
         # Get here only haven't hit 0
-        if self.prover.mode == proof.ProverMode.satProof:
+        if self.prover.mode in [proof.ProverMode.satProof, proof.ProverMode.dualProof]:
             # Make sure all clauses cleared away
             self.prover.qcollect(1)
 
@@ -601,7 +923,7 @@ class Solver:
             if self.prover.mode == proof.ProverMode.refProof:
                 self.writer.write("ERROR: Formula is TRUE\n")
             else:
-                self.writer.write("Formula TRUE\n")
+                self.writer.write("Formula is TRUE\n")
             self.manager.summarize()
 
     # Provide roots of active nodes to garbage collector
@@ -645,6 +967,8 @@ def run(name, args):
                 mode = proof.ProverMode.refProof
             elif val == 'n':
                 mode = proof.ProverMode.noProof
+            elif val == 'd':
+                mode = proof.ProverMode.dualProof
             else:
                 sys.stderr.write("Unknown proof mode '%s'\n" % val)
                 usage(name)
@@ -676,6 +1000,11 @@ def run(name, args):
             usage(name)
             return
 
+    # If no quantification permuter specified, follow variable ordering
+    # This will cause the quantifications to be performed from the bottom of the BDDs upward
+    if bpermuter is None:
+        bpermuter = permuter
+
     writer = stream.Logger(logName)
 
     try:
@@ -686,9 +1015,9 @@ def run(name, args):
 
     start = datetime.datetime.now()
 
-    if mode == proof.ProverMode.satProof:
+    if mode in [proof.ProverMode.satProof, proof.ProverMode.dualProof]:
         stretchExistential = True
-    if mode == proof.ProverMode.refProof:
+    if mode in [proof.ProverMode.refProof, proof.ProverMode.dualProof]:
         stretchUniversal = True
 
     try:

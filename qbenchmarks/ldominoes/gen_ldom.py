@@ -537,6 +537,7 @@ class Domino:
 
     def listVariables(self, writer):
         for l in unitRange(self.moveCount):
+#        for l in range(self.moveCount,0,-1):
             vlist = []
             vlist += self.moveList[l-1].listTopVariables()
             if l-1 in self.winnerVars:
@@ -548,7 +549,9 @@ class Domino:
             writer.doOrder(vlist)
         for i in unitRange(self.N-1):
             for l in unitRange(self.moveCount):
+#            for l in range(self.moveCount,0,-1):
                 writer.doOrder(self.moveList[l-1].listBottomVariables(i))
+
 
 def run(name, args):
     N = 2

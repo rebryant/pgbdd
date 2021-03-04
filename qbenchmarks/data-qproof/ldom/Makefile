@@ -30,6 +30,7 @@ all: sa
 sa: ldom$(CAT)-$(N)-sa.data
 ra: ldom$(CAT)-$(N)-ra.data
 na: ldom$(CAT)-$(N)-na.data
+da: ldom$(CAT)-$(N)-da.data
 nae: ldom$(CAT)-$(N)-nae.data
 nau: ldom$(CAT)-$(N)-nau.data
 naeu: ldom$(CAT)-$(N)-naeu.data
@@ -37,6 +38,7 @@ naeu: ldom$(CAT)-$(N)-naeu.data
 isa: ildom$(CAT)-$(N)-sa.data
 ira: ildom$(CAT)-$(N)-ra.data
 ina: ildom$(CAT)-$(N)-na.data
+ida: ildom$(CAT)-$(N)-da.data
 
 ldom$(CAT)-$(N)-sa.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-sa
@@ -64,6 +66,17 @@ ldom$(CAT)-$(N)-na.data:
 		-i ldom$(CAT)-$(N)-na.qcnf \
 		-p ldom$(CAT)-$(N)-na.order \
 		-L ldom$(CAT)-$(N)-na.data
+
+ldom$(CAT)-$(N)-da.data:
+	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-da
+	$(SOLVE) -v $(VLEVEL) -m d -b \
+		-i ldom$(CAT)-$(N)-da.qcnf \
+		-o ldom$(CAT)-$(N)-da.qproof \
+		-p ldom$(CAT)-$(N)-da.order \
+		-L ldom$(CAT)-$(N)-da.data
+	$(CHECK) -m d -i ldom$(CAT)-$(N)-da.qcnf -p ldom$(CAT)-$(N)-da.qproof | tee -a ldom$(CAT)-$(N)-da.data
+	rm -f ldom$(CAT)-$(N)-da.qproof
+
 
 ldom$(CAT)-$(N)-nae.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-nae
@@ -114,6 +127,17 @@ ildom$(CAT)-$(N)-na.data:
 		-p ildom$(CAT)-$(N)-na.order \
 		-L ildom$(CAT)-$(N)-na.data
 
+ildom$(CAT)-$(N)-da.data:
+	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-da
+	$(SOLVE) -v $(VLEVEL) -m d -b \
+		-i ildom$(CAT)-$(N)-da.qcnf \
+		-o ildom$(CAT)-$(N)-da.qproof \
+		-p ildom$(CAT)-$(N)-da.order \
+		-L ildom$(CAT)-$(N)-da.data
+	$(CHECK) -m d -i ildom$(CAT)-$(N)-da.qcnf -p ildom$(CAT)-$(N)-da.qproof | tee -a ildom$(CAT)-$(N)-da.data
+	rm -f ildom$(CAT)-$(N)-da.qproof
+
+
 data:
 #	$(CGRAB) ldom*-sa.data > ldom-bdd-sa-clauses.csv
 #	$(CGRAB) ldom*-ra.data > ldom-bdd-ra-clauses.csv
@@ -130,10 +154,14 @@ data:
 #	$(AGRAB) ldom*-nau.data > ldom-bdd-nau-applies.csv
 #	$(AGRAB) ldom*-naeu.data > ldom-bdd-naeu-applies.csv
 #	$(VGRAB) *.data | grep -v ERR > ldom-solve-check.csv
-	$(CGRAB) *BY5S*.data > ldom-qproof-sat-clauses.csv
-	$(CGRAB) *BY5R*.data > ldom-qproof-ref-clauses.csv
-	$(VGRAB) *BY5S*.data > ldom-qproof-sat-seconds.csv
-	$(VGRAB) *BY5R*.data > ldom-qproof-ref-seconds.csv
+	$(CGRAB) *BY5S-*.data > ldom-qproof-sat-clauses.csv
+	$(CGRAB) *BY5R-*.data > ldom-qproof-ref-clauses.csv
+	$(VGRAB) *BY5S-*.data > ldom-qproof-sat-seconds.csv
+	$(VGRAB) *BY5R-*.data > ldom-qproof-ref-seconds.csv
+	$(CGRAB) *BY5DS-*.data > ldom-qproof-dual-sat-clauses.csv
+	$(CGRAB) *BY5DR-*.data > ldom-qproof-dual-ref-clauses.csv
+	$(VGRAB) *BY5DS-*.data > ldom-qproof-dual-sat-seconds.csv
+	$(VGRAB) *BY5DR-*.data > ldom-qproof-dual-ref-seconds.csv
 
 clean:
 	rm -f *~ 

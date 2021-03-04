@@ -14,7 +14,12 @@ tautologyId = 1000 * 1000 * 1000
 # Remove duplicates + false
 # Detect when tautology
 # (by sorting in reverse order of literal number)
-def cleanClause(literalList):
+# When nosort, just remove null and detect tautolgy
+def cleanClause(literalList, nosort = False):
+    if nosort:
+        if tautologyId in literalList:
+            return tautologyId
+        return [lit for lit in literalList if lit != -tautologyId]
     slist = sorted(literalList, key = lambda v: -abs(v))
     while len(slist) > 0:
         # Tautology and Null will be in front

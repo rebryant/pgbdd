@@ -14,8 +14,8 @@ class ProverException(Exception):
         return "Prover Exception: " + str(self.value)
 
 class ProverMode:
-    (noProof, refProof, satProof) = list(range(3))
-    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof"]
+    (noProof, refProof, satProof, dualProof) = list(range(4))
+    modeNames = ["No Proof", "Refutation Proof", "Satisfaction Proof", "Dual Proof"]
 
 class Prover:
 
@@ -80,16 +80,31 @@ class Prover:
         if self.verbLevel > 1 and comment is not None:
             self.file.write("c " + comment + '\n')
 
-    def createClause(self, result, antecedent, comment = None, isInput = False, isUniversal = False):
+    def expungeClause(self, id):
+        if id in self.clauseDict:
+            del self.clauseDict[id]
+        if id in self.antecedentDict:
+            del self.antecedentDict[id]
+
+    # Remove universal literal from clause in QRAT proof
+    def qratUniversal(self, id, ulit):
+        oclause = self.clauseDict[id]
+        nclause = [lit for lit in oclause if lit != ulit]
+        slist = ['u'] + [str(i) for i in ([ulit] + nclause + [0])]
+        self.file.write(" ".join(slist) + '\n')
+        self.clauseDict[id] = nclause
+        return id
+
+    def createClause(self, result, antecedent = [], comment = None, isInput = False, isUniversal = False, ulit = None):
         self.comment(comment)
-        result = resolver.cleanClause(result)
+        result = resolver.cleanClause(result, nosort = isUniversal)
         if result == resolver.tautologyId:
             return result
         self.clauseCount += 1
         antecedent = list(antecedent)
         middle = ['u'] if isUniversal else []
         rest = result + [0]
-        if self.mode == ProverMode.refProof and not self.doQrat:
+        if self.mode in [ProverMode.refProof, ProverMode.dualProof] and not self.doQrat:
             rest += antecedent + [0]
         ilist = [self.clauseCount] if not self.doQrat else []
         ilist += middle + rest
@@ -99,37 +114,26 @@ class Prover:
             self.comment(istring)
         else:
             self.file.write(istring + '\n')
+        if isUniversal and ulit is not None:
+            result = [lit for lit in result if lit != ulit]
         self.clauseDict[self.clauseCount] = result
-        self.antecedentDict[self.clauseCount] = antecedent
+        if len(antecedent) > 0:
+            self.antecedentDict[self.clauseCount] = antecedent
         return self.clauseCount
 
+    # Only called with refutation proofs
     def deleteClauses(self, clauseList):
-        if self.mode == ProverMode.refProof:
-            if self.doQrat:
-                for id in clauseList:
-                    self.file.write('d ')
-                    for lit in self.clauseDict[id]:
-                        self.file.write(str(lit) + ' ')
-                    self.file.write('0\n')
-            else:
-                 for id in clauseList:
-                     del self.clauseDict[id]
-                 middle = ['d']
-                 rest = clauseList + [0]
-                 ilist = [self.clauseCount] + middle + rest
-                 slist = [str(i) for i in ilist]
-                 istring = " ".join(slist)
-                 self.file.write(istring + '\n')
+        if self.doQrat:
+            for id in clauseList:
+                slist = ['d'] + [str(lit) for lit in self.clauseDict[id]] + ['0']
+                istring = ' '.join(slist)
+                self.file.write(istring + '\n')
         else:
             for id in clauseList:
-                middle = ['d']
-                rest = clauseList + [0] + self.antecedentDict[id] + [0]
-            ilist = [self.clauseCount] + middle + rest
-            slist = [str(i) for i in ilist]
+                self.expungeClause(id)
+            slist = ['-', 'd'] + [str(id) for id in clauseList] + ['0']
             istring = " ".join(slist)
             self.file.write(istring + '\n')
-            del self.clauseDict[id]
-            del self.antecedentDict[id]
 
     def generateStepQP(self, fields, addNumber = True, comment = None):
         self.comment(comment)
@@ -172,30 +176,27 @@ class Prover:
 
     def proveAddResolution(self, result, antecedent, comment = None):
         result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            self.comment(comment)
+            return result
         rfields = [str(r) for r in result]
         afields = [str(a) for a in antecedent]
-        cmd =  'ar' if self.mode == ProverMode.refProof else 'a'
+        cmd =  'ar' if self.mode in [ProverMode.refProof, ProverMode.dualProof] else 'a'
         fields = [cmd] + rfields + ['0']
-        if self.mode == ProverMode.refProof:
+        if self.mode in [ProverMode.refProof, ProverMode.dualProof]:
             afields = [str(a) for a in antecedent]
             fields += afields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
-        if self.mode == ProverMode.satProof:
+        if len(result) > 0 and self.mode in [ProverMode.satProof, ProverMode.refProof, ProverMode.dualProof]:
             qlevel = max([self.idToQlevel[abs(lit)] for lit in result])
             if qlevel in self.qlevelClauses:
                 self.qlevelClauses[qlevel].append(stepNumber)
             else:
                 self.qlevelClauses[qlevel] = [stepNumber]
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            self.comment(comment)
-            return result
         self.clauseDict[stepNumber] = result
         self.antecedentDict[stepNumber] = antecedent
         if self.doQrat:
             self.file.write(' '.join(rfields) + ' 0\n')
-#        if self.doQrat:
-#            return self.createClause(result, antecedent, comment)
         return stepNumber
 
     def proveAddBlocked(self, clause, blockers, comment = None):
@@ -204,11 +205,9 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-#       if self.doQrat:
-#           self.file.write(' '.join(rfields) + ' 0\n')
-        cmd =  'ab' if self.mode == ProverMode.refProof else 'a'
+        cmd =  'ab' if self.mode in [ProverMode.refProof, ProverMode.dualProof] else 'a'
         fields = [cmd] + rfields + ['0']
-        if self.mode == ProverMode.refProof:
+        if self.mode in [ProverMode.refProof, ProverMode.dualProof]:
             bfields = [str(-abs(b)) for b in blockers]
             fields += bfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
@@ -231,15 +230,6 @@ class Prover:
         self.clauseDict[stepNumber] = nclause
         return stepNumber
 
-    def proveDelete(self, idList, comment = None):
-        ilist = [str(id) for id in idList]
-        fields = ['d'] + ilist + ['0']
-        self.generateStepQP(fields, False, comment)
-        for id in idList:
-            del self.clauseDict[id]
-            if id in self.antecedentDict:
-                del self.antecedentDict[id]
-
     ## Satisfaction-only steps
 
     def proveAdd(self, result, comment = None):
@@ -248,8 +238,6 @@ class Prover:
             self.comment(comment)
             return result
         rfields = [str(r) for r in result]
-#        if self.doQrat:
-#           self.file.write(' '.join(rfields) + ' 0\n')
         fields = ['a'] + rfields + ['0']
         stepNumber = self.generateStepQP(fields, True, comment)
         self.clauseDict[stepNumber] = result
@@ -261,36 +249,32 @@ class Prover:
         if self.doQrat:
             lfields = [str(lit) for lit in self.clauseDict[id]]
             self.file.write('d ' + ' '.join(lfields) + ' 0\n')
-            return self.proveDelete([id], comment)
+            self.expungeClause(id)
+            return 
         if antecedent is None:
             antecedent = self.antecedentDict[id]
         afields = [str(a) for a in antecedent]
         fields = ['dr', str(id)] + afields + ['0']
         self.generateStepQP(fields, False, comment)
-        if id in self.clauseDict:
-            del self.clauseDict[id]
-        if id in self.antecedentDict:
-            del self.antecedentDict[id]
+        self.expungeClause(id)
 
     def proveDeleteDavisPutnam(self, var, deleteIdList, causeIdList, comment = None):
         dlist = [str(id) for id in deleteIdList]
         if self.doQrat:
             for id in deleteIdList:
-                for lit in self.clauseDict[id]:
-                    if abs(lit) == var:
-                        self.file.write('d ' + str(lit) + ' ')
-                for lit in self.clauseDict[id]:
-                    if abs(lit) != var:
-                        self.file.write(str(lit) + ' ')
-                self.file.write('0\n')
+                list1 = [lit for lit in self.clauseDict[id] if abs(lit) == var]
+                list2 = [lit for lit in self.clauseDict[id] if abs(lit) != var]
+                slist = [str(lit) for lit in (list1+list2)]
+                self.file.write('d ' + ' '.join(slist) + ' 0\n')
         else:
             clist = [str(id) for id in causeIdList]
             fields = ['dd', str(var)] + dlist + ['0'] + clist + ['0']
             self.generateStepQP(fields, False, comment)
         for id in deleteIdList:
-            del self.clauseDict[id]
-            if id in self.antecedentDict:
-                del self.antecedentDict[id]
+            if id not in self.clauseDict:
+                print("INTERNAL ERROR.  Cannot delete clause #%d.  Not in clause dictionary" % id)
+                continue
+            self.expungeClause(id)
 
     def qcollect(self, qlevel):
         # self.file.write("QCOLLECT\n");
