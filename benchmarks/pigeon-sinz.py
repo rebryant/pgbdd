@@ -100,6 +100,24 @@ class Configuration:
                     self.cnfWriter.doComment("Hole %d, pigeon %d: M=%d" % (h, p, mv))
             self.orderWriter.doOrder(hlist)
 
+    def generateVariablesPM(self):
+        # Declared in pigeon-major order
+        for p in range(self.n+1):
+            plist = []
+            for h in range(self.n):
+                mv = self.nextVariable()
+                self.idDict[(h, p, 'M')] = mv
+                plist.append(mv)
+                if p < self.n:
+                    sv = self.nextVariable()        
+                    self.idDict[(h, p, 'S')] = sv
+                    plist.append(sv)
+                    self.cnfWriter.doComment("Hole %d, pigeon %d: M=%d S=%d" % (h, p, mv, sv))
+                else:
+                    self.cnfWriter.doComment("Hole %d, pigeon %d: M=%d" % (h, p, mv))
+            self.orderWriter.doOrder(plist)
+
+
     def buildPositions(self):
         for h in range(self.n):
             for p in range(self.n+1):
