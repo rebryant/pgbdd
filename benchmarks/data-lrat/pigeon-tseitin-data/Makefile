@@ -11,6 +11,7 @@ EXTENSION = lrat
 
 c: pigeon-tseitin-$(N)-column.data
 b: pigeon-tseitin-$(N)-bucket.data
+pb: pigeon-tseitin-$(N)-bucket-pm.data
 l: pigeon-tseitin-$(N)-linear.data
 
 pigeon-tseitin-$(N)-column.data:
@@ -26,6 +27,14 @@ pigeon-tseitin-$(N)-bucket.data:
 		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-bucket.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-bucket.data
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
+
+pigeon-tseitin-$(N)-bucket-pm.data:
+	$(GENERATOR) -n $(N) -p -r pigeon-tseitin-$(N)-bucket-pm | tee pigeon-tseitin-$(N)-bucket-pm.data
+	$(SOLVER) -b -v $(VLEVEL) -i pigeon-tseitin-$(N)-bucket-pm.cnf \
+		-p pigeon-tseitin-$(N)-bucket-pm.order -o pigeon-tseitin-$(N)-bucket-pm.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-bucket-pm.data
+	$(CHECKER) pigeon-tseitin-$(N)-bucket-pm.cnf pigeon-tseitin-$(N)-bucket-pm.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-bucket-pm.data
+	rm -f pigeon-tseitin-$(N)-bucket-pm.$(EXTENSION)
+
 
 pigeon-tseitin-$(N)-linear.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-linear.data
