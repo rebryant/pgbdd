@@ -45,11 +45,13 @@ pigeon-tseitin-$(N)-linear.data:
 
 data:
 	$(GRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket.csv
+	$(GRABBER) pigeon-*-bucket-pm.data > pigeon-tseitin-bucket-pm.csv
 	$(GRABBER) pigeon-*-column.data > pigeon-tseitin-column.csv
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
 
 vdata:
 	$(VGRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket-verification.csv
+	$(VGRABBER) pigeon-*-bucket-pm.data > pigeon-tseitin-bucket-verification-pm.csv
 	$(VGRABBER) pigeon-*-column.data > pigeon-tseitin-column-verification.csv
 	$(VGRABBER) pigeon-*-linear.data > pigeon-tseitin-linear-verification.csv
 
