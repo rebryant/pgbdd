@@ -7,8 +7,9 @@ import writer
 
 # Generate files for pigeonhole problem using Sinz's represent of AtMost1 constraints
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-p] [-v] [-r ROOT] -n N" % name) 
     print("  -h       Print this message")
+    print("  -p       Use pigeon-major variable ordering")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
     print("  -n N     Specify number of holes (pigeons = n+1)")
@@ -100,6 +101,24 @@ class Configuration:
                     self.cnfWriter.doComment("Hole %d, pigeon %d: M=%d" % (h, p, mv))
             self.orderWriter.doOrder(hlist)
 
+    def generateVariablesPM(self):
+        # Declared in pigeon-major order
+        for p in range(self.n+1):
+            plist = []
+            for h in range(self.n):
+                mv = self.nextVariable()
+                self.idDict[(h, p, 'M')] = mv
+                plist.append(mv)
+                if p < self.n:
+                    sv = self.nextVariable()        
+                    self.idDict[(h, p, 'S')] = sv
+                    plist.append(sv)
+                    self.cnfWriter.doComment("Hole %d, pigeon %d: M=%d S=%d" % (h, p, mv, sv))
+                else:
+                    self.cnfWriter.doComment("Hole %d, pigeon %d: M=%d" % (h, p, mv))
+            self.orderWriter.doOrder(plist)
+
+
     def buildPositions(self):
         for h in range(self.n):
             for p in range(self.n+1):
@@ -140,8 +159,11 @@ class Configuration:
                 self.scheduleWriter.doQuantify(pvars)
                 self.scheduleWriter.doInformation("After quantification for pigeon %d" % p)
 
-    def build(self):
-        self.generateVariables()
+    def build(self, pigeonMajor = False):
+        if pigeonMajor:
+            self.generateVariablesPM()
+        else:
+            self.generateVariables()
         self.buildPositions()
         self.constructProblem()
 
@@ -153,15 +175,18 @@ class Configuration:
 def run(name, args):
     verbose = False
     n = 0
+    pigeonMajor = False
     rootName = None
     
-    optlist, args = getopt.getopt(args, "hvcr:n:")
+    optlist, args = getopt.getopt(args, "hvpr:n:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-p':
+            pigeonMajor = True
         elif opt == '-r':
             rootName = val
         elif opt == '-n':
@@ -176,7 +201,7 @@ def run(name, args):
         usage(name)
         return
     c = Configuration(n, rootName, verbose)
-    c.build()
+    c.build(pigeonMajor)
     c.finish()
 
 if __name__ == "__main__":
