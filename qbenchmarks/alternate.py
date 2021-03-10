@@ -124,13 +124,13 @@ def run(name, args):
             try:
                 infile = open(val, 'r')
             except:
-                sys.stederr.write("Couldn't open input file '%s'" % val)
+                sys.stderr.write("Couldn't open input file '%s'\n" % val)
                 return
         elif opt == '-o':
             try:
                 outfile = open(val, 'w')
             except:
-                sys.stederr.write("Couldn't open output file '%s'" % val)
+                sys.stderr.write("Couldn't open output file '%s'\n" % val)
                 return
         else:
             print("Unknown option '%s'" % opt)
