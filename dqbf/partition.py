@@ -148,7 +148,9 @@ class Block:
     srcPartition = None
     destPartition = None
     blockMap = {} # Mapping from source pset to set of destination psets
-    blockList = [] # Pairs of Psets (src,dest) comprising blocks
+    blockList = [] # Pairs of psets (src,dest) comprising blocks
+    conflictPairList = [] # Incompatible pairs of source psets
+    contentionBlockList = [] # Subset of blockList that are candidates for elimination
 
     # Element map is mapping from source elements to list of destination elements
     def __init__(self, elementMap = None):
@@ -189,17 +191,51 @@ class Block:
                     self.blockMap[sps].append(dps)
                     self.blockList.append((sps,dps))
         
+        # Find incompatible blocks
+        self.conflictPairList = []
+        self.contentionBlockList = []
+        sblockList = sorted(self.blockMap.keys())
+        for s1 in sblockList:
+            sd1 = set(self.blockMap[s1])
+            cset = set([])
+            for s2 in sblockList:
+                if s1 == s2:
+                    continue
+                sd2 = set(self.blockMap[s2])
+                list1m2 = []
+                list2m1 = []
+                for sd in sd1 | sd2:
+                    if sd in sd1:
+                        if sd not in sd2:
+                            list1m2.append(sd)
+                    else:
+                        list2m1.append(sd)
+                if len(list1m2) > 0 and len(list2m1) > 0:
+                    self.conflictPairList.append((s1,s2))
+                    cset |= set(list1m2)
+            self.contentionBlockList += [(s1,sd) for sd in sorted(cset)]
+
+
+
+
+
     def statList(self):
         ssize = len(self.srcPartition.universe())
         dsize = len(self.destPartition.universe())
         sblocks = len(self.srcPartition)
         dblocks = len(self.destPartition)
         blocks = len(self.blockList)
-        return [ssize, sblocks, dsize, dblocks, blocks]
+        cblocks = len(self.contentionBlockList)
+        cpairs = len(self.conflictPairList)
+        return [ssize, sblocks, dsize, dblocks, blocks, cblocks, cpairs]
 
     def statFieldList(self):
-        return ['sele', 'sblk', 'dele', 'dblk', 'blk']
+        return ['sele', 'sblk', 'dele', 'dblk', 'blk', 'cblk', 'cpair']
         
     def show(self):
+        print("Blocks")
         for (s,d) in self.blockList:
+            print("%s --> %s" % (str(s), str(d)))
+        print("Contention blocks")
+        for (s,d) in self.contentionBlockList:
             print("%s --> %s" % (str(s), str(d)))

@@ -203,10 +203,6 @@ class DqcnfReader():
                 self.clauses.append(lits)
                 clauseCount += 1
 
-#                slist = [str(l) for l in lits]
-#                sclause = ", ".join(slist)
-#                print("Line %d.  Clause #%d.  [%s]" % (lineNumber, clauseCount, sclause))
-
         if clauseCount != nclause:
             raise CnfException("Line %d: Got %d clauses.  Expected %d" % (lineNumber, clauseCount, nclause))
         # See if there are any undeclared variables

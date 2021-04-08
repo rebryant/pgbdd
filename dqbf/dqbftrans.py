@@ -19,9 +19,17 @@ import partition
 fieldSep = '\t'
 extension = "dqdimacs"
 
+# Translation from labels by partitioner to labels relevant to DQBF
+labelTransDict = { 'sele':'evar' , 'sblk':'eblk',  'dele':'uvar',  'dblk':'ublk' }
+
 def formatList(ls):
     slist = [str(e) for e in ls]
     return fieldSep.join(slist)
+
+def buildHeader(llist):
+    nllist = [ (labelTransDict[lab] if lab in labelTransDict else lab) for lab in llist]
+    return formatList(nllist)
+
 
 def trimFile(fname):
     return fname.split('/')[-1]
@@ -48,7 +56,7 @@ def processFile(fname, verbose):
     if verbose:
         print("File: %s.  Blocks" % tfname)
         b.show()
-        print(formatList(b.statFieldList()))
+        print(buildHeader(b.statFieldList()))
         print(formatList(b.statList()))
     else:
         print(formatList(b.statList() + [tfname]))
@@ -71,11 +79,11 @@ def run(name, args):
             fname = val
     if not verbose:
         slist = partition.Block().statFieldList() + ["file"]
-        print(formatList(slist))
+        print(buildHeader(slist))
     if fname is not None:
         processFile(fname, verbose)
     if dname is not None:
-        flist = glob.glob(dname + "/*." + extension)
+        flist = sorted(glob.glob(dname + "/*." + extension))
         for name in flist:
             processFile(name, verbose)    
     
