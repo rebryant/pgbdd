@@ -11,8 +11,8 @@ import sys
 import getopt
 import glob
 
-import util
-import partition
+import reader
+import preprocess
 
 # CSV or tab separated?
 #fieldSep = ','
@@ -44,13 +44,12 @@ def usage(prog):
 def processFile(fname, verbose):
     tfname = trimFile(fname)
     try:
-        reader = util.DqcnfReader(fname)
-    except util.CnfException as ex:
+        estimator = preprocess.Estimator(fname)
+        b = estimator.blocks
+    except reader.CnfException as ex:
         print("File: %s. Read failed (%s)" % (tfname, str(ex)))
         return
-    try:
-        b = partition.Block(reader.dependencyMap)
-    except partition.PartitionException as ex:
+    except preprocess.PartitionException as ex:
         print("File: %s.  Couldn't generate block partition (%s)" % (tfname, str(ex)))
         return
     if verbose:
@@ -78,7 +77,7 @@ def run(name, args):
         elif opt == '-f':
             fname = val
     if not verbose:
-        slist = partition.Block().statFieldList() + ["file"]
+        slist = preprocess.Block().statFieldList() + ["file"]
         print(buildHeader(slist))
     if fname is not None:
         processFile(fname, verbose)

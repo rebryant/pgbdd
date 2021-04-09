@@ -1,5 +1,9 @@
+# Preprocessing of DQBF formulas.  Convert them into QBF by 
+# performing variable eliminations in a way that minimizes the number of clauses in the modified formula
 # Support partition refinement
 # Underlying elements can be any objects with an equality ordering, and equality functions
+
+import reader
 
 class PartitionException(Exception):
     msg = ""
@@ -143,6 +147,8 @@ class Partition:
         self.psetSet.show()
 
 
+        
+
 # Generate a block-level decomposition of a mapping from one set of objects to another
 class Block:
     srcPartition = None
@@ -216,9 +222,6 @@ class Block:
             self.contentionBlockList += [(s1,sd) for sd in sorted(cset)]
 
 
-
-
-
     def statList(self):
         ssize = len(self.srcPartition.universe())
         dsize = len(self.destPartition.universe())
@@ -239,3 +242,108 @@ class Block:
         print("Contention blocks")
         for (s,d) in self.contentionBlockList:
             print("%s --> %s" % (str(s), str(d)))
+
+# Estimate number of clauses as perform variable eliminations
+class ClauseCounter:
+    # Signature consists of subset of the universal variables
+    # plus subset of the blocks of existential variables
+    # Each represented by an Id of form 'uXX' or 'eXX'
+
+    # Mapping from universal variable to its signature
+    uvarMap = {}
+    # Mapping from existential block (represented as Pset) to its signature
+    eblockMap = {}
+    # Mapping from existential variable to its existential block
+    evarMap = {}
+    # Mapping from signature to count of number of clauses with that signature
+    clauseCounts = {}
+    # Number of clauses in original
+    inputCount = 0
+
+    def __init__(self, uvarList, eblockList):
+        self.uvarMap = {}
+        self.eblockMap = {}
+        self.evarMap = {}
+        self.clauseCounts = {}
+        self.inputCount = 0
+        for u in uvarList:
+            sig = self.signUvar(u)
+            uvarMap[u] = sig
+        for eblock in eblockList:
+            sig = self.signEblock(eblock)
+            eblockMap[eblock] = sig
+            for e in eblock:
+                self.evarMap[e] = eblock
+
+    def signUvar(self, u):
+        return "u%.4d" % u
+
+    def signEblock(self, eblock):
+        return "E%.4d" % eblock.id
+
+    # Build signature from components
+    def makeSignature(self, sset):
+        slist = sorted(sset)
+        return "+".join(slist)
+
+    # Decompose signature into set of individual signatures
+    def splitSignature(self, sig):
+        return set(sig.split('+'))
+
+    def addCount(self, sig, count):
+        if sig in self.clauseCounts:
+            self.clauseCounts[sig] += count
+        else:
+            self.clauseCounts[sig] = count
+
+    def addClause(self, clause):
+        sset = set([])
+        vars = [abs(lit) for lit in clause]
+        for v in vars:
+            if v in self.uvarMap:
+                vsig = self.uvarMap[v]
+                sset |= set([vsig])
+            elif v in self.evarMap:
+                vsig = self.eblockMap[self.evarMap[v]]
+                sset |= set([vsig])
+        sig = self.makeSignature(sset)
+        self.addCount(sig, 1)
+        self.inputCount += 1
+
+    def totalCount(self):
+        return sum(self.clauseCounts.values())
+
+    # Compute effect of performing variable elimination of universal from block of existentials
+    def eliminate(self, uvar, eblock):
+        usig = self.uvarMap[uvar]
+        esig = self.eblockMap[eblock]
+        sigList = list(selfclauseCounts.keys())
+        for sig in sigList:
+            sset = self.splitSignature(sig)
+            if esig in sset and usig not in sset:
+                # Must double the clauses, adding uvar
+                nsig = self.makeSignature(sset | set([usig]))
+                self.addCount(nsig, 2 * self.clauseCounts[sig])
+                # Old clauses get eliminated
+                del self.clauseCounts[sig]
+
+    def show(self):
+        print("Counts by signature")
+        for sig in sorted(self.clauseCounts.keys()):
+            print("\t%d\t%s" % (self.clauseCounts[sig], sig)) 
+        icnt = str(self.inputCount)
+        tot = self.totalCount()
+        fields = ['','InCls', icnt, 'ToCls', str(tot), 'Ratio', "%.2f" % float(tot)/icnt]
+        print('\t'.join(fields))
+
+
+# Class for doing estimations of clause expansion
+class Estimator:
+
+    reader = None # DQCNF reader
+    blocks = None # Block partitioning of input
+
+    def __init__(self, fname):
+        self.reader = reader.DqcnfReader(fname)
+        self.blocks = Block(self.reader.dependencyMap)
+        
