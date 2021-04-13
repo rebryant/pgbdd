@@ -4,6 +4,7 @@
 # Underlying elements can be any objects with an equality ordering, and equality functions
 
 import reader
+import enumerate
 
 class PartitionException(Exception):
     msg = ""
@@ -93,6 +94,10 @@ class Partition:
             for e in elist:
                 self.elementMap[e] = id
 
+    def singletons(self):
+        nlist = [[e] for e in self.elementMap.keys()]
+        return Partition(nlist)
+
     # Partition current refinement according split caused by membership in set
     def listRefine(self, elist):
         eset = set(elist)
@@ -155,19 +160,19 @@ class Block:
     destPartition = None
     blockMap = {} # Mapping from source pset to set of destination psets
     blockList = [] # Pairs of psets (src,dest) comprising blocks
-    conflictPairList = [] # Incompatible pairs of source psets
     contentionBlockList = [] # Subset of blockList that are candidates for elimination
+    contentionDestList = [] # List of destination elements that have contentions
 
     # Element map is mapping from source elements to list of destination elements
-    def __init__(self, elementMap = None):
+    def __init__(self, elementMap = None, singletons = False):
         self.srcPartition = None
         self.destPartition = None
         self.blockMap = {}
         self.blockList = []
         if elementMap is not None:
-            self.processMap(elementMap)
+            self.processMap(elementMap, singletons)
 
-    def processMap(self, elementMap):
+    def processMap(self, elementMap, singletons):
         # Map from source to unique sets
         elementIdMap = {}
         destPsets = PsetSet()
@@ -184,7 +189,10 @@ class Block:
         # Partition destination based on sets of destination elements
         destElements = destPsets.universe
         destLists = destPsets.elists()
-        self.destPartition = Partition([destElements]).multiListRefine(destLists)
+        if singletons:
+            self.destPartition = Partition([destElements]).singletons()
+        else:
+            self.destPartition = Partition([destElements]).multiListRefine(destLists)
 
         # Construct block map
         self.blockMap = { sps : [] for sps in self.srcPartition.psetSet}
@@ -198,7 +206,6 @@ class Block:
                     self.blockList.append((sps,dps))
         
         # Find incompatible blocks
-        self.conflictPairList = []
         self.contentionBlockList = []
         sblockList = sorted(self.blockMap.keys())
         for s1 in sblockList:
@@ -217,10 +224,40 @@ class Block:
                     else:
                         list2m1.append(sd)
                 if len(list1m2) > 0 and len(list2m1) > 0:
-                    self.conflictPairList.append((s1,s2))
-                    cset |= set(list1m2)
+                    set1m2 = set(list1m2)
+                    cset |= set1m2
             self.contentionBlockList += [(s1,sd) for sd in sorted(cset)]
+        self.contentionBlockList.sort(key=lambda p : (p[0].id, p[1].id))
 
+
+    # Construct CNF representation of feasibility formula
+    # Return list of clauses
+    def feasibilityFormula(self):
+        # Create mapping from contention blocks to a feasibility variable
+        fvarIds = {self.contentionBlockList[i] : i+1 for i in range(len(self.contentionBlockList))}
+        sblockList = sorted(self.blockMap.keys())
+        clauseList = []
+        for i1 in range(len(sblockList)):
+            s1 = sblockList[i1]
+            sd1 = set(self.blockMap[s1])
+            for i2 in range(i1+1, len(sblockList)):
+                s2 = sblockList[i2]
+                sd2 = set(self.blockMap[s2])
+                list1m2 = []
+                list2m1 = []
+                for sd in sorted(sd1 | sd2):
+                    if sd in sd1:
+                        if sd not in sd2:
+                            list1m2.append(sd)
+                    else:
+                        list2m1.append(sd)
+                if len(list1m2) > 0 and len(list2m1) > 0:
+                    for d1 in list1m2:
+                        v1 = fvarIds[(s1,d1)]
+                        for d2 in list2m1:
+                            v2 = fvarIds[(s2,d2)]
+                            clauseList.append([v1, v2])
+        return clauseList
 
     def statList(self):
         ssize = len(self.srcPartition.universe())
@@ -229,19 +266,21 @@ class Block:
         dblocks = len(self.destPartition)
         blocks = len(self.blockList)
         cblocks = len(self.contentionBlockList)
-        cpairs = len(self.conflictPairList)
-        return [ssize, sblocks, dsize, dblocks, blocks, cblocks, cpairs]
+        return [ssize, sblocks, dsize, dblocks, blocks, cblocks]
 
     def statFieldList(self):
-        return ['sele', 'sblk', 'dele', 'dblk', 'blk', 'cblk', 'cpair']
+        return ['sele', 'sblk', 'dele', 'dblk', 'blk', 'cblk']
         
     def show(self):
         print("Blocks")
         for (s,d) in self.blockList:
             print("%s --> %s" % (str(s), str(d)))
         print("Contention blocks")
-        for (s,d) in self.contentionBlockList:
-            print("%s --> %s" % (str(s), str(d)))
+        for i in range(len(self.contentionBlockList)):
+            (s,d) = self.contentionBlockList[i]
+            id = i+1
+            print("%d: %s --> %s" % (id, str(s), str(d)))
+
 
 # Estimate number of clauses as perform variable eliminations
 class ClauseCounter:
@@ -256,24 +295,25 @@ class ClauseCounter:
     # Mapping from existential variable to its existential block
     evarMap = {}
     # Mapping from signature to count of number of clauses with that signature
+    initialClauseCounts = {}
     clauseCounts = {}
     # Number of clauses in original
     inputCount = 0
 
-    def __init__(self, uvarList, eblockList):
+    def __init__(self, contentionBlockList):
         self.uvarMap = {}
         self.eblockMap = {}
         self.evarMap = {}
         self.clauseCounts = {}
         self.inputCount = 0
-        for u in uvarList:
-            sig = self.signUvar(u)
-            uvarMap[u] = sig
-        for eblock in eblockList:
+        for (eblock,ublock) in contentionBlockList:
             sig = self.signEblock(eblock)
-            eblockMap[eblock] = sig
-            for e in eblock:
+            self.eblockMap[eblock] = sig
+            for e in eblock.elements:
                 self.evarMap[e] = eblock
+            for u in ublock.elements:
+                sig = self.signUvar(u)
+                self.uvarMap[u] = sig
 
     def signUvar(self, u):
         return "u%.4d" % u
@@ -310,14 +350,23 @@ class ClauseCounter:
         self.addCount(sig, 1)
         self.inputCount += 1
 
+    def loadClauses(self, clauseList):
+        self.clauseCounts = {}
+        for c in clauseList:
+            self.addClause(c)
+        self.initialClauseCounts = { k : v for k,v in self.clauseCounts.items() }
+            
+    def resetCounts(self):
+        self.clauseCounts = { k : v for (k,v) in self.initialClauseCounts.items() }
+
     def totalCount(self):
         return sum(self.clauseCounts.values())
 
     # Compute effect of performing variable elimination of universal from block of existentials
-    def eliminate(self, uvar, eblock):
+    def uvarEliminate(self, uvar, eblock):
         usig = self.uvarMap[uvar]
         esig = self.eblockMap[eblock]
-        sigList = list(selfclauseCounts.keys())
+        sigList = list(self.clauseCounts.keys())
         for sig in sigList:
             sset = self.splitSignature(sig)
             if esig in sset and usig not in sset:
@@ -327,13 +376,20 @@ class ClauseCounter:
                 # Old clauses get eliminated
                 del self.clauseCounts[sig]
 
+    # Compute effect of performing variable elimination for entire block
+    def blockEliminate(self, bpair):
+        eblock, ublock = bpair
+        for u in ublock.elements:
+            self.uvarEliminate(u, eblock)
+
     def show(self):
         print("Counts by signature")
         for sig in sorted(self.clauseCounts.keys()):
             print("\t%d\t%s" % (self.clauseCounts[sig], sig)) 
-        icnt = str(self.inputCount)
+        icnt = self.inputCount
         tot = self.totalCount()
-        fields = ['','InCls', icnt, 'ToCls', str(tot), 'Ratio', "%.2f" % float(tot)/icnt]
+        ratio = float(tot)/icnt
+        fields = ['','InCls', str(icnt), 'ToCls', str(tot), 'Ratio', "%.2f" % ratio]
         print('\t'.join(fields))
 
 
@@ -342,8 +398,49 @@ class Estimator:
 
     reader = None # DQCNF reader
     blocks = None # Block partitioning of input
+    ccounter = None # Clause counter
+    totalCountList = [] # List of all Total counts computed
+    bestBlockList = None # List of elimination blocks in optimal solution
 
-    def __init__(self, fname):
+    def __init__(self, fname, singletons):
         self.reader = reader.DqcnfReader(fname)
-        self.blocks = Block(self.reader.dependencyMap)
+        self.blocks = Block(self.reader.dependencyMap, singletons)
+        self.ccounter = ClauseCounter(self.blocks.contentionBlockList)
+        self.ccounter.loadClauses(self.reader.clauses)
+        
+    # Find optimal solution
+    # Return #input clauses, #solutions tested, #total clauses for best solution
+    def findSolutions(self, verbose = False):
+        clauseList = self.blocks.feasibilityFormula()
+        e = enumerate.Enumerator(clauseList)
+        varList = list(range(1, len(self.blocks.contentionBlockList)+1))
+        solutions = e.minSolve(varList)
+        self.totalCountList = []
+        self.bestBlockList = None
+        bestT = 0
+        for soln in solutions:
+            self.ccounter.resetCounts()
+            blist = []
+            vlist = []
+            for var in soln:
+                if var > 0:
+                    block = self.blocks.contentionBlockList[var-1]
+                    self.ccounter.blockEliminate(block)
+                    vlist.append(var)
+                    blist.append(block)
+            if verbose:
+                print("Eliminated blocks %s" % str(vlist))
+                self.ccounter.show()
+            t = self.ccounter.totalCount()
+            self.totalCountList.append(t)
+            if bestT == 0.0 or t < bestT:
+                bestT = t
+                self.bestBlockList = blist
+        if verbose:
+            icount = self.ccounter.inputCount
+            print("Initial: %d.  Totals: %s.  Best = %d" % (icount, str(self.totalCountList), bestT))
+        return bestT
+        
+            
+        
         
