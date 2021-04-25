@@ -212,4 +212,3 @@ class DqcnfReader():
             self.existentialList.append(v)
             self.dependencyMap[v] = []
 
-
