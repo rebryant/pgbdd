@@ -15,27 +15,30 @@ import reader
 import preprocess
 
 def usage(prog):
-    print("Usage: %s [-h] [-v VERB] [-E] [-M MAXC] [-d DIR] [-p PFX] [-f FILE] [-o FILE]" % prog)
+    print("Usage: %s [-h] [-v VERB] [-E] [-M MAXC] [-d DIR] [-p PFX] [-f FILE] [-L FILE]" % prog)
     print(" -h      Print this message")
     print(" -v VERB Set verbosity level (0 = None, 1 = Output comments, 2 = Debugging info)")
     print(" -E      Stop after estimation phase")
     print(" -M MAXC Don't generate expanded version if it would have more than MAXC clauses")
     print(" -d DIR  Process all matching files in specified directory")
     print(" -p PFX  Only process files with specified prefix")
-    print(" -f FILE Process only specified file")
+    print(" -L FILE Write information as CSV to FILE")
+
 
 # CSV or tab separated?
-#fieldSep = ','
-fieldSep = '\t'
 extension = "dqdimacs"
 checkSolutions = False
 
+# Global
 haveHeader = False
 
 # Translation from labels by partitioner to labels relevant to DQBF
 labelTransDict = { 'sele':'evar' , 'sblk':'eblk',  'dele':'uvar',  'dblk':'ublk' }
 
-def formatList(ls):
+# Benchmark categories
+categories = ["misc", "bloem", "kullmann", "scholl", "tentrup"]
+
+def formatList(ls, fieldSep = "\t"):
     slist = [str(e) for e in ls]
     return fieldSep.join(slist)
 
@@ -47,10 +50,10 @@ def buildHeader(llist):
 def trimFile(fname):
     tfname = fname.split('/')[-1]
     fields = tfname.split('_')
-    if len(fields) > 1:
-        return [fields[0], "_".join(fields[1:])]
-    else:
-        return ["misc", tfname]
+    cat = categories[0]
+    if fields[0] in categories:
+        cat = fields[0]
+    return [cat, tfname]
 
 # Get root name from file name
 def rootName(fname):
@@ -76,7 +79,7 @@ def storeClauses(estimator, ifname):
     outf.write("]\n")
     outf.close()
 
-def processFile(fname, estimateOnly, maxClause, verbLevel):
+def processFile(fname, estimateOnly, maxClause, verbLevel, logFile):
     global haveHeader
     info = trimFile(fname)
     tfname = info[1] if info[0] == "" else "_".join(info)
@@ -95,27 +98,36 @@ def processFile(fname, estimateOnly, maxClause, verbLevel):
         print("File: %s.  Blocks" % tfname)
         b.show()
     stats = b.statList()
-    header = buildHeader(b.statFieldList())
-    header += ['solns', 'icls', 'bcls', 'ratio', 'cat', 'prob']
     bcount = estimator.findSolutions(verbose = verbLevel > 1, check = checkSolutions)
     solns = len(estimator.totalCountList)
     icount = estimator.ccounter.inputCount
     ratio = "%.2f" % (float(bcount)/icount)
     stats += [solns, icount, bcount, ratio]
-    if verbLevel > 1:
+
+    header = buildHeader(b.statFieldList())
+    header += ['solns', 'icls', 'ecls', 'ratio']
+    if not estimateOnly:
+        header += ['eevar', 'euvar']
+    header += ['cat', 'prob']
+    if not haveHeader:
+        haveHeader = True
         print(formatList(header))
-        print(formatList(stats))
-    else:
-        if not haveHeader:
-              haveHeader = True
-              print(formatList(header))
-        print(formatList(stats + info))
-    if estimateOnly or bcount > maxClause:
-        return
-    root = rootName(fname) + "_expanded"
-    expander = preprocess.Expander(qreader)
-    expander.expand(estimator.bestBlockList)
-    expander.generate(root, verbLevel > 0)
+        if logFile is not None:
+            logFile.write(formatList(header, ',') + '\n')
+    if not estimateOnly:
+        if bcount <= maxClause:
+            root = rootName(fname) + "_expanded"
+            expander = preprocess.Expander(qreader)
+            expander.expand(estimator.bestBlockList)
+            euvar, eevar = expander.generate(root, verbLevel > 0)
+            stats += [eevar, euvar]
+        else:
+            stats += ['', '']
+    stats += info
+    print(formatList(stats))
+    if logFile is not None:
+        logFile.write(formatList(stats, ',') + '\n')
+
     
 def run(name, args):
     dname = None
@@ -124,8 +136,9 @@ def run(name, args):
     prefix = ""
     estimateOnly = False
     maxClause = 50000
+    logFile = None
 
-    optlist, args = getopt.getopt(args, "hv:EM:d:p:f:")
+    optlist, args = getopt.getopt(args, "hv:EM:d:p:f:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -142,12 +155,18 @@ def run(name, args):
             prefix = val
         elif opt == '-f':
             fname = val
+        elif opt == '-L':
+            try:
+                logFile = open(val, 'w')
+            except:
+                print("Couldn't open log file '%s'" % val)
+                return
     if fname is not None:
-        processFile(fname, estimateOnly, maxClause, verbLevel)
+        processFile(fname, estimateOnly, maxClause, verbLevel, logFile)
     if dname is not None:
         flist = sorted(glob.glob(dname + "/" + prefix + "*." + extension))
         for name in flist:
-            processFile(name, estimateOnly, maxClause, verbLevel)    
+            processFile(name, estimateOnly, maxClause, verbLevel, logFile)    
     
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

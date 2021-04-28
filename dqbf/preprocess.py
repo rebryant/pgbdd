@@ -741,6 +741,7 @@ class Expander:
         if verbose:
             print("File %s:  %d evars, %d uvars, %d clauses" % (outname, evarCount, uvarCount, clauseCount))
         outfile.close()
+        return (uvarCount, evarCount)
 
         
             
