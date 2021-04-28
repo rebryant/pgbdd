@@ -15,14 +15,14 @@ import reader
 import preprocess
 
 def usage(prog):
-    print("Usage: %s [-h] [-v] [-u] [-d DIR] [-p PFX] [-f FILE]" % prog)
+    print("Usage: %s [-h] [-v VERB] [-E] [-M MAXC] [-d DIR] [-p PFX] [-f FILE] [-o FILE]" % prog)
     print(" -h      Print this message")
-    print(" -v      Provide more detailed information")
-    print(" -u      Treat universal variables as singleton partitions")
+    print(" -v VERB Set verbosity level (0 = None, 1 = Output comments, 2 = Debugging info)")
+    print(" -E      Stop after estimation phase")
+    print(" -M MAXC Don't generate expanded version if it would have more than MAXC clauses")
     print(" -d DIR  Process all matching files in specified directory")
     print(" -p PFX  Only process files with specified prefix")
     print(" -f FILE Process only specified file")
-
 
 # CSV or tab separated?
 #fieldSep = ','
@@ -49,12 +49,18 @@ def trimFile(fname):
     if len(fields) > 1:
         return [fields[0], "_".join(fields[1:])]
     else:
-        return ["", tfname]
+        return ["misc", tfname]
+
+# Get root name from file name
+def rootName(fname):
+    fields = fname.split('.')
+    root = ".".join(fields[:-1])
+    return root
 
 # Build up library of formulas.  Store in form that can be cut & pasted into Python
 def storeClauses(estimator, ifname):
     localName = ifname.split('/')[-1]
-    root = ".".join(localName.split('.')[:-1])
+    root = rootname(localName)
     fname = root + ".clauses"
     clist = estimator.blocks.feasibilityFormula()
     try:
@@ -69,31 +75,33 @@ def storeClauses(estimator, ifname):
     outf.write("]\n")
     outf.close()
 
-def processFile(fname, verbose, singletons):
+def processFile(fname, estimateOnly, maxClause, verbLevel):
     global haveHeader
     info = trimFile(fname)
     tfname = info[1] if info[0] == "" else "_".join(info)
     try:
-        estimator = preprocess.Estimator(fname, singletons)
-        b = estimator.blocks
+        qreader = reader.DqcnfReader(fname)
     except reader.CnfException as ex:
         print("File: %s. Read failed (%s)" % (tfname, str(ex)))
         return
+    try:
+        estimator = preprocess.Estimator(qreader)
+        b = estimator.blocks
     except preprocess.PartitionException as ex:
         print("File: %s.  Couldn't generate block partition (%s)" % (tfname, str(ex)))
         return
-    if verbose:
+    if verbLevel > 1:
         print("File: %s.  Blocks" % tfname)
         b.show()
     stats = b.statList()
     header = buildHeader(b.statFieldList())
     header += ['solns', 'icls', 'bcls', 'ratio', 'cat', 'prob']
-    bcount = estimator.findSolutions(verbose = verbose)
+    bcount = estimator.findSolutions(verbose = verbLevel > 1)
     solns = len(estimator.totalCountList)
     icount = estimator.ccounter.inputCount
     ratio = "%.2f" % (float(bcount)/icount)
     stats += [solns, icount, bcount, ratio]
-    if verbose:
+    if verbLevel > 1:
         print(formatList(header))
         print(formatList(stats))
     else:
@@ -101,24 +109,32 @@ def processFile(fname, verbose, singletons):
               haveHeader = True
               print(formatList(header))
         print(formatList(stats + info))
-#    storeClauses(estimator, fname)
+    if estimateOnly or bcount > maxClause:
+        return
+    root = rootName(fname) + "_expanded"
+    expander = preprocess.Expander(qreader)
+    expander.expand(estimator.bestBlockList)
+    expander.generate(root, verbLevel > 0)
     
 def run(name, args):
     dname = None
     fname = None
-    verbose = False
+    verbLevel = 0
     prefix = ""
-    singletons = False
+    estimateOnly = False
+    maxClause = 50000
 
-    optlist, args = getopt.getopt(args, "hvud:p:f:")
+    optlist, args = getopt.getopt(args, "hv:EM:d:p:f:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
-            verbose = True
-        elif opt == '-u':
-            singletons = True
+            verbLevel = int(val)
+        elif opt == '-E':
+            estimateOnly = True
+        elif opt == '-M':
+            maxClause = int(val)
         elif opt == '-d':
             dname = val
         elif opt == '-p':
@@ -126,11 +142,11 @@ def run(name, args):
         elif opt == '-f':
             fname = val
     if fname is not None:
-        processFile(fname, verbose, singletons)
+        processFile(fname, estimateOnly, maxClause, verbLevel)
     if dname is not None:
         flist = sorted(glob.glob(dname + "/" + prefix + "*." + extension))
         for name in flist:
-            processFile(name, verbose, singletons)    
+            processFile(name, estimateOnly, maxClause, verbLevel)    
     
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
