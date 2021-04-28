@@ -407,11 +407,11 @@ class Estimator:
         
     # Find optimal solution
     # Return #input clauses, #solutions tested, #total clauses for best solution
-    def findSolutions(self, verbose = False):
+    def findSolutions(self, verbose = False, check = False):
         clauseList = self.blocks.feasibilityFormula()
         e = enumerate.Enumerator(clauseList)
         varList = list(range(1, len(self.blocks.contentionBlockList)+1))
-        solutions = e.minSolve(varList)
+        solutions = e.minSolve(varList, check = check)
         self.totalCountList = []
         self.bestBlockList = None
         bestT = 0
@@ -707,8 +707,8 @@ class Expander:
             uslist = [str(u) for u in ulist]
             xlist = self.emanager.evarMap[evar]
             for xvar in xlist:
-                if verbose:
-                    outfile.write("c Expansion of %d: %s:%d" % (evar, str(xvar), xvar.id))
+                if verbose and len(xlist) > 1:
+                    outfile.write("c Expansion of %d: %s:%d\n" % (evar, str(xvar), xvar.id))
                 slist = ['d', str(xvar.id)] + uslist + ['0']
                 outfile.write(" ".join(slist) + '\n')
         return (uvarCount, evarCount)

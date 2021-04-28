@@ -28,6 +28,7 @@ def usage(prog):
 #fieldSep = ','
 fieldSep = '\t'
 extension = "dqdimacs"
+checkSolutions = False
 
 haveHeader = False
 
@@ -96,7 +97,7 @@ def processFile(fname, estimateOnly, maxClause, verbLevel):
     stats = b.statList()
     header = buildHeader(b.statFieldList())
     header += ['solns', 'icls', 'bcls', 'ratio', 'cat', 'prob']
-    bcount = estimator.findSolutions(verbose = verbLevel > 1)
+    bcount = estimator.findSolutions(verbose = verbLevel > 1, check = checkSolutions)
     solns = len(estimator.totalCountList)
     icount = estimator.ccounter.inputCount
     ratio = "%.2f" % (float(bcount)/icount)

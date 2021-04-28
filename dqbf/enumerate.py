@@ -1,4 +1,4 @@
-# Crude method of enumerating all minimal solution to a monotone CNF
+# Enumerate or sample minimal solution to a monotone CNF
 # Clauses can only contain positive literals
 
 import random
@@ -56,14 +56,14 @@ class Clause:
 
 
     def push(self):
-        state = ([v for v in self.activeList], self.isTrue, self.isFalse)
-        self.listStack = [state] + self.listStack
+        state = (list(self.activeList), self.isTrue, self.isFalse)
+        self.listStack.append(state)
 
     def pop(self):
         if len(self.listStack) == 0:
             raise Exception("Empty clause stack")
-        state = self.listStack[0]
-        self.listStack = self.listStack[1:]
+        state = self.listStack[-1]
+        self.listStack = self.listStack[:-1]
         self.activeList, self.isTrue, self.isFalse = state
 
 class Enumerator:
@@ -94,7 +94,7 @@ class Enumerator:
 
     def __init__(self, clist):
         self.clauseList = []
-        self.forcedSet = set([])
+        self.forcedVarSet = set([])
         self.isFalse = False
         self.isTrue = len(clist) == 0
         forced = set([])
@@ -120,7 +120,7 @@ class Enumerator:
             self.setTrue(fv)
         self.forcedVarSet |= forcedSet
 
-    # Set variable to true and propagate unit clauses
+    # Set variable to false and propagate unit clauses
     def setFalse(self, var):
         foundFalse = False
         nforced = set([])
@@ -137,7 +137,7 @@ class Enumerator:
     def saveState(self):
         for cc in self.clauseList:
             cc.push()
-        saveForced = set([v for v in self.forcedSet])
+        saveForced = set([v for v in self.forcedVarSet])
         state = (saveForced, self.isFalse, self.isTrue)
         self.statusStack.append(state)
 
@@ -145,8 +145,8 @@ class Enumerator:
     def restoreState(self):
         for cc in self.clauseList:
             cc.pop()
-        state = self.statusStack[0]
-        self.statusStack = self.statusStack[1:]
+        state = self.statusStack[-1]
+        self.statusStack = self.statusStack[:-1]
         self.forcedVarSet, self.isFalse, self.isTrue = state
 
     def singleSolve(self, varList):
@@ -230,7 +230,7 @@ class Enumerator:
                 return
 
 
-    def minSolve(self, varList):
+    def minSolve(self, varList, check = False):
         varList.sort()
         sset = set([])
         self.catalogSolution(sset, self.singleSolve(varList))
@@ -241,7 +241,34 @@ class Enumerator:
                 self.catalogSolution(sset, soln)
         else:
             self.sampleSolve(sset, varList)
-        return sorted(sset)
+        result = sorted(sset)
+        if check:
+            badCount = 0
+            for soln in result:
+                if not self.checkSolution(soln):
+                    badCount += 1
+            if badCount > 0:
+                print("%d/%d solutions invalid" % (badCount, len(result)))
+        return result
+
+    def checkSolution(self, soln):
+        posLits = [lit for lit in soln if lit > 0]
+        icount = 0
+        firstBad = None
+        for c in self.clauseList:
+            found = False
+            for lit in c.activeList:
+                if lit in posLits:
+                    found = True
+                    break
+            if not found:
+                icount += 1
+                if icount == 1:
+                    firstBad = c
+        if icount > 0:
+            print("Invalid solution.  %d/%d not satisifed.  First bad clause = %s.  Positive solution literals = %s" % (icount, len(self.clauseList), str(firstBad), str(posLits)))
+        return icount > 0
+
 
 class OldEnumerator:
 
