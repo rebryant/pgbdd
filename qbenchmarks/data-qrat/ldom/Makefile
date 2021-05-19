@@ -160,6 +160,10 @@ data:
 	$(VGRAB) *BY5R*-ra.data > ldom-qrat-ref-seconds.csv
 	$(VGRAB) *BY5S*-dsa.data > ldom-qrat-dual-sat-seconds.csv
 	$(VGRAB) *BY5R*-dra.data > ldom-qrat-dual-ref-seconds.csv
+	$(VGRAB) *S*-sa.data > ldom-qrat-allsat-seconds.csv
+	$(VGRAB) *R*-ra.data > ldom-qrat-allref-seconds.csv
+	$(VGRAB) *S*-dsa.data > ldom-qrat-dual-allsat-seconds.csv
+	$(VGRAB) *R*-dra.data > ldom-qrat-dual-allref-seconds.csv
 
 
 clean:

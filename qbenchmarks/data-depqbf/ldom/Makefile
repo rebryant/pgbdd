@@ -39,8 +39,8 @@ ildoma$(CAT)-$(N).data:
 	$(SOLVE) ildoma$(CAT)-$(N).qcnf | tee ildoma$(CAT)-$(N).data
 
 data:
-#	$(TGRAB) ldoma-*.data > ldom-depqbf-a-seconds.csv
-#	$(TGRAB) ildoma-*.data > ildom-depqbf-a-seconds.csv
+	$(WGRAB) *ldoma-TS-*.data > ldom-depqbf-allsat-seconds.csv
+	$(WGRAB) *ldoma-TR-*.data > ldom-depqbf-allref-seconds.csv
 	$(WGRAB) *BY5S*.data > ldom-depqbf-sat-seconds.csv
 	$(WGRAB) *BY5R*.data > ldom-depqbf-ref-seconds.csv
 
