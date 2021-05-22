@@ -16,3 +16,4 @@ make a  CAT=-TS N=19
 make ia CAT=-TR N=19
 make a  CAT=-TS N=20
 make ia CAT=-TR N=20
+make ia CAT=-TS N=21
