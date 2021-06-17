@@ -4,6 +4,7 @@
 # Underlying elements can be any objects with an equality ordering, and equality functions
 
 import reader
+import sys
 import enumerate
 
 class PartitionException(Exception):
@@ -27,6 +28,9 @@ class Pset:
     def elist(self):
         return sorted([e for e in self.elements])
 
+    def __len__(self):
+        return len(self.elements)
+
     def __str__(self):
         return 'S' + str(self.id) + ':{' + ", ".join(str(e) for e in self.elist()) + '}'
 
@@ -38,7 +42,7 @@ class Pset:
 
 # Maintain set of unique sets
 class PsetSet:
-    # List of sets
+    # List of sets.  Ordered by Id
     psetList = []
     # Set of all atomic elements
     universe = set([])
@@ -62,7 +66,7 @@ class PsetSet:
 
     def elists(self):
         return [ps.elist() for ps in self.psetList]
-
+    
     def __len__(self):
         return len(self.psetList)
 
@@ -139,6 +143,31 @@ class Partition:
         plists = [p for p in plists if len(p)>0]
         return Partition(plists)
 
+    # Join sets containing specified elements into single set
+    def listJoin(self, elist, ignoreAll):
+        eset = set(elist)
+        if not eset <= self.psetSet.universe:
+            raise PartitionException("Cannot join with non-subset")
+        if len(elist) < 2:
+            return self
+        # This is a placeholder.  Must do proper check of Tseitin variable dependencies"
+        if ignoreAll and len(elist) == len(self.elementMap):
+            return self
+        nlist = []
+        rest = []
+        for p in self.psetSet:
+            if len(p.elements & eset) > 0:
+                nlist += p.elist()
+            else:
+                rest.append(p.elist())
+        return Partition([nlist] + rest)
+
+    def multiListJoin(self, llist, ignoreAll = False):
+        result = self
+        for elist in llist:
+            result = result.listJoin(elist, ignoreAll)
+        return result
+
     def elementSet(self, e):
         return self.psetSet[self.elementMap[e]]
 
@@ -150,8 +179,6 @@ class Partition:
 
     def show(self):
         self.psetSet.show()
-
-
         
 
 # Generate a block-level decomposition of a mapping from one set of objects to another
@@ -743,7 +770,57 @@ class Expander:
         outfile.close()
         return (uvarCount, evarCount)
 
-        
+# Attempt splitting into independent subproblems.
+# Extension of work by Scholl, et al., AAAI 2019
+class Splitter:        
             
+    reader = None
+    # Partitions of variables such that dependency sets for all variables
+    # in an existential partition are wholly contained in corresponding
+    # universal partition
+    existentialPartition = None
+    universalPartition = None
+    # Existential variables with empty dependency sets
+    independentList = []
 
-                 
+    def __init__(self, reader, ignoreTseitin = False):
+        self.reader = reader
+        self.independentList = []
+        upart = Partition([reader.universalList]).singletons()
+        llist = reader.dependencyMap.values()
+        upart = upart.multiListJoin(llist, ignoreAll = ignoreTseitin)
+        self.universalPartition = upart
+        if len(upart.psetSet) == 1:
+            # Degenerate case
+            self.existentialPartition = Partition([reader.existentialList])
+            return
+
+        # Build up list of lists for existential partition
+        llist = [[] for i in range(len(upart.psetSet))]
+        for evar in reader.existentialList:
+            ulist = reader.dependencyMap[evar]
+            if len(ulist) == 0:
+                self.independentList.append(evar)
+            else:
+                uid = upart.elementMap[ulist[0]]
+                llist[uid].append(evar)
+        self.existentialPartition = Partition(llist)
+            
+    def stats(self, outfile=sys.stdout, name="", verbose = 0):
+        prefix = "" if name == "" else name + ": "
+        pcount = len(self.existentialPartition.psetSet)
+        ecount = len(self.reader.existentialList)
+        icount = len(self.independentList)
+        ucount = len(self.reader.universalList)
+        if pcount > 1:
+            outfile.write("%s MULTI.  %d partitions.  Universal vars: %d. Existential vars: %d (%d independent).\n" % (prefix, pcount, ucount, ecount, icount))
+            if verbose > 1:
+                slist = [str(len(pset)) for pset in self.existentialPartition.psetSet]
+                outfile.write("  Independent existentials: %d\n" % len(self.independentList))
+                outfile.write("  Existential Partitions: %s\n" % ", ".join(slist))
+                slist = [str(len(pset)) for pset in self.universalPartition.psetSet]
+                outfile.write("  Universal Partitions: %s\n" % ", ".join(slist))
+        elif verbose > 1:
+            outfile.write("%s SINGLE. Universal vars: %d.  Existential vars: %d (%d independent)\n" % (prefix, ucount, ecount, icount))
+        else:
+            outfile.write("%s SINGLE\n" % (prefix))
