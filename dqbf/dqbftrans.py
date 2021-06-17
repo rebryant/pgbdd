@@ -20,6 +20,7 @@ def usage(prog):
     print(" -v VERB Set verbosity level (0 = None, 1 = Output comments, 2 = Debugging info)")
     print(" -E      Stop after estimation phase")
     print(" -M MAXC Don't generate expanded version if it would have more than MAXC clauses")
+    print(" -f FILE Process specified file")
     print(" -d DIR  Process all matching files in specified directory")
     print(" -p PFX  Only process files with specified prefix")
     print(" -L FILE Write information as CSV to FILE")
