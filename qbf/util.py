@@ -192,21 +192,13 @@ class QcnfReader():
                 clauseCount += 1
         if clauseCount != nclause:
             raise CnfException("Line %d: Got %d clauses.  Expected %d" % (lineNumber, clauseCount, nclause))
-        # See if there are any undeclared variables
+        # See if there are any undeclared variables.
         outerVars = [v for v in range(1, self.nvar+1) if v not in foundDict]
         if len(outerVars) > 0:
-            # These must be added as existential variables in first quantifier block
+            # These are added as existential variables in first quantifier block
             ovarList = [(v, 1, True) for v in outerVars]
             nvarList = [(v, qlevel+2, isExistential) for (v, qlevel, isExistential) in self.varList]
             self.varList = ovarList + nvarList
-        # Debugging info:
-
-        vdict = {q+1 : [] for q in range(qlevel)}
-        tdict = {q : False for q in range(qlevel)}
-        for (v, q, e) in self.varList:
-            vdict[q].append(v)
-            tdict[q] = e
-
 
 ###########################################################################################
 ## Permutations of 1..n
