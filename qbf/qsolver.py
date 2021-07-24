@@ -1,4 +1,26 @@
 #!/usr/bin/python
+
+#####################################################################################
+# Copyright (c) 2021 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+# Last edit: Feb. 16, 2021
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+# associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+# OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+########################################################################################
+
+
 # Simple, proof-generating QBF solver based on BDDs
 
 import sys
@@ -7,10 +29,9 @@ import datetime
 
 import bdd
 import resolver
-import stream
-import qreader
-import permutation
 import proof
+import util
+
 
 # Increase maximum recursion depth
 sys.setrecursionlimit(50 * sys.getrecursionlimit())
@@ -129,7 +150,7 @@ class Term:
         comment = "Apply universal reduction to eliminate variable %d" % literal.variable.id
         if self.manager.prover.doQrat:
             rule1 = self.manager.prover.createClause(rclause)
-            validation = self.manager.prover.createClause(rclause, isUniversal=True, ulit = ulit)
+            validation = self.manager.prover.qratUniversal(rule1, ulit)
         else:
             rule1 = self.manager.prover.proveAddResolution(rclause, antecedents, comment)
             validation = self.manager.prover.proveUniversal(ulit, rule1, None)
@@ -161,7 +182,7 @@ class Term:
             down1 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Restriction by -%d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
-                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
+                validation1 = self.manager.prover.qratUniversal(down1, -litid)
             else:
                 validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
             return None
@@ -177,7 +198,7 @@ class Term:
             # Apply universal reduction
             comment = "Apply universal reduction to eliminate variable %d" % litid
             if self.manager.prover.doQrat:
-                validation1 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=-litid)
+                validation1 = self.manager.prover.qratUniversal(down1, -litid)
             else:
                 validation1 = self.manager.prover.proveUniversal(-litid, down1, comment)
                 # Now remove down1
@@ -209,7 +230,7 @@ class Term:
             down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Restriction by %d, followed by universal reduction yields empty clause" % litid
             if self.manager.prover.doQrat:
-                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
+                validation0 = self.manager.prover.qratUniversal(down0, litid)
             else:
                 validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
             return None
@@ -224,7 +245,7 @@ class Term:
             down0 = self.manager.prover.proveAddResolution(dclause, antecedents, comment)
             comment = "Apply universal reduction to eliminate variable %d" % litid
             if self.manager.prover.doQrat:
-                validation0 = self.manager.prover.createClause(dclause, isUniversal=True, ulit=litid)
+                validation0 = self.manager.prover.qratUniversal(down0, litid)
             else:
                 validation0 = self.manager.prover.proveUniversal(litid, down0, comment)
                 # Now remove down0
@@ -545,7 +566,7 @@ class Solver:
         # Generate BDD representations of literals
         if permuter is None:
             # Default is identity permutation
-            permuter = permutation.Permuter(list(range(1, reader.nvar+1)))
+            permuter = util.Permuter(list(range(1, reader.nvar+1)))
         self.permuter = permuter
         # Construct literal map
         self.litMap = {}
@@ -948,7 +969,7 @@ def run(name, args):
         if opt == '-b':
             doBucket = True
         elif opt == '-B':
-            bpermuter = permutation.readPermutation(val)
+            bpermuter = util.readPermutation(val)
             if bpermuter is None:
                 return
         elif opt == '-c':
@@ -983,7 +1004,7 @@ def run(name, args):
         elif opt == '-o':
             proofName = val
         elif opt == '-p':
-            permuter = permutation.readPermutation(val)
+            permuter = util.readPermutation(val)
             if permuter is None:
                 return
         elif opt == '-L':
@@ -993,7 +1014,12 @@ def run(name, args):
             usage(name)
             return
 
-    writer = stream.Logger(logName)
+    # If no quantification permuter specified, follow variable ordering
+    # This will cause the quantifications to be performed from the bottom of the BDDs upward
+    if bpermuter is None:
+        bpermuter = permuter
+
+    writer = util.Logger(logName)
 
     try:
         prover = proof.Prover(proofName, writer = writer, verbLevel = verbLevel, mode = mode)
@@ -1009,7 +1035,7 @@ def run(name, args):
         stretchUniversal = True
 
     try:
-        reader = qreader.QcnfReader(cnfName, bpermuter, stretchExistential, stretchUniversal)
+        reader = util.QcnfReader(cnfName, bpermuter, stretchExistential, stretchUniversal)
     except Exception as ex:
         writer.write("Aborted: %s\n" % str(ex))
         return

@@ -12,3 +12,7 @@ make da CAT=-BY5DR N=25
 make ida CAT=-BY5DS N=25
 make da CAT=-BY5DS N=30
 make ida CAT=-BY5DR N=30
+make da CAT=-BY5DR N=35
+make ida CAT=-BY5DS N=35
+make da CAT=-BY5DR N=40
+make ida CAT=-BY5DS N=40

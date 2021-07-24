@@ -41,8 +41,8 @@ ildoma$(CAT)-$(N).data:
 
 
 data:
-#	$(TGRAB) ldoma-*.data > ldom-ghostq-a-seconds.csv
-#	$(TGRAB) ildoma-*.data > ildom-ghostq-a-seconds.csv
+	$(TGRAB) *ldoma-TS-*.data > ldom-ghostq-allsat-seconds.csv
+	$(TGRAB) *ldoma-TR-*.data > ldom-ghostq-allref-seconds.csv
 	$(TGRAB) *BY5S*.data > ldom-ghostq-sat-seconds.csv
 	$(TGRAB) *BY5R*.data > ldom-ghostq-ref-seconds.csv
 

@@ -61,7 +61,7 @@ ldom$(CAT)-$(N)-qsa.data:
 		-p ldom$(CAT)-$(N)-qsa.order \
 		-L ldom$(CAT)-$(N)-qsa.data
 	$(QCHECK) ldom$(CAT)-$(N)-qsa.qcnf ldom$(CAT)-$(N)-qsa.qrat -S -t $(TLIM) 
-#	rm -f ldom$(CAT)-$(N)-qsa.qrat
+	rm -f ldom$(CAT)-$(N)-qsa.qrat
 
 ldom$(CAT)-$(N)-ra.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
@@ -72,7 +72,8 @@ ldom$(CAT)-$(N)-ra.data:
 		-p ldom$(CAT)-$(N)-ra.order \
 		-L ldom$(CAT)-$(N)-ra.data
 	$(CHECK) ldom$(CAT)-$(N)-ra-expand.qcnf ldom$(CAT)-$(N)-ra.qrat -t $(TLIM) | tee -a ldom$(CAT)-$(N)-ra.data
-	rm -f ldom$(CAT)-$(N)-ra.qrat
+#	$(CHECK) ldom$(CAT)-$(N)-ra.qcnf ldom$(CAT)-$(N)-ra.qrat -t $(TLIM) | tee -a ldom$(CAT)-$(N)-ra.data
+#	rm -f ldom$(CAT)-$(N)-ra.qrat
 
 ldom$(CAT)-$(N)-dsa.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-dsa 
@@ -87,7 +88,7 @@ ldom$(CAT)-$(N)-dsa.data:
 ldom$(CAT)-$(N)-dra.data:
 	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-dra
 	$(ALTERNATE) -a -i ldom$(CAT)-$(N)-dra.qcnf -o ldom$(CAT)-$(N)-dra-expand.qcnf	
-	$(SOLVE) -v $(VLEVEL) -m r -b \
+	$(SOLVE) -v $(VLEVEL) -m d -b \
 		-i ldom$(CAT)-$(N)-dra.qcnf \
 		-o ldom$(CAT)-$(N)-dra.qrat \
 		-p ldom$(CAT)-$(N)-dra.order \
@@ -155,8 +156,14 @@ data:
 #	$(AGRAB) ldom*-nau.data > ldom-bdd-nau-applies.csv
 #	$(AGRAB) ldom*-naeu.data > ldom-bdd-naeu-applies.csv
 #	$(VGRAB) *.data | grep -v ERR > ldom-solve-check.csv
-	$(VGRAB) *BY5S*.data > ldom-qrat-sat-seconds.csv
-	$(VGRAB) *BY5R*.data > ldom-qrat-ref-seconds.csv
+	$(VGRAB) *BY5S*-sa.data > ldom-qrat-sat-seconds.csv
+	$(VGRAB) *BY5R*-ra.data > ldom-qrat-ref-seconds.csv
+	$(VGRAB) *BY5S*-dsa.data > ldom-qrat-dual-sat-seconds.csv
+	$(VGRAB) *BY5R*-dra.data > ldom-qrat-dual-ref-seconds.csv
+	$(VGRAB) *S*-sa.data > ldom-qrat-allsat-seconds.csv
+	$(VGRAB) *R*-ra.data > ldom-qrat-allref-seconds.csv
+	$(VGRAB) *S*-dsa.data > ldom-qrat-dual-allsat-seconds.csv
+	$(VGRAB) *R*-dra.data > ldom-qrat-dual-allref-seconds.csv
 
 
 clean:

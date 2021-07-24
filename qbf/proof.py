@@ -1,3 +1,23 @@
+#####################################################################################
+# Copyright (c) 2021 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+# Last edit: Feb. 16, 2021
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+# associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+# OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+########################################################################################
+
 # Resolution Prover for QBF solver
 
 import sys
@@ -85,9 +105,18 @@ class Prover:
         if id in self.antecedentDict:
             del self.antecedentDict[id]
 
+    # Remove universal literal from clause in QRAT proof
+    def qratUniversal(self, id, ulit):
+        oclause = self.clauseDict[id]
+        nclause = [lit for lit in oclause if lit != ulit]
+        slist = ['u'] + [str(i) for i in ([ulit] + nclause + [0])]
+        self.file.write(" ".join(slist) + '\n')
+        self.clauseDict[id] = nclause
+        return id
+
     def createClause(self, result, antecedent = [], comment = None, isInput = False, isUniversal = False, ulit = None):
         self.comment(comment)
-        result = resolver.cleanClause(result)
+        result = resolver.cleanClause(result, nosort = isUniversal)
         if result == resolver.tautologyId:
             return result
         self.clauseCount += 1
@@ -162,7 +191,7 @@ class Prover:
         self.evarQlevels[var] = level
         self.generateStepQP(fields, False, comment)
 
-    ## Refutation and satisfaction steps, but with different actions
+    ## Refutation, satisfaction and dual steps, but with different actions
 
     def proveAddResolution(self, result, antecedent, comment = None):
         result = resolver.cleanClause(result)
@@ -210,7 +239,7 @@ class Prover:
             return self.createClause(result, blockers, comment)
         return stepNumber
 
-    ## Refutation-only steps
+    ## Refutation and dual steps
 
     def proveUniversal(self, lit, oldId, comment = None):
         fields = ['u', str(lit), str(oldId)]
@@ -234,6 +263,8 @@ class Prover:
         if self.doQrat:
             return self.createClause(result, comment)
         return stepNumber
+
+    ## Satisfaction and dual steps
 
     def proveDeleteResolution(self, id, antecedent = None, comment = None):
         if self.doQrat:
@@ -266,8 +297,8 @@ class Prover:
                 continue
             self.expungeClause(id)
 
+    # Clause removal
     def qcollect(self, qlevel):
-        # self.file.write("QCOLLECT\n");
         # Delete all clauses for qlevels >= qlevel
         qlevels = sorted(self.qlevelClauses.keys(), key=lambda q:-q)
         for q in qlevels:
