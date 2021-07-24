@@ -177,6 +177,7 @@ class Equation:
         nc = self.mbox.sub(self.cval, other.cval)
         return self.spawn(nnz, nc)
 
+
     # Perform scaling subtraction
     # Must scale other vector by value at pivot pivot position before subtracting
     def scale_sub(self, other, pidx):
@@ -228,6 +229,24 @@ class EquationSystem:
     # Remaining equations
     rlist = []
 
+    ## Accumulating data
+    # Mapping from variable ID to True
+    var_used = {}
+    # Total number of equations
+    equation_count = 0
+    # Total number of elimination steps
+    step_count = 0
+    # Sum of pivot degrees
+    pivot_degree_sum = 0
+    # Max of pivot degrees
+    pivot_degree_max = 0
+    # Total number of nonzero terms in all equations
+    term_count = 0
+    # Max number of nonzero terms in equations
+    term_max = 0
+    # Total number of vector operations
+    combine_count = 0
+
 
     def __init__(self, N, modulus, verbose = True):
         self.N = N
@@ -235,6 +254,14 @@ class EquationSystem:
         self.verbose = verbose
         self.mbox = ModMath(modulus)
         self.elist = []
+        self.var_used = {}
+        self.equation_count = 0
+        self.step_count = 0
+        self.pivot_degree_sum = 0
+        self.pivot_degree_max = 0
+        self.term_count = 0        
+        self.term_max = 0        
+        self.combine_count = 0
         
     # Insert equation into sorted list
     # This is purely to aid visualization
@@ -257,7 +284,14 @@ class EquationSystem:
         return ls + [e]
 
     def list_insert(self, e, ls):
-        return self.ordered_insert(e, ls) if self.verbose else self.unordered_insert(e, ls)
+        self.equation_count += 1
+        tcount = len(e)
+        self.term_count += tcount
+        self.term_max = max(self.term_max, tcount)
+        for i in e.nz:
+            self.var_used[i] = True
+        reorder = self.verbose
+        return self.ordered_insert(e, ls) if reorder else self.unordered_insert(e, ls)
 
     # Do ordered insertion of equation
     def add_equation(self, e):
@@ -288,6 +322,8 @@ class EquationSystem:
             if d > 0 and (bestI is None or d < bestD):
                 bestI = i
                 bestD = d
+        self.pivot_degree_sum += bestD
+        self.pivot_degree_max = max(self.pivot_degree_max, bestD)
         return bestI
 
     # Given pivot element, move best equation to top of rlist
@@ -314,6 +350,7 @@ class EquationSystem:
     def solution_step(self):
         if len(self.rlist) == 0:
             return True
+        self.step_count += 1
         pidx = self.select_pivot()
         if pidx is None:
             return True
@@ -324,7 +361,14 @@ class EquationSystem:
         self.rlist = self.rlist[1:]
         e = e.normalize(pidx)
         self.slist = self.list_insert(e, self.slist)
-        self.rlist = [ne.scale_sub(e, pidx) for ne in self.rlist]
+        nrlist = []
+        for ne in self.rlist:
+            re = ne
+            if re[pidx] != 0:
+                re = ne.scale_sub(e, pidx)
+                self.combine_count += 1
+            nrlist.append(re)
+        self.rlist = nrlist
         return False
         
             
@@ -357,13 +401,29 @@ class EquationSystem:
             print("   " + str(e))
         
     def pre_statistics(self):
-        print("%d equations" % len(self.elist))
+        ecount = self.equation_count
+        vcount = len(self.var_used)
+        tavg = float(self.term_count)/ecount
+        tmax = self.term_max
+        print("  Problem: %d equations, %d variables.  %.2f avg vars/equation (max=%d)" % (ecount, vcount, tavg, tmax))
 
     def post_statistics(self):
         ok = self.solvable()
         msg = "System Solvable" if ok else "System Unsolvable"
-        print(msg)
-        print("%d modular operations" % self.mbox.opcount)
+        print("  " + msg)
+        sscount = self.step_count
+        pavg = float(self.pivot_degree_sum)/sscount
+        pmax = self.pivot_degree_max
+        print("  Solving: %d steps.  %.2f avg pivot degree (max=%d)" % (sscount, pavg, pmax))
+        ecount = self.equation_count
+        ccount = self.combine_count
+        tavg = float(self.term_count)/ecount
+        tmax = self.term_max
+        print("    %d total equations.  %.2f avg vars/equation (max=%d).  %d vector operations" % (ecount, tavg, tmax, ccount))
+        sscount = self.step_count
+        pavg = float(self.pivot_degree_sum)/sscount
+        print("    %d modular operations" % self.mbox.opcount)
+
         
 # Encoding of mutilated chessboard problem as linear equations
 class Board:
@@ -398,6 +458,8 @@ class Board:
         fields = rcorners.split(":")
         for field in fields:
             field = field.lower()
+            if field == "":
+                continue
             if field == 'ul':
                 rlist.append((0,0))
             elif field == 'll':
@@ -453,6 +515,8 @@ class Board:
 def solve(verbose, modulus, n, rcorners):
     b = Board(n, n, rcorners)
     esys = b.equations(modulus, verbose)
+    if not verbose:
+        esys.pre_statistics()
     solvable = esys.solve()
     if not verbose:
         esys.post_statistics()
@@ -475,7 +539,9 @@ def run(name, args):
             n = int(val)
         elif opt == '-c':
             rcorners = val
-    print("N = %d.  Modulus = %d.  Omitting corners %s" % (n, modulus, rcorners))
+    ocorners = rcorners.split(":")
+    scorners = '[' + ", ".join(ocorners) + ']'
+    print("N = %d.  Modulus = %d.  Omitting corners %s" % (n, modulus, scorners))
     solve(verbose, modulus, n, rcorners)
 
 if __name__ == "__main__":
