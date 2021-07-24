@@ -460,7 +460,7 @@ def solve(verbose, modulus, n, rcorners):
 def run(name, args):
     verbose = False
     modulus = 3
-    n = 6
+    n = 8
     rcorners = "ul:lr"
     optlist, args = getopt.getopt(args, "hvm:n:c:")
     for (opt, val) in optlist:
