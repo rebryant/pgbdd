@@ -584,7 +584,7 @@ class Board:
                         white_count += 1
                     else:
                         black_count += 1
-        return abs(white_count - black_count) % 2 == 0
+        return white_count == black_count
 
     # Return list of variables surrounding given square
     def vars(self, r, c):
