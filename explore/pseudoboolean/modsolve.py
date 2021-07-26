@@ -247,6 +247,81 @@ class Equation:
             return self.format_sparse()
 
 
+# Maintain set of sparse equations, including index from each index i to those equations having nonzero value there
+class EquationSet:
+    # Unique ID assigned when registered
+    next_id = 0
+    # Mapping from id to equation
+    equ_dict = {}
+    # Mapping from index to list of equation IDs having nonzero entry at that index
+    nz_map = {}
+
+    def __init__(self, elist = []):
+        self.next_id = 1
+        self.equ_dict = {}
+        self.nz_map = {}
+        for e in elist:
+            self.add_equation(e)
+
+    def add_index(self, eid, idx):
+        if idx in self.nz_map:
+            self.nz_map[idx].append(eid)
+        else:
+            self.nz_map[idx] = [eid]
+
+    def remove_index(self, eid, idx):
+        nlist = [j for j in self.nz_map[idx] if j != eid]
+        if len(nlist) == 0:
+            del self.nz_map[idx]
+        else:
+            self.nz_map[idx] = nlist
+
+
+    def add_equation(self, e):
+        id = self.next_id
+        self.next_id += 1
+        self.equ_dict[id] = e
+        for idx in e.nz:
+            self.add_index(id, idx)
+
+    def remove_equation(self, eid):
+        e = self[eid]
+        for idx in e.nz:
+            self.remove_index(eid, idx)
+        del self.equ_dict[eid]
+
+    def lookup(self, idx):
+        if idx in self.nz_map:
+            return self.nz_map[idx]
+        else:
+            return []
+
+    def __getitem__(self, id):
+        return self.equ_dict[id]
+        
+    def __len__(self):
+        return len(self.equ_dict)
+
+    def current_eids(self):
+        return self.equ_dict.keys()
+
+    def current_indices(self):
+        return self.nz_map.keys()
+
+    def clone(self):
+        # Make clean copy of all data structures
+        nes = EquationSet()
+        nes.next_id = self.next_id
+        nes.equ_dict = { id : self.equ_dict[id] for id in self.equ_dict.keys() }
+        nes.nz_map = { idx : list(self.nz_map[idx]) for idx in self.nz_map.keys() }
+        return nes
+
+    def show(self):
+        eid_list = sorted(self.current_eids())
+        for eid in eid_list:
+            print("   #%d:%s" % (eid, str(self[eid])))
+
+
 # System of equations.
 # Support LU decomposition of Gaussian elimination to see if system has any solutions
 class EquationSystem:
@@ -258,13 +333,13 @@ class EquationSystem:
     # Class to support math operations
     mbox = None
     # Set of original equations
-    elist = []
+    eset = {}
 
     ## Solver state
     # Eliminated equations
-    slist = []
+    sset = {}
     # Remaining equations
-    rlist = []
+    rset = {}
 
     ## Accumulating data
     # List of pivot values
@@ -292,7 +367,9 @@ class EquationSystem:
         self.modulus = modulus
         self.verbose = verbose
         self.mbox = ModMath(modulus)
-        self.elist = []
+        self.eset = EquationSet()
+        self.sset = EquationSet()
+        self.rset = EquationSet()
         self.pivot_list = []
         self.var_used = {}
         self.equation_count = 0
@@ -303,43 +380,20 @@ class EquationSystem:
         self.term_max = 0        
         self.combine_count = 0
         
-    # Insert equation into sorted list
-    # This is purely to aid visualization
-    def ordered_insert(self, e, ls):
-        sofar = []
-        rest = ls
-        inserted = False
-        while len(rest) > 0:
-            if not inserted and e.is_greater(rest[0]):
-                inserted = True
-                sofar.append(e)
-            else:
-                sofar.append(rest[0])
-                rest = rest[1:]
-        if not inserted:
-            sofar.append(e)
-        return sofar
 
-    def unordered_insert(self, e, ls):
-        return ls + [e]
-
-    def list_insert(self, e, ls):
+    # Add new equation to main set
+    def add_equation(self, e):
+        self.eset.add_equation(e)
         self.equation_count += 1
         tcount = len(e)
-        self.term_count += tcount
         self.term_max = max(self.term_max, tcount)
         for i in e.nz:
             self.var_used[i] = True
-        reorder = self.verbose
-        return self.ordered_insert(e, ls) if reorder else self.unordered_insert(e, ls)
 
-    # Do ordered insertion of equation
-    def add_equation(self, e):
-        self.elist = self.list_insert(e, self.elist)
-    
     # Is set of equations left after solution steps solvable
     def solvable(self):
-        for e in self.rlist:
+        for eid in self.rset.current_eids():
+            e = self.rset[eid]
             if e.is_null():
                 return False
         return True
@@ -347,51 +401,49 @@ class EquationSystem:
     # Compute number of columns in remaining rows having nonzero coefficient
     # At position var
     def column_degree(self, idx, unit_only):
-        d = 0
-        for e in self.rlist:
-            if idx in e.nz:
-                if not unit_only or self.mbox.unit_valued(e.nz[idx]):
-                    d += 1
-        return d
+        eid_list = self.rset.lookup(idx)
+        ok = True
+        if unit_only:
+            for eid in eid_list:
+                e = self.rset[eid]
+                v = e[idx]
+                if not self.mbox.unit_valued(v):
+                    ok = False
+                    break
+        return len(eid_list) if ok else 0
 
     # Given remaining set of equations, select pivot element
     def select_pivot(self, unit_only):
-        bestI = None
-        bestD = 0
-        for i in range(self.N):
+        best_idx = None
+        best_d = 0
+        for i in self.rset.current_indices():
             d = self.column_degree(i, unit_only)
-            if d > 0 and (bestI is None or d < bestD):
-                bestI = i
-                bestD = d
-        if bestI is not None:
-            self.pivot_degree_sum += bestD
-            self.pivot_degree_max = max(self.pivot_degree_max, bestD)
-        return bestI
+            if d > 0 and (best_idx is None or d < best_d):
+                best_idx = i
+                best_d = d
+        if best_idx is not None:
+            self.pivot_degree_sum += best_d
+            self.pivot_degree_max = max(self.pivot_degree_max, best_d)
+        return best_idx
 
-    # Given pivot element, move best equation to top of rlist
+    # Given pivot element, return eid of best one for elimination
     def choose_equation(self, pidx):
-        bestJ = None
-        bestD = 0
-        for j in range(len(self.rlist)):
-            e = self.rlist[j]
-            if pidx in e.nz:
-                d = len(e)
-                if bestJ is None or d < bestD:
-                    bestJ = j
-                    bestD = d
-                    # Greedy
-                    #break
-        topE = self.rlist[bestJ]
-        mid = self.rlist[:bestJ]
-        rest = self.rlist[bestJ+1:]
-        self.rlist = [topE] + mid + rest
-        return bestJ
+        best_eid = None
+        best_d = 0
+        eid_list = self.rset.lookup(pidx)
+        for eid in eid_list:
+            e = self.rset[eid]
+            d = len(e)
+            if best_eid is None or d < best_d:
+                best_eid = eid
+                best_d = d
+        return best_eid
                 
     # Perform one step of LU decomposition
     # Possible return values:
     # "solved", "unit_stopped", "unsolvable", "normal"
     def solution_step(self, unit_only):
-        if len(self.rlist) == 0:
+        if len(self.rset) == 0:
             return "solved"
         self.step_count += 1
         pidx = self.select_pivot(True)
@@ -402,31 +454,31 @@ class EquationSystem:
                     return "unit_stopped"
         if pidx is None:
             return "solved" if self.solvable() else "unsolvable"
-        j = self.choose_equation(pidx)
-        e = self.rlist[0]
+
+        eid = self.choose_equation(pidx)
+        e = self.rset[eid]
+        self.rset.remove_equation(eid)
+        self.sset.add_equation(e)
         pval = e[pidx]
         self.pivot_list.append(pval)
         if self.verbose:
-            print("Pivoting with value %d (element %d).  Using row %d" % (pval, pidx, j))
-        self.rlist = self.rlist[1:]
+            print("Pivoting with value %d (element %d).  Using equation #%d" % (pval, pidx, eid))
         e = e.normalize(pidx)
-        self.slist = self.list_insert(e, self.slist)
-        nrlist = []
-        for ne in self.rlist:
-            re = ne
-            if re[pidx] != 0:
-                re = ne.scale_sub(e, pidx)
-                self.combine_count += 1
-            nrlist.append(re)
-        self.rlist = nrlist
+
+        other_eids =  self.rset.lookup(pidx)
+        for oeid in other_eids:
+            oe = self.rset[oeid]
+            self.rset.remove_equation(oeid)
+            re = oe.scale_sub(e, pidx)
+            self.rset.add_equation(re)
+            self.combine_count += 1
         return "normal"
-        
             
     def solve(self, unit_only):
-        self.slist = []
-        self.rlist = self.elist
+        self.sset = EquationSet()
+        self.rset = self.eset.clone()
         if self.verbose:
-            print("Initial state")
+            print("  Initial state")
             self.show_state()
         status = "normal"
         while True:
@@ -437,25 +489,21 @@ class EquationSystem:
             if self.verbose:
                 self.show_state()
         if self.verbose:
-            print("Solution status:%s" % status)
-            self.post_statistics(status)
+            print("  Solution status:%s" % status)
+            self.post_statistics(status, False)
         return status
 
     def show(self):
-        for e in self.elist:
-            print("   " + str(e))
+        self.eset.show()
     
     def show_state(self):
-        print("Processed:")
-        for e in self.slist:
-            print("   " + str(e))
-        print("Remaining:")
-        for e in self.rlist:
-            print("   " + str(e))
+        print("  Processed:")
+        self.sset.show()
+        print("  Remaining:")
+        self.rset.show()
 
     def show_remaining_state(self):
-        for e in self.rlist:
-            print("   " + str(e))
+        self.rset.show()
             
     def pre_statistics(self):
         ecount = self.equation_count
@@ -467,7 +515,7 @@ class EquationSystem:
     def post_statistics(self, status, maybe_solvable):
         # status: "solved", "unit_stopped", "unsolvable", "normal"
         expected = "solvable" if maybe_solvable else "unsolvable"
-        print("Solution status: %s (expected = %s)" % (status, expected))
+        print("  Solution status: %s (expected = %s)" % (status, expected))
         if status == "unit_stopped":
             print("Stopped with remaining equations:")
             self.show_remaining_state()
@@ -475,13 +523,13 @@ class EquationSystem:
         pavg = float(self.pivot_degree_sum)/sscount
         pmax = self.pivot_degree_max
         print("  Solving: %d steps.  %.2f avg pivot degree (max=%d)" % (sscount, pavg, pmax))
-        slist = []
+        pslist = []
         for s in range(1, len(self.pivot_list)+1):
             p = self.pivot_list[s-1]
             if not self.mbox.unit_valued(p):
-                slist.append("%d:%d" % (s,p))
-        if len(slist) > 0:
-            print("  Non-unit pivots: [%s]" % (' '.join(slist)))
+                pslist.append("%d:%d" % (s,p))
+        if len(pslist) > 0:
+            print("  Non-unit pivots: [%s]" % (' '.join(pslist)))
         ecount = self.equation_count
         ccount = self.combine_count
         tavg = float(self.term_count)/ecount
@@ -513,7 +561,7 @@ class Board:
         self.udvars = {}
         self.lrars = {}
 
-        print("Wrapping: Horizontal %s.  Vertical %s" % (self.wrap_horizontal, self.wrap_vertical))
+        print("     Wrapping: Horizontal %s.  Vertical %s" % (self.wrap_horizontal, self.wrap_vertical))
 
         # Assign variable IDs
         var = 0
