@@ -160,7 +160,7 @@ class Equation:
 
     def format_sparse(self):
         slist = []
-        for i in self.nz.keys():
+        for i in sorted(self.nz.keys()):
             v = self.nz[i]
             slist.append("%d:%d" % (i, v))
         slist.append("=%d" % self.cval)
@@ -236,9 +236,36 @@ class Equation:
                 return False
         return False
     
+    # Could other equation be added/or subtracted without going outside unit bounds
+    def is_compatible(self, other):
+        ok_neg = True
+        ok_pos = True
+        for i in self.nz.keys():
+            if i not in other.nz:
+                continue # No conflict
+            mx = self.nz[i]
+            ox = other.nz[i]
+            if not self.mbox.unit_valued(mx) or not self.mbox.unit_valued(ox):
+                # Lost cause
+                return False
+            if mx == ox:
+                ok_neg = False
+            if mx == self.mbox.sub(0, ox):
+                ok_pos = False
+            if not (ok_neg or ok_pos):
+                break
+        return ok_pos or ok_neg
+
     # Is this an equation with no solution?
     def is_null(self):
         return self.cval != 0 and len(self) == 0
+
+    # Check that all elements in equation are unit-valued
+    def unit_valued(self):
+        for v in self.nz.values():
+            if not self.mbox.unit_valued(v):
+                return False
+        return True
 
     def __str__(self):
         if self.N <= 40:
@@ -413,7 +440,7 @@ class EquationSystem:
         return len(eid_list) if ok else 0
 
     # Given remaining set of equations, select pivot element
-    def select_pivot(self, unit_only):
+    def select_pivot_old(self, unit_only):
         best_idx = None
         best_d = 0
         for i in self.rset.current_indices():
@@ -439,6 +466,57 @@ class EquationSystem:
                 best_d = d
         return best_eid
                 
+    # Given possible pivot index
+    # Return (degree, eid) giving number of entries in column
+    # and equation id
+    # With unit_only set, will return (None, None) cannot find equation
+    # that maintains UPB property
+    def evaluate_pivot(self, pidx, unit_only):
+        eid_list = self.rset.lookup(pidx)
+        best_eid = None
+        best_rd = 0
+        if unit_only:
+            for eid in eid_list:
+                e = self.rset[eid]
+                rd = len(e)
+                viable = True
+                for oid in eid_list:
+                    if eid == oid:
+                        continue
+                    oe = self.rset[oid]
+                    if not e.is_compatible(oe):
+                        viable = False
+                        break
+                if viable and best_eid is None or rd < best_rd:
+                    best_eid = eid
+                    best_rd = rd
+        else:
+            for eid in eid_list:
+                e = self.rset[eid]
+                rd = len(e)
+                if best_eid is None or rd < best_rd:
+                    best_eid = eid
+                    best_rd = rd
+        degree = 0 if best_eid is None else len(eid_list)
+        return (degree, best_eid)
+
+    # Given remaining set of equations, select pivot element and equation id
+    def select_pivot(self, unit_only):
+        best_idx = None
+        best_d = 0
+        best_eid = None
+        for idx in self.rset.current_indices():
+            (d, eid) = self.evaluate_pivot(idx, unit_only)
+            if eid is not None and (best_eid is None or d < best_d):
+                best_idx = idx
+                best_d = d
+                best_eid = eid
+        if best_idx is not None:
+            self.pivot_degree_sum += best_d
+            self.pivot_degree_max = max(self.pivot_degree_max, best_d)
+        return (best_idx, best_eid)
+
+
     # Perform one step of LU decomposition
     # Possible return values:
     # "solved", "unit_stopped", "unsolvable", "normal"
@@ -446,16 +524,14 @@ class EquationSystem:
         if len(self.rset) == 0:
             return "solved"
         self.step_count += 1
-        pidx = self.select_pivot(True)
+        (pidx, eid) = self.select_pivot(unit_only)
         if pidx is None:
-            pidx =  self.select_pivot(False)
             if unit_only:
+                (pidx, eid) = self.select_pivot(False)
                 if pidx is not None:
                     return "unit_stopped"
-        if pidx is None:
             return "solved" if self.solvable() else "unsolvable"
 
-        eid = self.choose_equation(pidx)
         e = self.rset[eid]
         self.rset.remove_equation(eid)
         self.sset.add_equation(e)
@@ -463,13 +539,13 @@ class EquationSystem:
         self.pivot_list.append(pval)
         if self.verbose:
             print("Pivoting with value %d (element %d).  Using equation #%d" % (pval, pidx, eid))
-        e = e.normalize(pidx)
+        ne = e.normalize(pidx)
 
         other_eids =  self.rset.lookup(pidx)
         for oeid in other_eids:
             oe = self.rset[oeid]
             self.rset.remove_equation(oeid)
-            re = oe.scale_sub(e, pidx)
+            re = oe.scale_sub(ne, pidx)
             self.rset.add_equation(re)
             self.combine_count += 1
         return "normal"
