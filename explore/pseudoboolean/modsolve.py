@@ -2,10 +2,11 @@
 
 import sys
 import getopt
+import random
 
 # Generate and solve embedding of mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n N] [-s SQUARES] [-w hvb" % name) 
+    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n N] [-s SQUARES] [-w nhvb] [-r SEED]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
     print("  -u         Stop when cannot find unit pivot")
@@ -14,7 +15,8 @@ def usage(name):
     print("  -s SQUARES Omit squares.")
     print("             String of form VH:VH:..:VH, where V in {u, m, d} and H in {l, m, r}")
     print("             Default is 'ul:dr'")
-    print("  -w WRAP    Optionally wrap grid horizontally (h), vertically (v) or both (b)")
+    print("  -w WRAP    Optionally wrap grid horizontally (h), vertically (v) both (b), or none (n)")
+    print("  -r SEED    Set random seed.")
 
 
 # General library for solving pseudo-boolean constraints embedded in
@@ -237,9 +239,10 @@ class Equation:
         return False
     
     # Could other equation be added/or subtracted without going outside unit bounds
-    def is_compatible(self, other):
+    def is_compatible(self, other, strict):
         ok_neg = True
         ok_pos = True
+        # Check coefficients
         for i in self.nz.keys():
             if i not in other.nz:
                 continue # No conflict
@@ -254,6 +257,21 @@ class Equation:
                 ok_pos = False
             if not (ok_neg or ok_pos):
                 break
+        # Skip latter part
+        if not strict:
+            return ok_pos or ok_neg        
+
+        # Check constants
+        mc = self.cval
+        oc = other.cval
+        if not self.mbox.unit_valued(mc) or not self.mbox.unit_valued(oc):
+            # Lost cause
+            return False
+        if mc != 0 and oc != 0:
+            if mc == oc:
+                ok_neg = False
+            if mc == self.mbox.sub(0, oc):
+                ok_pos = False
         return ok_pos or ok_neg
 
     # Is this an equation with no solution?
@@ -277,18 +295,25 @@ class Equation:
 # Maintain set of sparse equations, including index from each index i to those equations having nonzero value there
 class EquationSet:
     # Unique ID assigned when registered
-    next_id = 0
+    next_id = 1
     # Mapping from id to equation
     equ_dict = {}
     # Mapping from index to list of equation IDs having nonzero entry at that index
     nz_map = {}
+    # Total number of nonzero terms added
+    term_count = 0
+    # Largest equation added
+    term_max = 0
 
     def __init__(self, elist = []):
         self.next_id = 1
         self.equ_dict = {}
         self.nz_map = {}
+        self.term_count = 0
+        self.term_max = 0
         for e in elist:
             self.add_equation(e)
+        
 
     def add_index(self, eid, idx):
         if idx in self.nz_map:
@@ -310,6 +335,9 @@ class EquationSet:
         self.equ_dict[id] = e
         for idx in e.nz:
             self.add_index(id, idx)
+        count = len(e)
+        self.term_count += count
+        self.term_max = max(self.term_max, count)
 
     def remove_equation(self, eid):
         e = self[eid]
@@ -348,6 +376,9 @@ class EquationSet:
         for eid in eid_list:
             print("   #%d:%s" % (eid, str(self[eid])))
 
+    # How many total equations have been generated
+    def equation_count(self):
+        return self.next_id - 1
 
 # System of equations.
 # Support LU decomposition of Gaussian elimination to see if system has any solutions
@@ -356,7 +387,7 @@ class EquationSystem:
     N = 10
     modulus = 3
     verbose = False
-
+    randomize = False
     # Class to support math operations
     mbox = None
     # Set of original equations
@@ -373,47 +404,37 @@ class EquationSystem:
     pivot_list = []
     # Mapping from variable ID to True
     var_used = {}
-    # Total number of equations
-    equation_count = 0
     # Total number of elimination steps
     step_count = 0
     # Sum of pivot degrees
     pivot_degree_sum = 0
     # Max of pivot degrees
     pivot_degree_max = 0
-    # Total number of nonzero terms in all equations
-    term_count = 0
-    # Max number of nonzero terms in equations
-    term_max = 0
     # Total number of vector operations
     combine_count = 0
+    
 
 
-    def __init__(self, N, modulus, verbose = True):
+    def __init__(self, N, modulus, verbose = True, randomize = False):
         self.N = N
         self.modulus = modulus
         self.verbose = verbose
+        self.randomize = randomize
         self.mbox = ModMath(modulus)
         self.eset = EquationSet()
         self.sset = EquationSet()
         self.rset = EquationSet()
         self.pivot_list = []
         self.var_used = {}
-        self.equation_count = 0
         self.step_count = 0
         self.pivot_degree_sum = 0
         self.pivot_degree_max = 0
-        self.term_count = 0        
-        self.term_max = 0        
         self.combine_count = 0
         
 
     # Add new equation to main set
     def add_equation(self, e):
         self.eset.add_equation(e)
-        self.equation_count += 1
-        tcount = len(e)
-        self.term_max = max(self.term_max, tcount)
         for i in e.nz:
             self.var_used[i] = True
 
@@ -425,47 +446,6 @@ class EquationSystem:
                 return False
         return True
 
-    # Compute number of columns in remaining rows having nonzero coefficient
-    # At position var
-    def column_degree(self, idx, unit_only):
-        eid_list = self.rset.lookup(idx)
-        ok = True
-        if unit_only:
-            for eid in eid_list:
-                e = self.rset[eid]
-                v = e[idx]
-                if not self.mbox.unit_valued(v):
-                    ok = False
-                    break
-        return len(eid_list) if ok else 0
-
-    # Given remaining set of equations, select pivot element
-    def select_pivot_old(self, unit_only):
-        best_idx = None
-        best_d = 0
-        for i in self.rset.current_indices():
-            d = self.column_degree(i, unit_only)
-            if d > 0 and (best_idx is None or d < best_d):
-                best_idx = i
-                best_d = d
-        if best_idx is not None:
-            self.pivot_degree_sum += best_d
-            self.pivot_degree_max = max(self.pivot_degree_max, best_d)
-        return best_idx
-
-    # Given pivot element, return eid of best one for elimination
-    def choose_equation(self, pidx):
-        best_eid = None
-        best_d = 0
-        eid_list = self.rset.lookup(pidx)
-        for eid in eid_list:
-            e = self.rset[eid]
-            d = len(e)
-            if best_eid is None or d < best_d:
-                best_eid = eid
-                best_d = d
-        return best_eid
-                
     # Given possible pivot index
     # Return (degree, eid) giving number of entries in column
     # and equation id
@@ -475,7 +455,27 @@ class EquationSystem:
         eid_list = self.rset.lookup(pidx)
         best_eid = None
         best_rd = 0
+        if self.randomize:
+            random.shuffle(eid_list)
+        if len(eid_list) == 1:
+            # Singleton.  Can eliminate.
+            eid = eid_list[0]
+            e = self.rset[eid]
+            pval = e[pidx]
+            cval = e.cval
+            print("Singleton. Equation #%d:%s" % (eid, str(e)))
+            if unit_only: 
+                # Must have cval = 0 or coefficient
+                if cval == 0 or pval == cval:
+                    return (1, eid)
+                else:
+                    # Would require solution with -1
+                    return (0, None)
+            else:
+                return (1, eid)
         if unit_only:
+            # Putting them in sorted order by degree means that first viable one will be the best
+            eid_list.sort(key = lambda eid : len(self.rset[eid]))
             for eid in eid_list:
                 e = self.rset[eid]
                 rd = len(e)
@@ -484,12 +484,14 @@ class EquationSystem:
                     if eid == oid:
                         continue
                     oe = self.rset[oid]
-                    if not e.is_compatible(oe):
+                    strict = unit_only
+                    if not e.is_compatible(oe, strict):
                         viable = False
                         break
                 if viable and best_eid is None or rd < best_rd:
                     best_eid = eid
                     best_rd = rd
+                    break
         else:
             for eid in eid_list:
                 e = self.rset[eid]
@@ -505,7 +507,11 @@ class EquationSystem:
         best_idx = None
         best_d = 0
         best_eid = None
-        for idx in self.rset.current_indices():
+        id_list = self.rset.current_indices()
+        if self.randomize:
+            random.shuffle(id_list)
+#            print("Randomizing indices as %s" % str(id_list))
+        for idx in id_list:
             (d, eid) = self.evaluate_pivot(idx, unit_only)
             if eid is not None and (best_eid is None or d < best_d):
                 best_idx = idx
@@ -582,11 +588,12 @@ class EquationSystem:
         self.rset.show()
             
     def pre_statistics(self):
-        ecount = self.equation_count
+        ecount = self.eset.equation_count()
         vcount = len(self.var_used)
-        tavg = float(self.term_count)/ecount
-        tmax = self.term_max
-        print("  Problem: %d equations, %d variables.  %.2f avg vars/equation (max=%d)" % (ecount, vcount, tavg, tmax))
+        tc = self.eset.term_count
+        tmax = self.eset.term_max
+        tavg = float(tc)/ecount
+        print("  Problem: %d equations, %d variables.  %d total nonzeros (%.2f avg, %d max)" % (ecount, tc, vcount, tavg, tmax))
 
     def post_statistics(self, status, maybe_solvable):
         # status: "solved", "unit_stopped", "unsolvable", "normal"
@@ -606,11 +613,12 @@ class EquationSystem:
                 pslist.append("%d:%d" % (s,p))
         if len(pslist) > 0:
             print("  Non-unit pivots: [%s]" % (' '.join(pslist)))
-        ecount = self.equation_count
+        ecount = self.rset.equation_count()
         ccount = self.combine_count
-        tavg = float(self.term_count)/ecount
-        tmax = self.term_max
-        print("    %d total equations.  %.2f avg vars/equation (max=%d).  %d vector operations" % (ecount, tavg, tmax, ccount))
+        tc = self.rset.term_count
+        tmax = self.rset.term_max
+        tavg = float(tc)/ecount
+        print("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations" % (ecount, tc, tavg, tmax, ccount))
         sscount = self.step_count
         pavg = float(self.pivot_degree_sum)/sscount
         print("    %d modular operations.  Used values = %s" % (self.mbox.opcount, self.mbox.report_used()))
@@ -757,9 +765,10 @@ class Board:
 
         
 
-def solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only):
+def mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, randomize):
     b = Board(n, n, ssquares, wrap_horizontal, wrap_vertical)
     esys = b.equations(modulus, verbose)
+    esys.randomize = randomize
     if not verbose:
         esys.pre_statistics()
     status = esys.solve(unit_only)
@@ -774,7 +783,8 @@ def run(name, args):
     ssquares = "ul:dr"
     wrap_horizontal = False
     wrap_vertical = False
-    optlist, args = getopt.getopt(args, "hvum:n:s:w:")
+    randomize = False
+    optlist, args = getopt.getopt(args, "hvum:n:s:w:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -799,13 +809,19 @@ def run(name, args):
             if val in "vb":
                 ok = True
                 wrap_vertical = True
+            if val == "n":
+                ok = True
             if not ok:
-                print("Invalid wrapping parameter '%s'.  Must be h, v, or b" % val)
+                print("Invalid wrapping parameter '%s'.  Must be h, v, b, or n" % val)
                 return
+        elif opt == '-r':
+            randomize = True
+            random.seed(int(val))
+
     ocorners = ssquares.split(":")
     scorners = '[' + ", ".join(ocorners) + ']'
     print("N = %d.  Modulus = %d.  Omitting squares %s" % (n, modulus, scorners))
-    solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only)
+    mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, randomize)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
