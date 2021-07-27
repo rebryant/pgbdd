@@ -51,9 +51,14 @@ class PivotExecption(MathException):
 
 
 # Supporting modular arithmetic
+# For odd modulus m, use bias k=(m-1)/2
+# I.e., Numbers between -k and k to represent range of values
+# For even number, will be -k to k+1
 class ModMath:
 
-    modulus = 2 # Must be prime
+    modulus = 3 # Must be prime
+    min_value = -1 # -[(modulus-1)/2] for odd, -[modulus/2-1] for even
+    max_value = 1
     reciprocals = {} # Dictionary mapping x to 1/x
     ## Statistics
     # Number of modular operations
@@ -61,13 +66,18 @@ class ModMath:
     # What values get used in places of interest
     used_values = {} # 
 
-    def __init__(self, modulus = 2):
+    def __init__(self, modulus = 3):
         self.reciprocals = {}
         self.modulus = modulus
+        self.min_value = -(self.modulus//2)
+        self.max_value = self.min_value + self.modulus - 1
         self.opcount = 0
-        for x in range(1,self.modulus):
+        print("Checking range %s" % str(range(self.min_value,self.max_value+1)))
+        for x in range(self.min_value,self.max_value+1):
+            if x == 0:
+                continue
             found = False
-            for y in range(self.modulus):
+            for y in range(self.min_value,self.max_value+1):
                 if self.mul(x, y) == 1:
                     self.reciprocals[x] = y
                     found = True
@@ -78,18 +88,28 @@ class ModMath:
         self.opcount = 0
         self.used_values = {}
 
+    # Convert to canonical value
+    def mod(self, x):
+        mx = x % self.modulus
+        if mx > self.max_value:
+            mx -= self.modulus
+        return mx
+
     def add(self, x, y):
         self.opcount += 1 
-        return (x+y) % self.modulus
+        return self.mod(x+y)
 
     def mul(self, x, y):
         self.opcount += 1 
-        return (x*y) % self.modulus
+        return self.mod(x*y)
 
     def sub(self, x, y):
         self.opcount += 1 
-        return (self.modulus + x - y) % self.modulus
+        return self.mod(x-y)
         
+    def neg(self, x):
+        return self.mod(-x)
+
     def recip(self, x):
         if x == 0:
             raise ZeroException(1)
@@ -100,6 +120,9 @@ class ModMath:
             raise ZeroException(y)
         return self.mul(x, self.recip(y))
 
+    def abs(self, x):
+        return abs(x)
+
     def mark_used(self, x):
         self.used_values[x] = True
         
@@ -109,7 +132,7 @@ class ModMath:
         return "{" + fstring + "}"
 
     def unit_valued(self, x):
-        return x in [0, 1, self.modulus-1]
+        return self.abs(x) <= 1
 
 # Equation of form SUM (a_i * x_i)  =  C
 # Only represent nonzero coefficients
@@ -253,7 +276,7 @@ class Equation:
                 return False
             if mx == ox:
                 ok_neg = False
-            if mx == self.mbox.sub(0, ox):
+            if mx == self.mbox.neg(ox):
                 ok_pos = False
             if not (ok_neg or ok_pos):
                 break
@@ -270,7 +293,7 @@ class Equation:
         if mc != 0 and oc != 0:
             if mc == oc:
                 ok_neg = False
-            if mc == self.mbox.sub(0, oc):
+            if mc == self.mbox.neg(oc):
                 ok_pos = False
         return ok_pos or ok_neg
 
