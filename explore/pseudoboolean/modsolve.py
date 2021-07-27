@@ -6,17 +6,17 @@ import random
 
 # Generate and solve embedding of mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n N] [-s SQUARES] [-w nhvb] [-r SEED]" % name) 
+    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n N] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
     print("  -u         Stop when cannot find unit pivot")
     print("  -m MOD     Specify modulus")
     print("  -n N       Specify size of board")
     print("  -s SQUARES Omit squares.")
-    print("             String of form VH:VH:..:VH, where V in {u, m, d} and H in {l, m, r}")
-    print("             Default is 'ul:dr'")
+    print("             String of form VH:VH:..:VH, where V in {u, m, d, e, o} and H in {l, m, r, e, o}")
+    print("             u=up, m=middle, d=down, e=random even, o = random odd, l=left, r=right.  Default is 'ul:dr'")
     print("  -w WRAP    Optionally wrap grid horizontally (h), vertically (v) both (b), or none (n)")
-    print("  -r SEED    Set random seed.")
+    print("  -r SEEDS   Set random seed.  Either single number S, or S1:S2 for board generation and solving")
 
 
 # General library for solving pseudo-boolean constraints embedded in
@@ -415,11 +415,11 @@ class EquationSystem:
     
 
 
-    def __init__(self, N, modulus, verbose = True, randomize = False):
+    def __init__(self, N, modulus, verbose = True):
         self.N = N
         self.modulus = modulus
         self.verbose = verbose
-        self.randomize = randomize
+        self.randomize = False
         self.mbox = ModMath(modulus)
         self.eset = EquationSet()
         self.sset = EquationSet()
@@ -463,7 +463,6 @@ class EquationSystem:
             e = self.rset[eid]
             pval = e[pidx]
             cval = e.cval
-            print("Singleton. Equation #%d:%s" % (eid, str(e)))
             if unit_only: 
                 # Must have cval = 0 or coefficient
                 if cval == 0 or pval == cval:
@@ -600,7 +599,7 @@ class EquationSystem:
         expected = "solvable" if maybe_solvable else "unsolvable"
         print("  Solution status: %s (expected = %s)" % (status, expected))
         if status == "unit_stopped":
-            print("Stopped with remaining equations:")
+            print("Stopped with %d remaining equations:" % len(self.rset))
             self.show_remaining_state()
         sscount = self.step_count
         pavg = float(self.pivot_degree_sum)/sscount
@@ -661,10 +660,13 @@ class Board:
                 var += 1
 
     # Parse string specifying which strings to omit
-    def get_squares(self, rcorners):
+    def get_squares(self, ssquares):
+        flist = []
         rlist = []
-        fields = rcorners.split(":")
-        for field in fields:
+        fields = ssquares.split(":")
+        while len(fields) > 0:
+            field = fields[0]
+            random_selection = 'e' in field or 'o' in field
             if field == "":
                 continue
             field = field.lower()
@@ -674,30 +676,44 @@ class Board:
             if len(field) != 2:
                 ok = False
             else:
-                lmr = field[1]
-                if lmr == 'l':
+                lmreo = field[1]
+                if lmreo == 'l':
                     c = 0
-                elif lmr == 'm':
+                elif lmreo == 'm':
                     c = self.cols/2
-                elif lmr == 'r':
+                elif lmreo == 'r':
                     c = self.cols-1
+                elif lmreo == 'e':
+                    c = 2 * random.randint(0, self.cols/2 -1)
+                elif lmreo == 'o':
+                    c = 1 + 2 * random.randint(0, self.cols/2 -1)
                 else:
                     ok = False
 
-                umd = field[0]
-                if umd == 'u':
+                umdeo = field[0]
+                if umdeo == 'u':
                     r = 0
-                elif umd == 'm':
+                elif umdeo == 'm':
                     r = self.rows/2
-                elif umd == 'd':
+                elif umdeo == 'd':
                     r = self.rows-1
+                elif umdeo == 'e':
+                    r = 2 * random.randint(0, self.rows/2 -1)
+                elif umdeo == 'o':
+                    r = 1 + 2 * random.randint(0, self.rows/2 -1)
                 else:
                     ok = False
             if ok:
-                rlist.append((r,c))
+                if random_selection:
+                    if (r,c) not in flist+rlist:
+                        rlist.append((r,c))
+                        fields = fields[1:]
+                else:
+                    flist.append((r,c))
+                    fields = fields[1:]
             else:
                 raise Exception("Can't parse square specifier '%s'" % field)
-        return rlist
+        return flist+rlist
 
 
     def omit(self, r, c):
@@ -765,10 +781,15 @@ class Board:
 
         
 
-def mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, randomize):
+def mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2):
     b = Board(n, n, ssquares, wrap_horizontal, wrap_vertical)
+    ssquares = str(b.rsquares)
+    print("N = %d.  Modulus = %d.  Omitting squares %s" % (n, modulus, ssquares))
+
     esys = b.equations(modulus, verbose)
-    esys.randomize = randomize
+    if seed2 is not None:
+        esys.randomize = True
+        random.seed(seed2)
     if not verbose:
         esys.pre_statistics()
     status = esys.solve(unit_only)
@@ -784,6 +805,7 @@ def run(name, args):
     wrap_horizontal = False
     wrap_vertical = False
     randomize = False
+    seed2 = None
     optlist, args = getopt.getopt(args, "hvum:n:s:w:r:")
     for (opt, val) in optlist:
         if opt == '-h':
@@ -816,12 +838,13 @@ def run(name, args):
                 return
         elif opt == '-r':
             randomize = True
-            random.seed(int(val))
+            fields = val.split(':')
+            seeds = [int(field) for field in fields]
+            seed1 = seeds[0]
+            random.seed(seed1)
+            seed2 = seeds[1] if len(seeds) > 1 else seed1
 
-    ocorners = ssquares.split(":")
-    scorners = '[' + ", ".join(ocorners) + ']'
-    print("N = %d.  Modulus = %d.  Omitting squares %s" % (n, modulus, scorners))
-    mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, randomize)
+    mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
