@@ -70,7 +70,7 @@ class ModMath:
     def __init__(self, modulus = 3):
         self.reciprocals = {}
         self.modulus = modulus
-        self.min_value = -(self.modulus//2)
+        self.min_value = -((self.modulus-1)//2)
         self.max_value = self.min_value + self.modulus - 1
         self.opcount = 0
         print("Checking range %s" % str(range(self.min_value,self.max_value+1)))
@@ -764,10 +764,10 @@ class Board:
     def vars(self, r, c):
         vlist = []
         if self.wrap_vertical:
-            rdown = r-1 if r > 0 else self.rows-1
-            vlist.append(self.udvars[(rdown, c)])
-            rup   = r if r < self.rows else 0
+            rup = r-1 if r > 0 else self.rows-1
             vlist.append(self.udvars[(rup, c)])
+            rdown   = r if r < self.rows else 0
+            vlist.append(self.udvars[(rdown, c)])
         else:
             if r > 0:
                 vlist.append(self.udvars[(r-1,c)])
@@ -776,7 +776,7 @@ class Board:
         if self.wrap_horizontal:
             cleft = c-1 if c > 0 else self.cols-1
             vlist.append(self.lrvars[(r, cleft)])
-            cright  = c+1 if c < self.cols-1 else 0
+            cright  = c if c < self.cols else 0
             vlist.append(self.lrvars[(r, cright)])
         else:
             if c > 0:
@@ -807,10 +807,10 @@ class Board:
 
         
 
-def mc_solve(verbose, modulus, row, col, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2):
-    b = Board(row, col, ssquares, wrap_horizontal, wrap_vertical)
+def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2):
+    b = Board(rows, cols, ssquares, wrap_horizontal, wrap_vertical)
     ssquares = str(b.rsquares)
-    print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (row, col, modulus, ssquares))
+    print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
 
     esys = b.equations(modulus, verbose)
     if seed2 is not None:
@@ -826,8 +826,8 @@ def run(name, args):
     verbose = False
     unit_only = False
     modulus = 3
-    row = 8
-    col = None
+    rows = 8
+    cols = None
     ssquares = "ul:dr"
     wrap_horizontal = False
     wrap_vertical = False
@@ -845,9 +845,9 @@ def run(name, args):
         elif opt == '-m':
             modulus = int(val)
         elif opt == '-n':
-            row = int(val)
+            rows = int(val)
         elif opt == '-c':
-            col = int(val)
+            cols = int(val)
         elif opt == '-s':
             ssquares = val
         elif opt == '-v':
@@ -873,10 +873,10 @@ def run(name, args):
             random.seed(seed1)
             seed2 = seeds[1] if len(seeds) > 1 else seed1
 
-    if col is None:
-        col = row
+    if cols is None:
+        cols = rows
 
-    mc_solve(verbose, modulus, row, col, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2)
+    mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
