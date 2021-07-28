@@ -6,10 +6,9 @@ import random
 
 # Generate and solve embedding of mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
-    print("  -u         Stop when cannot find unit pivot")
     print("  -m MOD     Specify modulus")
     print("  -n ROW     Specify number of rows in board")
     print("  -c COL     Specify number of columns in board (default is square)")
@@ -132,11 +131,8 @@ class ModMath:
         fstring = ", ".join([str(v) for v in vlist])
         return "{" + fstring + "}"
 
-    def unit_valued(self, x):
-        return self.abs(x) <= 1
-
 # Equation of form SUM (a_i * x_i)  =  C
-# C may be arbitrary integer.  Treat differently for modular arithmetic than for standard
+# over modular arithmetic
 # Only represent nonzero coefficients
 class Equation:
 
@@ -152,14 +148,14 @@ class Equation:
     def __init__(self, N, modulus, cval, mbox = None):
         self.N = N
         self.modulus = modulus
-        self.cval = cval
-        self.nz = {}
         if mbox is None:
             self.mbox = ModMath(modulus)
         elif mbox.modulus != modulus:
             raise Exception("Mismatched moduli")
         else:
             self.mbox = mbox
+        self.cval = self.mbox.mod(cval)
+        self.nz = {}
 
     def set_nz(self, nz):
         self.nz = nz
@@ -207,11 +203,8 @@ class Equation:
         if pval == 0:
             raise PivotException(pidx)
         nnz = { i : self.mbox.div(self.nz[i], pval) for i in self.nz.keys() }
-        if self.mbox.abs(pval) == 1:
-            nc = self.cval * pval
-        else:
-            # Must use modular arithmetic
-            nc = self.mbox.div(self.cval, pval)
+        # Must use modular arithmetic
+        nc = self.mbox.div(self.cval, pval)
         return self.spawn(nnz, nc)
         
     # Helper function for inserting new element in dictionary
@@ -228,7 +221,7 @@ class Equation:
             nx = self.mbox.add(self[i], other.nz[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
-        nc = self.cval + other.cval
+        nc = self.mbox.add(self.cval, other.cval)
         return self.spawn(nnz, nc)
 
     # Subtract other vector from self
@@ -238,7 +231,7 @@ class Equation:
             nx = self.mbox.sub(self[i], other.nz[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
-        nc = self.cval - other.cval
+        nc = self.mbox.sub(self.cval, other.cval)
         return self.spawn(nnz, nc)
 
 
@@ -255,7 +248,7 @@ class Equation:
                 nx = self.mbox.sub(x, dx)
                 self.mbox.mark_used(nx)
                 self.nz_insert(nnz, i, nx)
-        nc = self.cval - sval * other.cval
+        nc = self.mbox.sub(self.cval, self.mbox.add(sval, other.cval))
         return self.spawn(nnz, nc)
 
     # Lexicographic ordering of equations
@@ -267,52 +260,10 @@ class Equation:
                 return False
         return False
     
-    # Could other equation be added/or subtracted without going outside unit bounds
-    def is_compatible(self, other):
-        ok_neg = True
-        ok_pos = True
-        # Check coefficients
-        for i in self.nz.keys():
-            if i not in other.nz:
-                continue # No conflict
-            mx = self.nz[i]
-            ox = other.nz[i]
-            if not self.mbox.unit_valued(mx) or not self.mbox.unit_valued(ox):
-                # Lost cause
-                return False
-            if mx == ox:
-                ok_neg = False
-            if mx == self.mbox.neg(ox):
-                ok_pos = False
-            if not (ok_neg or ok_pos):
-                break
-        return ok_pos or ok_neg
-
     # Does this equation have no solution with modular arithmetic
-    def is_zp_infeasible(self):
+    def is_infeasible(self):
         # All zero coefficients and non-zero constant
-        return self.mbox.mod(self.cval) != 0 and len(self) == 0
-
-    # Is this an an equation with no Boolean solution?
-    def is_pb_infeasible(self):
-        if self.cval == 0:
-            return False
-        psum = 0
-        nsum = 0
-        for v in self.nz.values():
-            if v > 0:
-                psum += v
-            else:
-                nsum += v
-        result = (self.cval < 0 and self.cval < nsum) or (self.cval > 0 and psum < self.cval)
-        return result
-
-    # Check that all elements in equation are unit-valued
-    def unit_valued(self):
-        for v in self.nz.values():
-            if not self.mbox.unit_valued(v):
-                return False
-        return True
+        return self.cval != 0 and len(self) == 0
 
     def __str__(self):
         if self.N <= 40:
@@ -342,7 +293,6 @@ class EquationSet:
         self.term_max = 0
         for e in elist:
             self.add_equation(e)
-        
 
     def add_index(self, eid, idx):
         if idx in self.nz_map:
@@ -356,7 +306,6 @@ class EquationSet:
             del self.nz_map[idx]
         else:
             self.nz_map[idx] = nlist
-
 
     def add_equation(self, e):
         id = self.next_id
@@ -429,8 +378,6 @@ class EquationSystem:
     rset = {}
 
     ## Accumulating data
-    # List of pivot values
-    pivot_list = []
     # Mapping from variable ID to True
     var_used = {}
     # Total number of elimination steps
@@ -441,8 +388,6 @@ class EquationSystem:
     pivot_degree_max = 0
     # Total number of vector operations
     combine_count = 0
-    
-
 
     def __init__(self, N, modulus, verbose = True):
         self.N = N
@@ -453,7 +398,6 @@ class EquationSystem:
         self.eset = EquationSet()
         self.sset = EquationSet()
         self.rset = EquationSet()
-        self.pivot_list = []
         self.var_used = {}
         self.step_count = 0
         self.pivot_degree_sum = 0
@@ -470,9 +414,7 @@ class EquationSystem:
     # Given possible pivot index
     # Return (degree, eid) giving number of entries in column
     # and equation id
-    # With unit_only set, will return (None, None) cannot find equation
-    # that maintains UPB property
-    def evaluate_pivot(self, pidx, unit_only):
+    def evaluate_pivot(self, pidx):
         eid_list = self.rset.lookup(pidx)
         best_eid = None
         best_rd = 0
@@ -484,45 +426,25 @@ class EquationSystem:
             eid = eid_list[0]
             return (1, eid)
 
-        if unit_only:
-            # Putting them in sorted order by degree means that first viable one will be the best
-            eid_list.sort(key = lambda eid : len(self.rset[eid]))
-            for eid in eid_list:
-                e = self.rset[eid]
-                rd = len(e)
-                viable = True
-                for oid in eid_list:
-                    if eid == oid:
-                        continue
-                    oe = self.rset[oid]
-                    if not e.is_compatible(oe):
-                        viable = False
-                        break
-                if viable and best_eid is None or rd < best_rd:
-                    best_eid = eid
-                    best_rd = rd
-                    break
-        else:
-            for eid in eid_list:
-                e = self.rset[eid]
-                rd = len(e)
-                if best_eid is None or rd < best_rd:
-                    best_eid = eid
-                    best_rd = rd
+        for eid in eid_list:
+            e = self.rset[eid]
+            rd = len(e)
+            if best_eid is None or rd < best_rd:
+                best_eid = eid
+                best_rd = rd
         degree = 0 if best_eid is None else len(eid_list)
         return (degree, best_eid)
 
     # Given remaining set of equations, select pivot element and equation id
-    def select_pivot(self, unit_only):
+    def select_pivot(self):
         best_idx = None
         best_d = 0
         best_eid = None
         id_list = self.rset.current_indices()
         if self.randomize:
             random.shuffle(id_list)
-#            print("Randomizing indices as %s" % str(id_list))
         for idx in id_list:
-            (d, eid) = self.evaluate_pivot(idx, unit_only)
+            (d, eid) = self.evaluate_pivot(idx)
             if eid is not None and (best_eid is None or d < best_d):
                 best_idx = idx
                 best_d = d
@@ -535,24 +457,19 @@ class EquationSystem:
 
     # Perform one step of LU decomposition
     # Possible return values:
-    # "solved", "unit_stopped", "zp_unsolvable", "pb_unsolvable", "normal"
-    def solution_step(self, unit_only):
+    # "solved", "zP_unsolvable", "normal"
+    def solution_step(self):
         if len(self.rset) == 0:
             return "solved"
         self.step_count += 1
-        (pidx, eid) = self.select_pivot(unit_only)
+        (pidx, eid) = self.select_pivot()
         if pidx is None:
-            if unit_only:
-                (pidx, eid) = self.select_pivot(False)
-                if pidx is not None:
-                    return "unit_stopped"
             return "solved"
 
         e = self.rset[eid]
         self.rset.remove_equation(eid)
         self.sset.add_equation(e)
         pval = e[pidx]
-        self.pivot_list.append(pval)
         if self.verbose:
             print("Pivoting with value %d (element %d).  Using equation #%d" % (pval, pidx, eid))
         ne = e.normalize(pidx)
@@ -562,17 +479,14 @@ class EquationSystem:
             oe = self.rset[oeid]
             self.rset.remove_equation(oeid)
             re = oe.scale_sub(ne, pidx)
-            if unit_only:
-                if re.is_pb_infeasible():
-                    return "pb_unsolvable"
-            else:
-                if re.is_zp_infeasible():
-                    return "zp_unsolvable"
+            if re.is_infeasible():
+                m = self.mbox.modulus
+                return "z%d_unsolvable" % m
             self.rset.add_equation(re)
             self.combine_count += 1
         return "normal"
             
-    def solve(self, unit_only):
+    def solve(self):
         self.sset = EquationSet()
         self.rset = self.eset.clone()
         if self.verbose:
@@ -581,16 +495,13 @@ class EquationSystem:
         # Scan equations to see if any are infeasible
         for eid in self.rset.current_eids():
             e = self.rset[eid]
-            if unit_only:
-                if e.is_pb_infeasible():
-                    return "pb_unsolvable"
-            else:
-                if e.is_zp_infeasible():
-                    return "zp_unsolvable"
+            if e.is_infeasible():
+                m = self.mbox.modulus
+                return "z%d_unsolvable" % m
         status = "normal"
         while True:
-            status = self.solution_step(unit_only)
-            # "solved", "unit_stopped", "zp_unsolvable", "pb_unsolvable", "normal"
+            status = self.solution_step()
+            # "solved", "zP_unsolvable", "normal"
             if status != "normal":
                 break
             if self.verbose:
@@ -621,23 +532,13 @@ class EquationSystem:
         print("  Problem: %d equations, %d variables.  %d total nonzeros (%.2f avg, %d max)" % (ecount, tc, vcount, tavg, tmax))
 
     def post_statistics(self, status, maybe_solvable):
-        # status: "solved", "unit_stopped", "zp_unsolvable", "pb_unsolvable", "normal"
+        # status: "solved", "zP_unsolvable", "normal"
         expected = "solvable" if maybe_solvable else "unsolvable"
         print("  Solution status: %s (expected = %s)" % (status, expected))
-        if status == "unit_stopped":
-            print("Stopped with %d remaining equations:" % len(self.rset))
-            self.show_remaining_state()
         sscount = self.step_count
         pavg = float(self.pivot_degree_sum)/sscount
         pmax = self.pivot_degree_max
         print("  Solving: %d steps.  %.2f avg pivot degree (max=%d)" % (sscount, pavg, pmax))
-        pslist = []
-        for s in range(1, len(self.pivot_list)+1):
-            p = self.pivot_list[s-1]
-            if not self.mbox.unit_valued(p):
-                pslist.append("%d:%d" % (s,p))
-        if len(pslist) > 0:
-            print("  Non-unit pivots: [%s]" % (' '.join(pslist)))
         ecount = self.rset.equation_count()
         ccount = self.combine_count
         tc = self.rset.term_count
@@ -807,7 +708,7 @@ class Board:
 
         
 
-def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2):
+def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2):
     b = Board(rows, cols, ssquares, wrap_horizontal, wrap_vertical)
     ssquares = str(b.rsquares)
     print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
@@ -818,13 +719,12 @@ def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_verti
         random.seed(seed2)
     if not verbose:
         esys.pre_statistics()
-    status = esys.solve(unit_only)
+    status = esys.solve()
     if not verbose:
         esys.post_statistics(status, b.maybe_solvable())
 
 def run(name, args):
     verbose = False
-    unit_only = False
     modulus = 3
     rows = 8
     cols = None
@@ -833,15 +733,13 @@ def run(name, args):
     wrap_vertical = False
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvum:n:c:s:w:r:")
+    optlist, args = getopt.getopt(args, "hvm:n:c:s:w:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
-        elif opt == '-u':
-            unit_only = True
         elif opt == '-m':
             modulus = int(val)
         elif opt == '-n':
@@ -876,7 +774,7 @@ def run(name, args):
     if cols is None:
         cols = rows
 
-    mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2)
+    mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
