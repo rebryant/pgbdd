@@ -588,6 +588,8 @@ class Board:
         flist = []
         rlist = []
         fields = ssquares.split(":")
+        # Trick to allow specification "mm:mm" to mean two different squares
+        parity = 0
         while len(fields) > 0:
             field = fields[0]
             random_selection = 'e' in field or 'o' in field
@@ -604,13 +606,13 @@ class Board:
                 if lmreo == 'l':
                     c = 0
                 elif lmreo == 'm':
-                    c = self.cols/2
+                    c = self.cols//2 + parity
                 elif lmreo == 'r':
                     c = self.cols-1
                 elif lmreo == 'e':
-                    c = 2 * random.randint(0, self.cols/2 -1)
+                    c = 2 * random.randint(0, self.cols//2 -1)
                 elif lmreo == 'o':
-                    c = 1 + 2 * random.randint(0, self.cols/2 -1)
+                    c = 1 + 2 * random.randint(0, self.cols//2 -1)
                 else:
                     ok = False
 
@@ -618,13 +620,13 @@ class Board:
                 if umdeo == 'u':
                     r = 0
                 elif umdeo == 'm':
-                    r = self.rows/2
+                    r = self.rows//2 + parity
                 elif umdeo == 'd':
                     r = self.rows-1
                 elif umdeo == 'e':
-                    r = 2 * random.randint(0, self.rows/2 -1)
+                    r = 2 * random.randint(0, self.rows//2 -1)
                 elif umdeo == 'o':
-                    r = 1 + 2 * random.randint(0, self.rows/2 -1)
+                    r = 1 + 2 * random.randint(0, self.rows//2 -1)
                 else:
                     ok = False
             if ok:
@@ -637,6 +639,9 @@ class Board:
                     fields = fields[1:]
             else:
                 raise Exception("Can't parse square specifier '%s'" % field)
+            # Flip rule for choosing middle
+            parity = 1-parity
+
         return flist+rlist
 
 
