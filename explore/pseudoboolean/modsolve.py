@@ -6,12 +6,13 @@ import random
 
 # Generate and solve embedding of mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n N] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-v] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
     print("  -u         Stop when cannot find unit pivot")
     print("  -m MOD     Specify modulus")
-    print("  -n N       Specify size of board")
+    print("  -n ROW     Specify number of rows in board")
+    print("  -c COL     Specify number of columns in board (default is square)")
     print("  -s SQUARES Omit squares.")
     print("             String of form VH:VH:..:VH, where V in {u, m, d, e, o} and H in {l, m, r, e, o}")
     print("             u=up, m=middle, d=down, e=random even, o = random odd, l=left, r=right.  Default is 'ul:dr'")
@@ -806,10 +807,10 @@ class Board:
 
         
 
-def mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2):
-    b = Board(n, n, ssquares, wrap_horizontal, wrap_vertical)
+def mc_solve(verbose, modulus, row, col, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2):
+    b = Board(row, col, ssquares, wrap_horizontal, wrap_vertical)
     ssquares = str(b.rsquares)
-    print("N = %d.  Modulus = %d.  Omitting squares %s" % (n, modulus, ssquares))
+    print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (row, col, modulus, ssquares))
 
     esys = b.equations(modulus, verbose)
     if seed2 is not None:
@@ -825,13 +826,14 @@ def run(name, args):
     verbose = False
     unit_only = False
     modulus = 3
-    n = 8
+    row = 8
+    col = None
     ssquares = "ul:dr"
     wrap_horizontal = False
     wrap_vertical = False
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvum:n:s:w:r:")
+    optlist, args = getopt.getopt(args, "hvum:n:c:s:w:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -843,7 +845,9 @@ def run(name, args):
         elif opt == '-m':
             modulus = int(val)
         elif opt == '-n':
-            n = int(val)
+            row = int(val)
+        elif opt == '-c':
+            col = int(val)
         elif opt == '-s':
             ssquares = val
         elif opt == '-v':
@@ -869,7 +873,10 @@ def run(name, args):
             random.seed(seed1)
             seed2 = seeds[1] if len(seeds) > 1 else seed1
 
-    mc_solve(verbose, modulus, n, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2)
+    if col is None:
+        col = row
+
+    mc_solve(verbose, modulus, row, col, ssquares, wrap_horizontal, wrap_vertical, unit_only, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
