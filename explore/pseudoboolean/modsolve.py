@@ -428,10 +428,15 @@ class EquationSystem:
         for eid in eid_list:
             e = self.rset[eid]
             rd = len(e)
+            if rd == 1:
+                # Grab unit clause
+                best_eid = eid
+                return (0, best_eid)
+                break
             if best_eid is None or rd < best_rd:
                 best_eid = eid
                 best_rd = rd
-        degree = 0 if best_eid is None else len(eid_list)
+        degree = min(best_rd, len(eid_list))
         return (degree, best_eid)
 
     # Given remaining set of equations, select pivot element and equation id
@@ -689,6 +694,9 @@ class Board:
         return vlist
                          
     def equations(self, modulus, verbose):
+        # Default: Use weakened definition of mutilation.
+        #    That variables must sum to 0
+        weak = False
         rmax = self.rows if self.wrap_vertical else self.rows-1
         cmax = self.cols if self.wrap_horizontal else self.cols-1
         N = self.rows * cmax + rmax * self.cols
@@ -697,10 +705,17 @@ class Board:
             for c in range(self.cols):
                 vars = self.vars(r,c)
                 if self.omit(r,c):
-                    for v in vars:
-                        e = Equation(N, modulus, 0, esys.mbox)
-                        e[v] = 1
+                    if weak:
+                        e = Equation(N, modulus, 1, esys.mbox)
+                        for v in vars:
+                            e[v] = 1
                         esys.add_equation(e)
+                    else:
+                        # Strong. Force individual variables to zero
+                        for v in vars:
+                            e = Equation(N, modulus, 0, esys.mbox)
+                            e[v] = 1
+                            esys.add_equation(e)
                 else:
                     e = Equation(N, modulus, 1, esys.mbox)
                     for v in vars:
