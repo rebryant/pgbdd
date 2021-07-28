@@ -72,7 +72,6 @@ class ModMath:
         self.min_value = -((self.modulus-1)//2)
         self.max_value = self.min_value + self.modulus - 1
         self.opcount = 0
-        print("Checking range %s" % str(range(self.min_value,self.max_value+1)))
         for x in range(self.min_value,self.max_value+1):
             if x == 0:
                 continue
@@ -571,8 +570,6 @@ class Board:
         self.udvars = {}
         self.lrars = {}
 
-        print("     Wrapping: Horizontal %s.  Vertical %s" % (self.wrap_horizontal, self.wrap_vertical))
-
         # Assign variable IDs
         var = 0
         rlim = self.rows if wrap_vertical else self.rows-1
@@ -712,7 +709,7 @@ def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_verti
     b = Board(rows, cols, ssquares, wrap_horizontal, wrap_vertical)
     ssquares = str(b.rsquares)
     print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
-
+    print("     Wrapping: Horizontal %s.  Vertical %s" % (wrap_horizontal, wrap_vertical))
     esys = b.equations(modulus, verbose)
     if seed2 is not None:
         esys.randomize = True
