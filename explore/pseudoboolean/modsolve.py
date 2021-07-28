@@ -131,7 +131,8 @@ class ModMath:
         return "{" + fstring + "}"
 
 # Equation of form SUM (a_i * x_i)  =  C
-# over modular arithmetic
+# Arithmetic performed over Z_p for prime p
+
 # Only represent nonzero coefficients
 class Equation:
 
@@ -145,7 +146,7 @@ class Equation:
     cval = 0
 
     def __init__(self, N, modulus, cval, mbox = None):
-        self.N = N
+        self.N = N     # Max Variable ID +1
         self.modulus = modulus
         if mbox is None:
             self.mbox = ModMath(modulus)
@@ -202,7 +203,6 @@ class Equation:
         if pval == 0:
             raise PivotException(pidx)
         nnz = { i : self.mbox.div(self.nz[i], pval) for i in self.nz.keys() }
-        # Must use modular arithmetic
         nc = self.mbox.div(self.cval, pval)
         return self.spawn(nnz, nc)
         
@@ -247,7 +247,7 @@ class Equation:
                 nx = self.mbox.sub(x, dx)
                 self.mbox.mark_used(nx)
                 self.nz_insert(nnz, i, nx)
-        nc = self.mbox.sub(self.cval, self.mbox.add(sval, other.cval))
+                nc = self.mbox.sub(self.cval, self.mbox.mul(sval, other.cval))
         return self.spawn(nnz, nc)
 
     # Lexicographic ordering of equations
@@ -292,6 +292,7 @@ class EquationSet:
         self.term_max = 0
         for e in elist:
             self.add_equation(e)
+        
 
     def add_index(self, eid, idx):
         if idx in self.nz_map:
@@ -305,6 +306,7 @@ class EquationSet:
             del self.nz_map[idx]
         else:
             self.nz_map[idx] = nlist
+
 
     def add_equation(self, e):
         id = self.next_id
@@ -387,6 +389,8 @@ class EquationSystem:
     pivot_degree_max = 0
     # Total number of vector operations
     combine_count = 0
+    
+
 
     def __init__(self, N, modulus, verbose = True):
         self.N = N
@@ -428,15 +432,11 @@ class EquationSystem:
         for eid in eid_list:
             e = self.rset[eid]
             rd = len(e)
-            if rd == 1:
-                # Grab unit clause
-                best_eid = eid
-                return (0, best_eid)
-                break
             if best_eid is None or rd < best_rd:
                 best_eid = eid
                 best_rd = rd
-        degree = min(best_rd, len(eid_list))
+        # Favor unit propagation
+        degree = best_rd if best_rd == 1 else len(eid_list)
         return (degree, best_eid)
 
     # Given remaining set of equations, select pivot element and equation id
@@ -461,7 +461,7 @@ class EquationSystem:
 
     # Perform one step of LU decomposition
     # Possible return values:
-    # "solved", "zP_unsolvable", "normal"
+    # "solved", "unsolvable", "normal"
     def solution_step(self):
         if len(self.rset) == 0:
             return "solved"
@@ -484,8 +484,7 @@ class EquationSystem:
             self.rset.remove_equation(oeid)
             re = oe.scale_sub(ne, pidx)
             if re.is_infeasible():
-                m = self.mbox.modulus
-                return "z%d_unsolvable" % m
+                return "unsolvable"
             self.rset.add_equation(re)
             self.combine_count += 1
         return "normal"
@@ -500,12 +499,11 @@ class EquationSystem:
         for eid in self.rset.current_eids():
             e = self.rset[eid]
             if e.is_infeasible():
-                m = self.mbox.modulus
-                return "z%d_unsolvable" % m
+                return "unsolvable"
         status = "normal"
         while True:
             status = self.solution_step()
-            # "solved", "zP_unsolvable", "normal"
+            # "solved", "unsolvable", "normal"
             if status != "normal":
                 break
             if self.verbose:
@@ -536,7 +534,7 @@ class EquationSystem:
         print("  Problem: %d equations, %d variables.  %d total nonzeros (%.2f avg, %d max)" % (ecount, tc, vcount, tavg, tmax))
 
     def post_statistics(self, status, maybe_solvable):
-        # status: "solved", "zP_unsolvable", "normal"
+        # status: "solved", "unsolvable", "normal"
         expected = "solvable" if maybe_solvable else "unsolvable"
         print("  Solution status: %s (expected = %s)" % (status, expected))
         sscount = self.step_count
@@ -593,8 +591,7 @@ class Board:
         flist = []
         rlist = []
         fields = ssquares.split(":")
-        # Trick to allow specification "mm:mm" to mean two different squares
-        parity = 0
+        parity = 0  # Support for shifting halfway point on alternating selections
         while len(fields) > 0:
             field = fields[0]
             random_selection = 'e' in field or 'o' in field
@@ -644,8 +641,7 @@ class Board:
                     fields = fields[1:]
             else:
                 raise Exception("Can't parse square specifier '%s'" % field)
-            # Flip rule for choosing middle
-            parity = 1-parity
+            parity = 1 - parity
 
         return flist+rlist
 
@@ -694,9 +690,6 @@ class Board:
         return vlist
                          
     def equations(self, modulus, verbose):
-        # Default: Use weakened definition of mutilation.
-        #    That variables must sum to 0
-        weak = False
         rmax = self.rows if self.wrap_vertical else self.rows-1
         cmax = self.cols if self.wrap_horizontal else self.cols-1
         N = self.rows * cmax + rmax * self.cols
@@ -705,17 +698,10 @@ class Board:
             for c in range(self.cols):
                 vars = self.vars(r,c)
                 if self.omit(r,c):
-                    if weak:
-                        e = Equation(N, modulus, 1, esys.mbox)
-                        for v in vars:
-                            e[v] = 1
+                    for v in vars:
+                        e = Equation(N, modulus, 0, esys.mbox)
+                        e[v] = 1
                         esys.add_equation(e)
-                    else:
-                        # Strong. Force individual variables to zero
-                        for v in vars:
-                            e = Equation(N, modulus, 0, esys.mbox)
-                            e[v] = 1
-                            esys.add_equation(e)
                 else:
                     e = Equation(N, modulus, 1, esys.mbox)
                     for v in vars:
