@@ -135,6 +135,7 @@ class ModMath:
         return self.abs(x) <= 1
 
 # Equation of form SUM (a_i * x_i)  =  C
+# C may be arbitrary integer.  Treat differently for modular arithmetic than for standard
 # Only represent nonzero coefficients
 class Equation:
 
@@ -205,7 +206,11 @@ class Equation:
         if pval == 0:
             raise PivotException(pidx)
         nnz = { i : self.mbox.div(self.nz[i], pval) for i in self.nz.keys() }
-        nc = self.mbox.div(self.cval, pval)
+        if self.mbox.abs(pval) == 1:
+            nc = self.cval * pval
+        else:
+            # Must use modular arithmetic
+            nc = self.mbox.div(self.cval, pval)
         return self.spawn(nnz, nc)
         
     # Helper function for inserting new element in dictionary
@@ -222,7 +227,7 @@ class Equation:
             nx = self.mbox.add(self[i], other.nz[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
-        nc = self.mbox.add(self.cval, other.cval)
+        nc = self.cval + other.cval
         return self.spawn(nnz, nc)
 
     # Subtract other vector from self
@@ -232,12 +237,12 @@ class Equation:
             nx = self.mbox.sub(self[i], other.nz[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
-        nc = self.mbox.sub(self.cval, other.cval)
+        nc = self.cval - other.cval
         return self.spawn(nnz, nc)
 
 
     # Perform scaling subtraction
-    # Must scale other vector by value at pivot pivot position before subtracting
+    # Must scale other vector by value at pivot position before subtracting
     def scale_sub(self, other, pidx):
         nnz = { i : self.nz[i] for i in self.nz.keys() }
         sval = 0
@@ -249,7 +254,7 @@ class Equation:
                 nx = self.mbox.sub(x, dx)
                 self.mbox.mark_used(nx)
                 self.nz_insert(nnz, i, nx)
-        nc = self.mbox.sub(self.cval, self.mbox.mul(sval, other.cval))
+        nc = self.cval - sval * other.cval
         return self.spawn(nnz, nc)
 
     # Lexicographic ordering of equations
@@ -262,7 +267,7 @@ class Equation:
         return False
     
     # Could other equation be added/or subtracted without going outside unit bounds
-    def is_compatible(self, other, strict):
+    def is_compatible(self, other):
         ok_neg = True
         ok_pos = True
         # Check coefficients
@@ -280,26 +285,26 @@ class Equation:
                 ok_pos = False
             if not (ok_neg or ok_pos):
                 break
-        # Skip latter part
-        if not strict:
-            return ok_pos or ok_neg        
-
-        # Check constants
-        mc = self.cval
-        oc = other.cval
-        if not self.mbox.unit_valued(mc) or not self.mbox.unit_valued(oc):
-            # Lost cause
-            return False
-        if mc != 0 and oc != 0:
-            if mc == oc:
-                ok_neg = False
-            if mc == self.mbox.neg(oc):
-                ok_pos = False
         return ok_pos or ok_neg
 
-    # Is this an equation with no solution?
-    def is_null(self):
-        return self.cval != 0 and len(self) == 0
+    # Does this equation have no solution with modular arithmetic
+    def is_zp_infeasible(self):
+        # All zero coefficients and non-zero constant
+        return self.mbox.mod(self.cval) != 0 and len(self) == 0
+
+    # Is this an an equation with no Boolean solution?
+    def is_pb_infeasible(self):
+        if self.cval == 0:
+            return False
+        psum = 0
+        nsum = 0
+        for v in self.nz.values():
+            if v > 0:
+                psum += v
+            else:
+                nsum += v
+        result = (self.cval < 0 and self.cval < nsum) or (self.cval > 0 and psum < self.cval)
+        return result
 
     # Check that all elements in equation are unit-valued
     def unit_valued(self):
@@ -461,14 +466,6 @@ class EquationSystem:
         for i in e.nz:
             self.var_used[i] = True
 
-    # Is set of equations left after solution steps solvable
-    def solvable(self):
-        for eid in self.rset.current_eids():
-            e = self.rset[eid]
-            if e.is_null():
-                return False
-        return True
-
     # Given possible pivot index
     # Return (degree, eid) giving number of entries in column
     # and equation id
@@ -480,21 +477,12 @@ class EquationSystem:
         best_rd = 0
         if self.randomize:
             random.shuffle(eid_list)
+
         if len(eid_list) == 1:
             # Singleton.  Can eliminate.
             eid = eid_list[0]
-            e = self.rset[eid]
-            pval = e[pidx]
-            cval = e.cval
-            if unit_only: 
-                # Must have cval = 0 or coefficient
-                if cval == 0 or pval == cval:
-                    return (1, eid)
-                else:
-                    # Would require solution with -1
-                    return (0, None)
-            else:
-                return (1, eid)
+            return (1, eid)
+
         if unit_only:
             # Putting them in sorted order by degree means that first viable one will be the best
             eid_list.sort(key = lambda eid : len(self.rset[eid]))
@@ -506,8 +494,7 @@ class EquationSystem:
                     if eid == oid:
                         continue
                     oe = self.rset[oid]
-                    strict = unit_only
-                    if not e.is_compatible(oe, strict):
+                    if not e.is_compatible(oe):
                         viable = False
                         break
                 if viable and best_eid is None or rd < best_rd:
@@ -547,7 +534,7 @@ class EquationSystem:
 
     # Perform one step of LU decomposition
     # Possible return values:
-    # "solved", "unit_stopped", "unsolvable", "normal"
+    # "solved", "unit_stopped", "zp_unsolvable", "pb_unsolvable", "normal"
     def solution_step(self, unit_only):
         if len(self.rset) == 0:
             return "solved"
@@ -558,7 +545,7 @@ class EquationSystem:
                 (pidx, eid) = self.select_pivot(False)
                 if pidx is not None:
                     return "unit_stopped"
-            return "solved" if self.solvable() else "unsolvable"
+            return "solved"
 
         e = self.rset[eid]
         self.rset.remove_equation(eid)
@@ -574,6 +561,12 @@ class EquationSystem:
             oe = self.rset[oeid]
             self.rset.remove_equation(oeid)
             re = oe.scale_sub(ne, pidx)
+            if unit_only:
+                if re.is_pb_infeasible():
+                    return "pb_unsolvable"
+            else:
+                if re.is_zp_infeasible():
+                    return "zp_unsolvable"
             self.rset.add_equation(re)
             self.combine_count += 1
         return "normal"
@@ -584,10 +577,19 @@ class EquationSystem:
         if self.verbose:
             print("  Initial state")
             self.show_state()
+        # Scan equations to see if any are infeasible
+        for eid in self.rset.current_eids():
+            e = self.rset[eid]
+            if unit_only:
+                if e.is_pb_infeasible():
+                    return "pb_unsolvable"
+            else:
+                if e.is_zp_infeasible():
+                    return "zp_unsolvable"
         status = "normal"
         while True:
             status = self.solution_step(unit_only)
-            # "solved", "unit_stopped", "unsolvable", "normal"
+            # "solved", "unit_stopped", "zp_unsolvable", "pb_unsolvable", "normal"
             if status != "normal":
                 break
             if self.verbose:
@@ -618,7 +620,7 @@ class EquationSystem:
         print("  Problem: %d equations, %d variables.  %d total nonzeros (%.2f avg, %d max)" % (ecount, tc, vcount, tavg, tmax))
 
     def post_statistics(self, status, maybe_solvable):
-        # status: "solved", "unit_stopped", "unsolvable", "normal"
+        # status: "solved", "unit_stopped", "zp_unsolvable", "pb_unsolvable", "normal"
         expected = "solvable" if maybe_solvable else "unsolvable"
         print("  Solution status: %s (expected = %s)" % (status, expected))
         if status == "unit_stopped":
