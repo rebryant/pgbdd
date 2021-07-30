@@ -452,6 +452,17 @@ class EquationSystem:
         return (best_pidx, best_eid)
 
 
+    # Estimate the number of BDD operations required for a validation step with BDDs
+    def bdd_estimator(self, elist):
+        # Build up dictionary of all used variables
+        vdict = {}
+        for e in elist:
+            for v in e.nz.keys():
+                vdict[v] = True
+        return self.mbox.modulus**2 * len(vdict)
+
+    
+
     # Perform one step of LU decomposition
     # Possible return values:
     # "solved", "unsolvable", "normal"
@@ -481,7 +492,7 @@ class EquationSystem:
             self.rset.add_equation(re)
             self.combine_count += 1
             # Estimate number of BDD operations for verification
-            self.bdd_ops += len(re) * self.mbox.modulus**2
+            self.bdd_ops += self.bdd_estimator([ne, oe, re])
         return "normal"
             
     def solve(self):
