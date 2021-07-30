@@ -375,6 +375,8 @@ class EquationSystem:
     pivot_degree_max = 0
     # Total number of vector operations
     combine_count = 0
+    # Estimated number of BDD ops for verifier
+    bdd_ops = 0
     
 
 
@@ -392,6 +394,7 @@ class EquationSystem:
         self.pivot_degree_sum = 0
         self.pivot_degree_max = 0
         self.combine_count = 0
+        self.bdd_ops = 0
         
 
     # Add new equation to main set
@@ -477,6 +480,8 @@ class EquationSystem:
                 return "unsolvable"
             self.rset.add_equation(re)
             self.combine_count += 1
+            # Estimate number of BDD operations for verification
+            self.bdd_ops += len(re) * self.mbox.modulus**2
         return "normal"
             
     def solve(self):
@@ -539,6 +544,7 @@ class EquationSystem:
         tavg = float(tc)/ecount
         print("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations" % (ecount, tc, tavg, tmax, ccount))
         sscount = self.step_count
+        bcount = self.bdd_ops
         pavg = float(self.pivot_degree_sum)/sscount
-        print("    %d modular operations.  Used values = %s" % (self.mbox.opcount, self.mbox.report_used()))
+        print("    %d modular operations.  %d estimated BDD operations.  Used values = %s" % (self.mbox.opcount, bcount, self.mbox.report_used()))
 
