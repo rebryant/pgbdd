@@ -415,19 +415,18 @@ class EquationSystem:
             self.var_used[i] = True
 
     # Given possible pivot index
-    # Return (degree, eid) giving number of entries in column
-    # and equation id
+    # find best equation to use as pivot equation and
+    # give score for its selection
+    # If there are no nonzeros with this index, return None for the equation ID
     def evaluate_pivot(self, pidx):
         eid_list = self.rset.lookup(pidx)
         best_eid = None
+        # Lowest degree row
         best_rd = 0
+        # Make sure that any ties are broken arbitrarily
+        # rather than as some artifact of the input file
         if self.randomize:
             random.shuffle(eid_list)
-
-        if len(eid_list) == 1:
-            # Singleton.  Can eliminate.
-            eid = eid_list[0]
-            return (1, eid)
 
         for eid in eid_list:
             e = self.rset[eid]
@@ -435,28 +434,33 @@ class EquationSystem:
             if best_eid is None or rd < best_rd:
                 best_eid = eid
                 best_rd = rd
-        # Favor unit propagation
-        degree = best_rd if best_rd == 1 else len(eid_list)
-        return (degree, best_eid)
+
+        # Score based on worst-case fill generated
+        # Also favors unit and singleton equations
+        score = (best_rd-1) * (len(eid_list)-1)
+        return (best_eid, score)
 
     # Given remaining set of equations, select pivot element and equation id
     def select_pivot(self):
-        best_idx = None
-        best_d = 0
+        best_pidx = None
+        best_score = 0
         best_eid = None
         id_list = self.rset.current_indices()
+        # Make sure that any ties are broken arbitrarily
+        # rather than as some artifact of the input file
         if self.randomize:
             random.shuffle(id_list)
-        for idx in id_list:
-            (d, eid) = self.evaluate_pivot(idx)
-            if eid is not None and (best_eid is None or d < best_d):
-                best_idx = idx
-                best_d = d
+        for pidx in id_list:
+            (eid, score) = self.evaluate_pivot(pidx)
+            if eid is not None and (best_eid is None or score < best_score):
+                best_pidx = pidx
+                best_score = score
                 best_eid = eid
-        if best_idx is not None:
-            self.pivot_degree_sum += best_d
-            self.pivot_degree_max = max(self.pivot_degree_max, best_d)
-        return (best_idx, best_eid)
+        if best_eid is not None:
+            pd = len(self.rset[best_eid])
+            self.pivot_degree_sum += pd
+            self.pivot_degree_max = max(self.pivot_degree_max, pd)
+        return (best_pidx, best_eid)
 
 
     # Perform one step of LU decomposition
