@@ -517,11 +517,12 @@ class EquationSystem:
             
     def pre_statistics(self):
         ecount = self.eset.equation_count()
-        vcount = len(self.var_used)
+        vcount = self.N
+        acount = len(self.var_used)
         tc = self.eset.term_count
         tmax = self.eset.term_max
         tavg = float(tc)/ecount
-        print("  Problem: %d equations, %d variables.  %d total nonzeros (%.2f avg, %d max)" % (ecount, tc, vcount, tavg, tmax))
+        print("  Problem: %d equations, %d variables, %d nonzero coefficients.  %d total nonzeros (%.2f avg, %d max)" % (ecount, vcount, acount, tc, tavg, tmax))
 
     def post_statistics(self, status, maybe_solvable):
         # status: "solved", "unsolvable", "normal"
