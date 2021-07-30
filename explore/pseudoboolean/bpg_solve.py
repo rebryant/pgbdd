@@ -147,7 +147,6 @@ class Graph:
 def bpg_solve(verbose, modulus, lcount, extra, density, seed2):
     rcount = lcount+extra
     ecount = int(round(density * lcount * rcount))
-    print("Getting %d * %.2f = %d edges" % (lcount*rcount, density, ecount))
     g = Graph(lcount, rcount, ecount)
     print("Graph: %d X %d.  %d edges (density = %.0f%%).  Modulus = %d." % (lcount, rcount, ecount, density * 100.0, modulus))
     esys = g.equations(modulus, verbose)
