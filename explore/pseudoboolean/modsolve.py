@@ -455,12 +455,12 @@ class EquationSystem:
     # Estimate the number of BDD operations required for a validation step with BDDs
     def bdd_estimator(self, elist):
         # Build up dictionary of all used variables
-        vdict = {}
-        for e in elist:
+        m = self.modulus
+        vdict = { v : m for v in elist[0].nz.keys() }
+        for e in elist[1:]:
             for v in e.nz.keys():
-                vdict[v] = True
-
-        return  len(vdict) * (self.modulus ** len(elist))
+                vdict[v] = vdict[v] * m if v in vdict else m
+        return  sum(vdict.values())
 
     # Perform one step of LU decomposition
     # Possible return values:
