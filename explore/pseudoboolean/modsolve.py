@@ -3,7 +3,7 @@
 import sys
 import getopt
 import random
-
+import queue
 
 # General library for solving pseudo-boolean constraints embedded in
 # modular arithmetic
@@ -118,8 +118,8 @@ class ModMath:
 
 # Equation of form SUM (a_i * x_i)  =  C
 # Arithmetic performed over Z_p for prime p
-
 # Only represent nonzero coefficients
+
 class Equation:
 
     # Variable Count
@@ -278,7 +278,6 @@ class EquationSet:
         self.term_max = 0
         for e in elist:
             self.add_equation(e)
-        
 
     def add_index(self, eid, idx):
         if idx in self.nz_map:
@@ -295,14 +294,15 @@ class EquationSet:
 
 
     def add_equation(self, e):
-        id = self.next_id
+        eid = self.next_id
         self.next_id += 1
-        self.equ_dict[id] = e
+        self.equ_dict[eid] = e
         for idx in e.nz:
-            self.add_index(id, idx)
+            self.add_index(eid, idx)
         count = len(e)
         self.term_count += count
         self.term_max = max(self.term_max, count)
+        return eid
 
     def remove_equation(self, eid):
         e = self[eid]
@@ -358,6 +358,10 @@ class EquationSystem:
     # Set of original equations
     eset = {}
 
+    # Optionally: Reduce some of the equations via summations before solving
+    # List of lists, each giving equations IDs to sum
+    presums = []
+
     ## Solver state
     # Eliminated equations
     sset = {}
@@ -399,9 +403,51 @@ class EquationSystem:
 
     # Add new equation to main set
     def add_equation(self, e):
-        self.eset.add_equation(e)
+        eid = self.eset.add_equation(e)
         for i in e.nz:
             self.var_used[i] = True
+        return eid
+
+    # Add presum list
+    def add_presum(self, elist):
+        self.presums.append(elist)
+
+    # Reduce set of equations by summing
+    def presum(self):
+        icount = len(self.rset)
+        for elist in self.presums:
+            if len(elist) == 0:
+                continue
+            # This is a hack to enable randomized removal of equal weighted items from priority queue
+            # and to make sure that priority queue has totally ordered keys
+            # Have enough entries in the list to cover initial equations and partial sums
+            olist = list(range(2*len(elist)))
+            if self.randomize:
+                random.shuffle(olist)
+            # Put elements into priority queue according to nnz's
+            pq = queue.PriorityQueue()
+            for idx in range(len(elist)):
+                oid = olist[idx]
+                eid = elist[idx]
+                e = self.rset[eid]
+                self.rset.remove_equation(eid)                
+                pq.put((len(e), oid, e))
+            # Now start combining them
+            idx = len(elist)
+            while pq.qsize() > 1:
+                (w1, o1, e1) = pq.get()
+                (w2, o2, e2) = pq.get()
+                ne = e1.add(e2)
+                self.bdd_ops += self.bdd_estimator([e1, e2, ne])
+                oid = olist[idx]
+                pq.put((len(ne), oid, ne))
+                idx += 1
+            # Reduced queue to single element
+            (w, o, e) = pq.get()
+            self.rset.add_equation(e)
+        ncount = len(self.rset)
+        if ncount < icount:
+            print("Presumming reduced equations from %d to %d" % (icount, ncount))
 
     # Given possible pivot index
     # find best equation to use as pivot equation and
@@ -507,6 +553,10 @@ class EquationSystem:
             if e.is_infeasible():
                 return "unsolvable"
         status = "normal"
+
+        # Perform any presumming
+        self.presum()
+
         while True:
             status = self.solution_step()
             # "solved", "unsolvable", "normal"

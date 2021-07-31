@@ -7,9 +7,10 @@ import modsolve
 
 # Generate and solve equational representations of Bipartite perfect matchings
 def usage(name):
-    print("Usage: %s [-h] [-v] [-m MOD] [-n LEFT] [-x EXTRA] [-d DEN_PCT] [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-p] [-m MOD] [-n LEFT] [-x EXTRA] [-d DEN_PCT] [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
+    print("  -p         Perform presumming")
     print("  -m MOD     Specify modulus")
     print("  -n LEFT    Specify number of nodes in left partition")
     print("  -x EXTRA   Specify number of additional nodes in right partition (default is 1)")
@@ -126,30 +127,37 @@ class Graph:
     def maybe_solvable(self):
         return self.lcount == self.rcount
 
-    def equations(self, modulus, verbose):
+    def equations(self, modulus, verbose, presum):
         ecount = self.ecount
         esys = modsolve.EquationSystem(ecount, modulus, verbose)
+        left_equations = []
+        right_equations = []
         for l in range(self.lcount):
             e = modsolve.Equation(ecount, modulus, 1, esys.mbox)
             rvars = self.l2r_map[l].values()
             for r in rvars:
                 e[r] = 1
-            esys.add_equation(e)
+            eid = esys.add_equation(e)
+            left_equations.append(eid)
         for r in range(self.rcount):
             e = modsolve.Equation(ecount, modulus, 1, esys.mbox)
             lvars = self.r2l_map[r].values()
             for l in lvars:
                 e[l] = 1
-            esys.add_equation(e)
+            eid = esys.add_equation(e)
+            right_equations.append(eid)
+        if presum:
+            esys.add_presum(left_equations)
+            esys.add_presum(right_equations)
         return esys
 
 
-def bpg_solve(verbose, modulus, lcount, extra, density, seed2):
+def bpg_solve(verbose, presum, modulus, lcount, extra, density, seed2):
     rcount = lcount+extra
     ecount = int(round(density * lcount * rcount))
     g = Graph(lcount, rcount, ecount)
     print("Graph: %d X %d.  %d edges (density = %.0f%%).  Modulus = %d." % (lcount, rcount, ecount, density * 100.0, modulus))
-    esys = g.equations(modulus, verbose)
+    esys = g.equations(modulus, verbose, presum)
     if seed2 is not None:
         esys.randomize = True
         random.seed(seed2)
@@ -161,19 +169,22 @@ def bpg_solve(verbose, modulus, lcount, extra, density, seed2):
 
 def run(name, args):
     verbose = False
+    presum = False
     modulus = 2
     lcount = 10
     extra = 1
     den_pct = None
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvm:n:x:d:r:")
+    optlist, args = getopt.getopt(args, "hvpm:n:x:d:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-p':
+            presum = True
         elif opt == '-m':
             modulus = int(val)
         elif opt == '-n':
@@ -192,7 +203,7 @@ def run(name, args):
 
     density = 1.0 if den_pct is None else 0.01 * den_pct
 
-    bpg_solve(verbose, modulus, lcount, extra, density, seed2)
+    bpg_solve(verbose, presum, modulus, lcount, extra, density, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

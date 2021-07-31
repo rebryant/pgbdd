@@ -7,9 +7,10 @@ import modsolve
 
 # Generate and solve embedding of mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-v] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-p] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
+    print("  -p         Perform presumming")
     print("  -m MOD     Specify modulus")
     print("  -n ROW     Specify number of rows in board")
     print("  -c COL     Specify number of columns in board (default is square)")
@@ -158,11 +159,14 @@ class Board:
                 vlist.append(self.lrvars[(r,c)])
         return vlist
                          
-    def equations(self, modulus, verbose):
+    def equations(self, modulus, verbose, presum):
         rmax = self.rows if self.wrap_vertical else self.rows-1
         cmax = self.cols if self.wrap_horizontal else self.cols-1
         N = self.rows * cmax + rmax * self.cols
         esys = modsolve.EquationSystem(N, modulus, verbose)
+        # Track equations for squares based on parity of r+c
+        even_equations = []
+        odd_equations = []
         for r in range(self.rows):
             for c in range(self.cols):
                 vars = self.vars(r,c)
@@ -170,22 +174,33 @@ class Board:
                     for v in vars:
                         e = modsolve.Equation(N, modulus, 0, esys.mbox)
                         e[v] = 1
-                        esys.add_equation(e)
+                        eid = esys.add_equation(e)
+                        if (r+c) % 2 ==  0:
+                            even_equations.append(eid)
+                        else:
+                            odd_equations.append(eid)
                 else:
                     e = modsolve.Equation(N, modulus, 1, esys.mbox)
                     for v in vars:
                         e[v] = 1
-                    esys.add_equation(e)
+                    eid=esys.add_equation(e)
+                    if (r+c) % 2 ==  0:
+                        even_equations.append(eid)
+                    else:
+                        odd_equations.append(eid)
+        if presum:
+            esys.add_presum(even_equations)
+            esys.add_presum(odd_equations)
         return esys
 
         
 
-def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2):
+def mc_solve(verbose, presum, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2):
     b = Board(rows, cols, ssquares, wrap_horizontal, wrap_vertical)
     ssquares = str(b.rsquares)
     print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
     print("     Wrapping: Horizontal %s.  Vertical %s" % (wrap_horizontal, wrap_vertical))
-    esys = b.equations(modulus, verbose)
+    esys = b.equations(modulus, verbose, presum)
     if seed2 is not None:
         esys.randomize = True
         random.seed(seed2)
@@ -197,6 +212,7 @@ def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_verti
 
 def run(name, args):
     verbose = False
+    presum = False
     modulus = 3
     rows = 8
     cols = None
@@ -205,13 +221,15 @@ def run(name, args):
     wrap_vertical = False
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvm:n:c:s:w:r:")
+    optlist, args = getopt.getopt(args, "hvpm:n:c:s:w:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-p':
+            presum = True
         elif opt == '-m':
             modulus = int(val)
         elif opt == '-n':
@@ -246,7 +264,7 @@ def run(name, args):
     if cols is None:
         cols = rows
 
-    mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2)
+    mc_solve(verbose, presum, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
