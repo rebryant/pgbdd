@@ -459,12 +459,8 @@ class EquationSystem:
         for e in elist:
             for v in e.nz.keys():
                 vdict[v] = True
-        estimate = self.mbox.modulus * len(vdict)
-        if len(elist) > 1:
-            estimate *= self.mbox.modulus
-        return estimate
 
-    
+        return  len(vdict) * (self.modulus ** len(elist))
 
     # Perform one step of LU decomposition
     # Possible return values:
@@ -484,7 +480,7 @@ class EquationSystem:
         if self.verbose:
             print("Pivoting with value %d (element %d).  Using equation #%d" % (pval, pidx, eid))
         ne = e.normalize(pidx)
-#        self.bdd_ops += self.bdd_estimator([ne])
+        self.bdd_ops += self.bdd_estimator([ne])
 
         other_eids =  self.rset.lookup(pidx)
         for oeid in other_eids:
@@ -496,7 +492,7 @@ class EquationSystem:
             self.rset.add_equation(re)
             self.combine_count += 1
             # Estimate number of BDD operations for verification
-            self.bdd_ops += self.bdd_estimator([ne, oe])
+            self.bdd_ops += self.bdd_estimator([ne, oe, re])
         return "normal"
             
     def solve(self):
