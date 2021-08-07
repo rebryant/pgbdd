@@ -30,7 +30,7 @@ class ZeroException(MathException):
         self.msg = "numerator=%d" % num
 
 
-class PivotExecption(MathException):
+class PivotException(MathException):
     def __init__(self, index):
         self.form = "Pivot=0!"
         self.msg = "index=%d" % index
