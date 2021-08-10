@@ -7,14 +7,15 @@ import modsolve
 
 # Generate and solve equational representations of Bipartite perfect matchings
 def usage(name):
-    print("Usage: %s [-h] [-v] [-p] [-m MOD] [-n LEFT] [-x EXTRA] [-d DEN_PCT] [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-p] [-m MOD] [-n LEFT] [-x EXTRA] ([-d DEN_PCT] [-e EDGES]) [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
     print("  -p         Perform presumming")
     print("  -m MOD     Specify modulus")
     print("  -n LEFT    Specify number of nodes in left partition")
     print("  -x EXTRA   Specify number of additional nodes in right partition (default is 1)")
-    print("  -d DEN_PCT Density (as percent).  Default is 100")
+    print("  -d DEN_PCT Specify number of edges based on density (as percent).  Default is 100")
+    print("  -e EDGES   Specify number of edges explicitly")
     print("  -r SEEDS   Set random seed.  Either single number S, or S1:S2 for graph generation and solving")
 
         
@@ -152,11 +153,10 @@ class Graph:
         return esys
 
 
-def bpg_solve(verbose, presum, modulus, lcount, extra, density, seed2):
+def bpg_solve(verbose, presum, modulus, lcount, extra, ecount, seed2):
     rcount = lcount+extra
-    ecount = int(round(density * lcount * rcount))
     g = Graph(lcount, rcount, ecount)
-    print("Graph: %d X %d.  %d edges (density = %.0f%%).  Modulus = %d." % (lcount, rcount, ecount, density * 100.0, modulus))
+    print("Graph: %d X %d.  %d edges.  Modulus = %d." % (lcount, rcount, ecount, modulus))
     esys = g.equations(modulus, verbose, presum)
     if seed2 is not None:
         esys.randomize = True
@@ -174,9 +174,10 @@ def run(name, args):
     lcount = 10
     extra = 1
     den_pct = None
+    ecount = None
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvpm:n:x:d:r:")
+    optlist, args = getopt.getopt(args, "hvpm:n:x:d:e:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -193,6 +194,8 @@ def run(name, args):
             extra = int(val)
         elif opt == '-d':
             den_pct = int(val)
+        elif opt == '-e':
+            ecount = int(val)
         elif opt == '-r':
             randomize = True
             fields = val.split(':')
@@ -201,9 +204,16 @@ def run(name, args):
             random.seed(seed1)
             seed2 = seeds[1] if len(seeds) > 1 else seed1
 
-    density = 1.0 if den_pct is None else 0.01 * den_pct
+    if ecount is None:
+        density = 1.0 if den_pct is None else 0.01 * den_pct
+        rcount = lcount+extra
+        ecount = int(round(density * lcount * rcount))
+    elif den_pct is not None:
+        print("Can't specify both density and number of edges")
+        usage(name)
+        return
 
-    bpg_solve(verbose, presum, modulus, lcount, extra, density, seed2)
+    bpg_solve(verbose, presum, modulus, lcount, extra, ecount, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
