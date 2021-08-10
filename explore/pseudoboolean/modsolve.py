@@ -157,20 +157,23 @@ class Equation:
         else:
             self.nz[i] = v
 
+    def indices(self):
+        return sorted(self.nz.keys())
+
     # Length defined to be the number of nonzeros
     def __len__(self):
         return len(self.nz)
 
     def format_dense(self):
         vec = [0 for i in range(self.N)]
-        for i in self.nz.keys():
-            vec[i] = self.nz[i]
+        for i in self.indices():
+            vec[i] = self[i]
         return str(vec + [self.cval])
 
     def format_sparse(self):
         slist = []
-        for i in sorted(self.nz.keys()):
-            v = self.nz[i]
+        for i in self.indices():
+            v = self[i]
             slist.append("%d:%d" % (i, v))
         slist.append("=%d" % self.cval)
         return '[' + " ".join(slist) + ']'
@@ -188,7 +191,7 @@ class Equation:
         pval = self[pidx]
         if pval == 0:
             raise PivotException(pidx)
-        nnz = { i : self.mbox.div(self.nz[i], pval) for i in self.nz.keys() }
+        nnz = { i : self.mbox.div(self[i], pval) for i in self.indices() }
         nc = self.mbox.div(self.cval, pval)
         return self.spawn(nnz, nc)
         
@@ -201,9 +204,9 @@ class Equation:
 
     # Add other vector to self
     def add(self, other):
-        nnz = { i : self.nz[i] for i in self.nz.keys() }
-        for i in other.nz.keys():
-            nx = self.mbox.add(self[i], other.nz[i])
+        nnz = { i : self[i] for i in self.indices() }
+        for i in other.indices():
+            nx = self.mbox.add(self[i], other[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
         nc = self.mbox.add(self.cval, other.cval)
@@ -211,9 +214,9 @@ class Equation:
 
     # Subtract other vector from self
     def sub(self, other):
-        nnz = { i : self.nz[i] for i in self.nz.keys() }
-        for i in other.nz.keys():
-            nx = self.mbox.sub(self[i], other.nz[i])
+        nnz = { i : self[i] for i in self.indices() }
+        for i in other.indices():
+            nx = self.mbox.sub(self[i], other[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
         nc = self.mbox.sub(self.cval, other.cval)
@@ -223,13 +226,13 @@ class Equation:
     # Perform scaling subtraction
     # Must scale other vector by value at pivot position before subtracting
     def scale_sub(self, other, pidx):
-        nnz = { i : self.nz[i] for i in self.nz.keys() }
+        nnz = { i : self[i] for i in self.indices() }
         sval = 0
         sval = self[pidx]
         if sval != 0:
-            for i in other.nz.keys():
+            for i in other.indices():
                 x = self[i]
-                dx = self.mbox.mul(sval, other.nz[i])
+                dx = self.mbox.mul(sval, other[i])
                 nx = self.mbox.sub(x, dx)
                 self.mbox.mark_used(nx)
                 self.nz_insert(nnz, i, nx)
@@ -500,22 +503,13 @@ class EquationSystem:
 
     # Estimate the number of BDD operations required for a validation step with BDDs
     def bdd_estimator(self, elist):
-        count= 0
-        # Build up dictionary of all used variables
         m = self.modulus
-        # Maximum size of each level
-        scdict = { v : m for v in elist[0].nz.keys() } 
-        if len(elist) == 0:
-            return sum(scdict.values())
+        # Maximum operations for each level
+        cdict = { i : m for i in elist[0].indices() } 
         for e in elist[1:]:
-            for v in e.nz.keys():
-                scdict[v] = scdict[v] * m if v in scdict else m
-            count += sum(scdict.values())
-            # Due to reduction, Result will return to m for each nonzero entry
-            for v in scdict.keys():
-                scdict[v] = m
-        return count
-
+            for i in e.indices():
+                cdict[i] = cdict[i] * m if i in cdict else m
+        return sum(cdict.values())
 
     # Perform one step of LU decomposition
     # Possible return values:
