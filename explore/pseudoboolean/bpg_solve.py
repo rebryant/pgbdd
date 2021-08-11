@@ -4,12 +4,14 @@ import sys
 import getopt
 import random
 import modsolve
+import constraints
 
-# Generate and solve equational representations of Bipartite perfect matchings
+# Generate and solve equational or constraint representation of Bipartite perfect matching
 def usage(name):
-    print("Usage: %s [-h] [-v] [-p] [-m MOD] [-n LEFT] [-x EXTRA] ([-d DEN_PCT] [-e EDGES]) [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-c] [-p] [-m MOD] [-n LEFT] [-x EXTRA] ([-d DEN_PCT] [-e EDGES]) [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
+    print("  -c         Use constraints rather than equations")
     print("  -p         Perform presumming")
     print("  -m MOD     Specify modulus")
     print("  -n LEFT    Specify number of nodes in left partition")
@@ -19,7 +21,7 @@ def usage(name):
     print("  -r SEEDS   Set random seed.  Either single number S, or S1:S2 for graph generation and solving")
 
         
-# Encoding of mutilated chessboard problem as linear equations
+# Encoding of bipartite matching problem as linear equations or constraints
 class Graph:
     # Number of nodes in left and right partitions
     lcount = 10
@@ -152,38 +154,64 @@ class Graph:
             esys.add_presum(right_equations)
         return esys
 
+    def constraints(self, verbose, presum):
+        ecount = self.ecount
+        csys = constraints.ConstraintSystem(ecount, verbose)
+        left_constraints = []
+        right_constraints = []
+        con = constraints.Constraint(ecount, 0)
+        for l in range(self.lcount):
+            rvars = self.l2r_map[l].values()
+            lcon = con.amo(rvars)
+            cid = csys.add_constraint(lcon)
+            left_constraints.append(cid)
+        for r in range(self.rcount):
+            lvars = self.r2l_map[r].values()
+            rcon = con.alo(lvars)
+            cid = csys.add_constraint(rcon)
+            right_constraints.append(cid)
+        if presum:
+            csys.add_presum(left_constraints)
+            csys.add_presum(right_constraints)
+        return csys
 
-def bpg_solve(verbose, presum, modulus, lcount, extra, ecount, seed2):
-    rcount = lcount+extra
+
+def bpg_solve(verbose, constrain, presum, modulus, lcount, rcount, ecount, seed2):
     g = Graph(lcount, rcount, ecount)
-    print("Graph: %d X %d.  %d edges.  Modulus = %d." % (lcount, rcount, ecount, modulus))
-    esys = g.equations(modulus, verbose, presum)
+    if constrain:
+        print("Graph: %d X %d.  %d edges." % (lcount, rcount, ecount))        
+    else:
+        print("Graph: %d X %d.  %d edges.  Modulus = %d." % (lcount, rcount, ecount, modulus))
+    xsys = g.constraints(verbose, presum) if constrain else g.equations(modulus, verbose, presum)
     if seed2 is not None:
-        esys.randomize = True
+        xsys.randomize = True
         random.seed(seed2)
     if not verbose:
-        esys.pre_statistics()
-    status = esys.solve()
+        xsys.pre_statistics()
+    status = xsys.solve()
     if not verbose:
-        esys.post_statistics(status, g.maybe_solvable())
+        xsys.post_statistics(status, g.maybe_solvable())
 
 def run(name, args):
     verbose = False
     presum = False
     modulus = 2
+    constrain = False
     lcount = 10
     extra = 1
     den_pct = None
     ecount = None
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvpm:n:x:d:e:r:")
+    optlist, args = getopt.getopt(args, "hvcpm:n:x:d:e:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-c':
+            constrain = True
         elif opt == '-p':
             presum = True
         elif opt == '-m':
@@ -204,16 +232,16 @@ def run(name, args):
             random.seed(seed1)
             seed2 = seeds[1] if len(seeds) > 1 else seed1
 
+    rcount = lcount+extra
     if ecount is None:
         density = 1.0 if den_pct is None else 0.01 * den_pct
-        rcount = lcount+extra
         ecount = int(round(density * lcount * rcount))
     elif den_pct is not None:
         print("Can't specify both density and number of edges")
         usage(name)
         return
 
-    bpg_solve(verbose, presum, modulus, lcount, extra, ecount, seed2)
+    bpg_solve(verbose, constrain, presum, modulus, lcount, rcount, ecount, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

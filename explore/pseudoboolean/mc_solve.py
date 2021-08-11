@@ -4,12 +4,14 @@ import sys
 import getopt
 import random
 import modsolve
+import constraints
 
-# Generate and solve embedding of mutilated chessboard problem
+# Generate and solve equational or constraint embedding of mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-v] [-p] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
+    print("Usage: %s [-h] [-v] [-c] [-p] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
     print("  -h         Print this message")
     print("  -v         Run in verbose mode")
+    print("  -c         Use constraints rather than equations")
     print("  -p         Perform presumming")
     print("  -m MOD     Specify modulus")
     print("  -n ROW     Specify number of rows in board")
@@ -58,6 +60,8 @@ class Board:
 
     # Parse string specifying which strings to omit
     def get_squares(self, ssquares):
+        if ssquares.lower() == 'none':
+            return []
         flist = []
         rlist = []
         fields = ssquares.split(":")
@@ -115,24 +119,27 @@ class Board:
 
         return flist+rlist
 
-
     def omit(self, r, c):
         for (xr,xc) in self.rsquares:
             if r == xr and c == xc:
                 return True
         return False
 
-    def maybe_solvable(self):
-        white_count = 0
-        black_count = 0
+    def even_odd_counts(self):
+        even_count = 0
+        odd_count = 0
         for r in range(self.rows):
             for c in range(self.cols):
                 if not self.omit(r,c):
-                    if (r % 2) == (c % 2):
-                        white_count += 1
+                    if (r+c) % 2 == 0:
+                        even_count += 1
                     else:
-                        black_count += 1
-        return white_count == black_count
+                        odd_count += 1
+        return (even_count, odd_count)
+
+    def maybe_solvable(self):
+        e, o = self.even_odd_counts()
+        return e == o
 
     # Return list of variables surrounding given square
     def vars(self, r, c):
@@ -193,27 +200,71 @@ class Board:
             esys.add_presum(odd_equations)
         return esys
 
+    def constraints(self, verbose, presum):
+        rmax = self.rows if self.wrap_vertical else self.rows-1
+        cmax = self.cols if self.wrap_horizontal else self.cols-1
+        N = self.rows * cmax + rmax * self.cols
+        csys = constraints.ConstraintSystem(N, verbose)
+        # Track constraints for squares based on minority and majority
+        # square classes, where these are based on parity of r+c
+        majority_constraints = []
+        minority_constraints = []
+        (even_count, odd_count) = self.even_odd_counts()
+        even_majority = even_count >= odd_count
+        con = constraints.Constraint(N, 0)
+        # Make pass through to find variables forced to zero
+        zdict = {}
+        for r in range(self.rows):
+            for c in range(self.cols):
+                if self.omit(r,c):
+                    vars = self.vars(r,c)
+                    for v in vars:
+                        zdict[v] = True
+        for r in range(self.rows):
+            for c in range(self.cols):
+                even = (r+c) % 2 == 0
+                is_major = even == even_majority
+                vars = { v for v in self.vars(r,c) if v not in zdict }
+                if self.omit(r,c):
+                    continue
+                elif is_major:
+                    ncon = con.alo(vars)
+                else:
+                    ncon = con.amo(vars)
+                cid = csys.add_constraint(ncon)
+                if is_major:
+                    majority_constraints.append(cid)
+                else:
+                    minority_constraints.append(cid)
+        if presum:
+            csys.add_presum(majority_constraints)
+            csys.add_presum(minority_constraints)
+        return csys
         
 
-def mc_solve(verbose, presum, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2):
+def mc_solve(verbose, constrain, presum, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2):
     b = Board(rows, cols, ssquares, wrap_horizontal, wrap_vertical)
     ssquares = str(b.rsquares)
-    print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
+    if constrain:
+        print("Board: %d X %d.  Omitting squares %s" % (rows, cols, ssquares))
+    else:
+        print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
     print("     Wrapping: Horizontal %s.  Vertical %s" % (wrap_horizontal, wrap_vertical))
-    esys = b.equations(modulus, verbose, presum)
+    xsys = b.constraints(verbose, presum) if constrain else b.equations(modulus, verbose, presum)
     if seed2 is not None:
-        esys.randomize = True
+        xsys.randomize = True
         random.seed(seed2)
     if not verbose:
-        esys.pre_statistics()
-    status = esys.solve()
+        xsys.pre_statistics()
+    status = xsys.solve()
     if not verbose:
-        esys.post_statistics(status, b.maybe_solvable())
+        xsys.post_statistics(status, b.maybe_solvable())
 
 def run(name, args):
     verbose = False
     presum = False
     modulus = 3
+    constrain = False
     rows = 8
     cols = None
     ssquares = "ul:dr"
@@ -221,13 +272,15 @@ def run(name, args):
     wrap_vertical = False
     randomize = False
     seed2 = None
-    optlist, args = getopt.getopt(args, "hvpm:n:c:s:w:r:")
+    optlist, args = getopt.getopt(args, "hvcpm:n:c:s:w:r:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-v':
             verbose = True
+        elif opt == '-c':
+            constrain = True
         elif opt == '-p':
             presum = True
         elif opt == '-m':
@@ -264,7 +317,7 @@ def run(name, args):
     if cols is None:
         cols = rows
 
-    mc_solve(verbose, presum, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2)
+    mc_solve(verbose, constrain, presum, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
