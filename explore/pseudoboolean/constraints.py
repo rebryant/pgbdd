@@ -139,19 +139,14 @@ class Constraint:
                 pos_sum += self[i]
             else:
                 neg_sum += self[i]
-
             max_to[i] = pos_sum
             min_to[i] = neg_sum
 
         widths = { }
-        
-        max_width = pos_sum - self.cval + 1
-        if max_width <= 0:
-            max_width = 1
-
         for i in self.indices():
-            width = max_to[i] - min_to[i] + 1
-            widths[i] = min(width, max_width)
+            up = min(max_to[i], min_to[i] + self.cval - neg_sum)
+            down = max(min_to[i], max_to[i] + self.cval - pos_sum)
+            widths[i] = max(1, up-down+1)
 
         return widths
 
