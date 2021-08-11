@@ -253,6 +253,17 @@ class Equation:
         # All zero coefficients and non-zero constant
         return self.cval != 0 and len(self) == 0
 
+    # Build dictionary mapping index to maximum number of BDD nodes at that position
+    def bdd_widths(self):
+        m = self.modulus
+        return { i : m for i in self.indices() }
+
+    # Compute max size of BDD representation
+    def bdd_size(self):
+        widths = self.bdd_widths()
+        return sum(widths.values())
+
+
     def __str__(self):
         if self.N <= 40:
             return self.format_dense()
@@ -272,6 +283,10 @@ class EquationSet:
     term_count = 0
     # Largest equation added
     term_max = 0
+    # Total number of BDD nodes generated
+    bdd_node_count = 0
+    # Largest BDD
+    bdd_node_max = 0
 
     def __init__(self, elist = []):
         self.next_id = 1
@@ -279,6 +294,8 @@ class EquationSet:
         self.nz_map = {}
         self.term_count = 0
         self.term_max = 0
+        self.bdd_node_count = 0
+        self.bdd_node_max = 0
         for e in elist:
             self.add_equation(e)
 
@@ -295,6 +312,13 @@ class EquationSet:
         else:
             self.nz_map[idx] = nlist
 
+    def analyze_equation(self, e):
+        count = len(e)
+        self.term_count += count
+        self.term_max = max(self.term_max, count)
+        bsize = e.bdd_size()
+        self.bdd_node_count += bsize
+        self.bdd_node_max = max(bsize, self.bdd_node_max)
 
     def add_equation(self, e):
         eid = self.next_id
@@ -302,9 +326,7 @@ class EquationSet:
         self.equ_dict[eid] = e
         for idx in e.nz:
             self.add_index(eid, idx)
-        count = len(e)
-        self.term_count += count
-        self.term_max = max(self.term_max, count)
+        self.analyze_equation(e)
         return eid
 
     def remove_equation(self, eid):
@@ -337,6 +359,10 @@ class EquationSet:
         nes.next_id = self.next_id
         nes.equ_dict = { id : self.equ_dict[id] for id in self.equ_dict.keys() }
         nes.nz_map = { idx : list(self.nz_map[idx]) for idx in self.nz_map.keys() }
+        nes.term_count = self.term_count
+        nes.term_max = self.term_max
+        nes.bdd_node_count = self.bdd_node_count
+        nes.bdd_node_max = self.bdd_node_max
         return nes
 
     def show(self):
@@ -347,6 +373,10 @@ class EquationSet:
     # How many total equations have been generated
     def equation_count(self):
         return self.next_id - 1
+
+    def bdd_avg(self):
+        return float(self.bdd_node_count) / self.equation_count()
+
 
 # System of equations.
 # Support LU decomposition of Gaussian elimination to see if system has any solutions
@@ -384,8 +414,6 @@ class EquationSystem:
     combine_count = 0
     # Estimated number of BDD ops for verifier
     bdd_ops = 0
-    
-
 
     def __init__(self, N, modulus, verbose = True):
         self.N = N
@@ -415,39 +443,46 @@ class EquationSystem:
     def add_presum(self, elist):
         self.presums.append(elist)
 
+    # Reduce set of equationss (given by their eid's) by summing
+    def sum_reduce(self, elist):
+        if len(elist) == 0:
+            return
+        # This is a hack to enable randomized removal of equal weighted items from priority queue
+        # and to make sure that priority queue has totally ordered keys
+        # Have enough entries in the list to cover initial equations and partial sums
+        olist = list(range(2*len(elist)))
+        if self.randomize:
+            random.shuffle(olist)
+        # Put elements into priority queue according to nnz's
+        pq = queue.PriorityQueue()
+        for idx in range(len(elist)):
+            oid = olist[idx]
+            eid = elist[idx]
+            e = self.rset[eid]
+            self.rset.remove_equation(eid)                
+            pq.put((len(e), oid, e))
+        # Now start combining them
+        idx = len(elist)
+        while pq.qsize() > 1:
+            (w1, o1, e1) = pq.get()
+            (w2, o2, e2) = pq.get()
+            ne = e1.add(e2)
+            self.bdd_ops += self.bdd_estimator([e1, e2, ne])
+            oid = olist[idx]
+            if pq.qsize() > 0:
+                # Gather statistics on this equation, even though won't be added to rset
+                self.rset.analyze_equation(ne)
+            pq.put((len(ne), oid, ne))
+            idx += 1
+        # Reduced queue to single element
+        (w, o, e) = pq.get()
+        self.rset.add_equation(e)
+
     # Reduce set of equations by summing
     def presum(self):
         icount = len(self.rset)
         for elist in self.presums:
-            if len(elist) == 0:
-                continue
-            # This is a hack to enable randomized removal of equal weighted items from priority queue
-            # and to make sure that priority queue has totally ordered keys
-            # Have enough entries in the list to cover initial equations and partial sums
-            olist = list(range(2*len(elist)))
-            if self.randomize:
-                random.shuffle(olist)
-            # Put elements into priority queue according to nnz's
-            pq = queue.PriorityQueue()
-            for idx in range(len(elist)):
-                oid = olist[idx]
-                eid = elist[idx]
-                e = self.rset[eid]
-                self.rset.remove_equation(eid)                
-                pq.put((len(e), oid, e))
-            # Now start combining them
-            idx = len(elist)
-            while pq.qsize() > 1:
-                (w1, o1, e1) = pq.get()
-                (w2, o2, e2) = pq.get()
-                ne = e1.add(e2)
-                self.bdd_ops += self.bdd_estimator([e1, e2, ne])
-                oid = olist[idx]
-                pq.put((len(ne), oid, ne))
-                idx += 1
-            # Reduced queue to single element
-            (w, o, e) = pq.get()
-            self.rset.add_equation(e)
+            self.sum_reduce(elist)
         ncount = len(self.rset)
         if ncount < icount:
             print("Presumming reduced equations from %d to %d" % (icount, ncount))
@@ -503,13 +538,13 @@ class EquationSystem:
 
     # Estimate the number of BDD operations required for a validation step with BDDs
     def bdd_estimator(self, elist):
-        m = self.modulus
-        # Maximum operations for each level
-        cdict = { i : m for i in elist[0].indices() } 
+        # Build up dictionary giving product of BDD widths at each level
+        wdict = elist[0].bdd_widths()
         for e in elist[1:]:
+            ewdict = e.bdd_widths()
             for i in e.indices():
-                cdict[i] = cdict[i] * m if i in cdict else m
-        return sum(cdict.values())
+                wdict[i] = wdict[i] * ewdict[i] if i in wdict else ewdict[i]
+        return sum(wdict.values())
 
     # Perform one step of LU decomposition
     # Possible return values:
@@ -607,8 +642,10 @@ class EquationSystem:
         tmax = self.rset.term_max
         tavg = float(tc)/ecount
         print("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations" % (ecount, tc, tavg, tmax, ccount))
-        sscount = self.step_count
         bcount = self.bdd_ops
-        pavg = float(self.pivot_degree_sum)/sscount
-        print("    %d modular operations.  %d estimated BDD operations.  Used values = %s" % (self.mbox.opcount, bcount, self.mbox.report_used()))
+        ncount = self.rset.bdd_node_count
+        navg = self.rset.bdd_avg()
+        nmax = self.rset.bdd_node_max
+        print("    %d estimated BDD operations.  %d total BDD nodes (%.2f avg, %d max)" % (bcount, ncount, navg, nmax))
+        print("    %d modular operations.  Used values = %s" % (self.mbox.opcount, self.mbox.report_used()))
 
