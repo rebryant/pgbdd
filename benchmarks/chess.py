@@ -7,11 +7,12 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b]" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
     print("  -c       Include corners")
+    print("  -w WRAP  Wrap board horizontally (h), vertically (v), both (b) or neither (n)")
     print("  -n N     Specify size of board")
 
 
@@ -33,16 +34,19 @@ def exactlyOne(vars):
 # Columns numbered from 0 to N-1
 # Rows numbered from 0 to N-1
 # H(r,c) denotes horizontal divider between rows r-1 and r for column c
-#   Range: r: 1..n-1.  c:0..n-1
+#   Range: 
+#    When wrap vertically: r: 1..n-1.  c:0..n-1  
+#    Without wrap          r: 0..n-1.  c:0..n-1  
 # V(r,c) denotes vertical divider between columns c-1 and c for row r
-#   Range: r: 0..n-1,  c:1..n-1
-
+#   Range:
+#    When wrap horizontally: r: 0..n-1,  c:0..n-1
+#    Without wrap:           r: 0..n-1,  c:1..n-1
 
 # Square at position r,c has
 # top divider at r,c
-# bottom dividerr at r+1,c
+# bottom divider at (r+1) mod N, c  (Mod only required for vertical wrap)
 # left divider at r,c
-# right divider at r,c+1
+# right divider at r, (c+1) mod N   (Mod only required for horizontal wrap)
 
 class Square:
     top = None
@@ -53,25 +57,29 @@ class Square:
     col = 0
 
     # idDict: Dictionary of variable identifiers, indexed by (row, col, isHorizontal)
-    def __init__(self, row, col, idDict):
+    def __init__(self, row, col, n, idDict):
         self.row = row
         self.col = col
+        rp1 = (row+1) % n
+        cp1 = (col+1) % n
         
         if (row,col,True) in idDict:
             self.top = idDict[(row,col,True)]
         else:
             self.top = None
-        if (row+1,col,True) in idDict:
-            self.bottom = idDict[(row+1,col,True)]
+
+        if (rp1,col,True) in idDict:
+            self.bottom = idDict[(rp1,col,True)]
         else:
             self.bottom = None
+
 
         if (row,col,False) in idDict:
             self.left = idDict[(row,col,False)]
         else:
             self.left = None
-        if (row,col+1,False) in idDict:
-            self.right = idDict[(row,col+1,False)]
+        if (row,cp1,False) in idDict:
+            self.right = idDict[(row,cp1,False)]
         else:
             self.right = None
 
@@ -98,19 +106,31 @@ class Board:
     bucketWriter = None
     verbose = False
     includeCorners = False
+    wrapHorizontal = False
+    wrapVertical = False
     n = None
     # What approach should be used to construct board
     doLinear = True
     # List of variable Ids for bucket ordering
     idList = []
 
-    def __init__(self, n, rootName, verbose = False, includeCorners = False):
+    def __init__(self, n, rootName, verbose = False, includeCorners = False, wrapHorizontal = False, wrapVertical = False):
         self.n = n
         variableCount = 2 * n * (n-1)
+        if wrapHorizontal:
+            variableCount += n
+        if wrapVertical:
+            variableCount += n
         if not includeCorners:
             variableCount -= 4
+            if wrapHorizontal:
+                variableCount -= 2
+            if wrapVertical:
+                variableCount -= 2
         self.verbose = verbose
         self.includeCorners = includeCorners
+        self.wrapHorizontal = wrapHorizontal
+        self.wrapVertical = wrapVertical
         self.cnfWriter = writer.CnfWriter(variableCount, rootName, self.verbose)
         self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose)
         self.bucketWriter = writer.OrderWriter(variableCount, rootName, self.verbose, suffix = "buckets")
@@ -194,7 +214,7 @@ class Board:
             self.scheduleWriter.doQuantify(rightMid)
         self.scheduleWriter.doInformation("Merged columns %d .. %d with %d .. %d" % (leftIndex, midLeftIndex, midRightIndex, rightIndex))
         if leftIndex <= self.n // 2 and rightIndex >= (self.n+1)//2 and rightIndex < self.n-1:
-                self.scheduleWriter.doInformation("RCSIZE %d %d" % (self.n, columnCount))
+            self.scheduleWriter.doInformation("RCSIZE %d %d" % (self.n, columnCount))
         return (left, right)
 
     def constructBoard(self):
@@ -205,14 +225,19 @@ class Board:
 
     def build(self):
         n = self.n
+        rmin = 0 if self.wrapVertical else 1
+        cmin = 0 if self.wrapHorizontal else 1
         # Generate variables
         for r in range(n):
-            if r >= 1:
+            if r >= rmin:
                 hlist = []
                 for c in range(n):
                     # Horizontal divider above.  Omit ones for UL and LR corners
-                    omit = not self.includeCorners and (r==1 and c ==0)
-                    omit = omit or not self.includeCorners and (r==n-1 and c==n-1)
+                    omit = False
+                    if not self.includeCorners:
+                        omit = (r==1 and c ==0) or (r==n-1 and c==n-1)
+                        if self.wrapVertical:
+                            omit = omit or (r==0 and c==0) or (r==0 and c==n-1)
                     if not omit:
                         v = self.nextVariable()
                         self.idDict[(r,c,True)] = v
@@ -220,10 +245,13 @@ class Board:
                 self.orderWriter.doOrder(hlist)
 
             vlist = []
-            for c in range(1, n):
+            for c in range(cmin, n):
                 # Vertical divider to left.  Omit ones for UL and LR corners
-                omit = not self.includeCorners and (r==0 and c ==1)
-                omit = omit or not self.includeCorners and (r==n-1 and c==n-1)
+                omit = False
+                if not self.includeCorners:
+                    omit = (r==0 and c ==1) or (r==n-1 and c==n-1)
+                    if self.wrapHorizontal:
+                        omit = omit or (r==0 and c==0) or (r==n-1 and c==0)
                 if not omit:
                     v = self.nextVariable()
                     self.idDict[(r,c,False)] = v
@@ -233,7 +261,7 @@ class Board:
         # Generate squares
         for r in range(n):
             for c in range(n):
-                self.squares[(r,c)] = Square(r, c, self.idDict)
+                self.squares[(r,c)] = Square(r, c, n, self.idDict)
 
         # Generate bucket ordering
         for c in range(n):
@@ -254,14 +282,16 @@ class Board:
         self.orderWriter.finish()
         self.bucketWriter.finish()
         self.scheduleWriter.finish()
+    
                            
 def run(name, args):
     verbose = False
     n = 0
     rootName = None
     includeCorners = False
-    
-    optlist, args = getopt.getopt(args, "hvcar:n:")
+    wrapHorizontal = False
+    wrapVertical = False    
+    optlist, args = getopt.getopt(args, "hvcar:n:w:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -274,7 +304,16 @@ def run(name, args):
             rootName = val
         elif opt == '-n':
             n = int(val)
-        
+        elif opt == '-w':
+            if len(val) != 1 or val not in "nhvb":
+                print("Invalid wrap specification '%s'" % val)
+                usage(name)
+                return
+            if val in "hb":
+                wrapHorizontal = True
+            if val in "vb":
+                wrapVertical = True
+
     if n == 0:
         print("Must have value for n")
         usage(name)
@@ -283,7 +322,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, includeCorners)
+    b = Board(n, rootName, verbose, includeCorners, wrapHorizontal, wrapVertical)
     b.build()
     b.finish()
 
