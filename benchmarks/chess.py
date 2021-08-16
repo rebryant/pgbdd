@@ -253,6 +253,9 @@ class Board:
                     doAMO = (r+c) % 2 == 0
                     cstring = "at-most-one" if doAMO else "at-least-one"
                     self.scheduleWriter.doComment("Validating and generating %s constraint for square %d,%d" % (cstring, r,c))
+                    # Exploit fact that at-least-one is single clause at beginning
+                    # and rest encode at-most-one
+                    clist = clist[1:] if doAMO else clist[0:1]
                     self.scheduleWriter.newTree()
                     self.scheduleWriter.getClauses(clist)
                     self.scheduleWriter.doAnd(len(clist))
