@@ -7,12 +7,13 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b]" % name) 
+    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c]" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
     print("  -c       Include corners")
     print("  -w WRAP  Wrap board horizontally (h), vertically (v), both (b) or neither (n)")
+    print("  -p e|c   Generate schedule that produces pseudoboolean equations (e) or constraints (c)")
     print("  -n N     Specify size of board")
 
 
@@ -94,6 +95,29 @@ class Square:
                 clist.append(writer.doClause(clause))
         return clist
 
+    # Generate commands for schedule to issue equation representing
+    # this square
+    def doEquation(self, swriter):
+        allVars = [self.top, self.right, self.bottom, self.left]
+        vlist = sorted([v for v in allVars if v is not None])
+        clist = [1] * len(vlist)
+        swriter.doPseudoBoolean(vlist, clist, 1, True)
+
+    # Generate at-most-one constraint for this square
+    def doAMO(self, swriter):
+        allVars = [self.top, self.right, self.bottom, self.left]
+        vlist = sorted([v for v in allVars if v is not None])
+        clist = [-1] * len(vlist)
+        swriter.doPseudoBoolean(vlist, clist, -1, False)
+
+    # Generate at-least-one constraint for this square
+    def doALO(self, swriter):
+        allVars = [self.top, self.right, self.bottom, self.left]
+        vlist = sorted([v for v in allVars if v is not None])
+        clist = [1] * len(vlist)
+        swriter.doPseudoBoolean(vlist, clist, 1, False)
+
+
 class Board:
     # Variable ids, indexed by (row, col, isHorizontal)
     idDict = {}
@@ -111,10 +135,12 @@ class Board:
     n = None
     # What approach should be used to construct board
     doLinear = True
+    doEquation = False
+    doConstraint = False
     # List of variable Ids for bucket ordering
     idList = []
 
-    def __init__(self, n, rootName, verbose = False, includeCorners = False, wrapHorizontal = False, wrapVertical = False):
+    def __init__(self, n, rootName, verbose = False, includeCorners = False, wrapHorizontal = False, wrapVertical = False, pseudoType = None):
         self.n = n
         variableCount = 2 * n * (n-1)
         if wrapHorizontal:
@@ -127,6 +153,14 @@ class Board:
                 variableCount -= 2
             if wrapVertical:
                 variableCount -= 2
+        self.doEquation = False
+        self.doConstraint = False
+        if pseudoType is not None:
+            self.doLinear = False
+            if pseudoType == 'e':
+                self.doEquation = True
+            elif pseudoType == 'c':
+                self.doConstraint  = True
         self.verbose = verbose
         self.includeCorners = includeCorners
         self.wrapHorizontal = wrapHorizontal
@@ -190,6 +224,42 @@ class Board:
             self.scheduleWriter.doInformation("After quantification for column %d" % c)
 
 
+    def constructBoardEquation(self):
+        # Generate equation for each square
+        for r in range(self.n):
+            for c in range(self.n):
+                # Generate clauses, And them, and generate equation
+                # Each set of conjunctions is independent
+                sq = self.squares[(r,c)]
+                clist = sq.doClauses(self.cnfWriter)
+                if len(clist) > 0:
+                    self.scheduleWriter.doComment("Validating and generating equation for square %d,%d" % (r,c))
+                    self.scheduleWriter.newTree()
+                    self.scheduleWriter.getClauses(clist)
+                    self.scheduleWriter.doAnd(len(clist))
+                    sq.doEquation(self.scheduleWriter)
+
+
+    def constructBoardConstraint(self):
+        # Assumption: There are least as many squares with r+c odd than with it even
+        # Generate constraint for each square
+        for r in range(self.n):
+            for c in range(self.n):
+                # Generate clauses, And them, and generate equation
+                # Each set of conjunctions is independent
+                sq = self.squares[(r,c)]
+                clist = sq.doClauses(self.cnfWriter)
+                if len(clist) > 0:
+                    doAMO = (r+c) % 2 == 0
+                    cstring = "at-most-one" if doAMO else "at-least-one"
+                    self.scheduleWriter.doComment("Validating and generating %s constraint for square %d,%d" % (cstring, r,c))
+                    self.scheduleWriter.newTree()
+                    self.scheduleWriter.getClauses(clist)
+                    self.scheduleWriter.doAnd(len(clist))
+                    if doAMO:
+                        sq.doAMO(self.scheduleWriter)
+                    else:
+                        sq.doALO(self.scheduleWriter)
 
     # Construct constraints for specified number of columns.  
     # Return lists of variables on left and right
@@ -217,11 +287,19 @@ class Board:
             self.scheduleWriter.doInformation("RCSIZE %d %d" % (self.n, columnCount))
         return (left, right)
 
+    
+
     def constructBoard(self):
         if self.doLinear:
             self.constructBoardLinear()
+        elif self.doEquation:
+            self.constructBoardEquation()
+        elif self.doConstraint:
+            self.constructBoardConstraint()
         else:
             self.treeBuild(0, self.n)
+
+    
 
     def build(self):
         n = self.n
@@ -291,7 +369,8 @@ def run(name, args):
     includeCorners = False
     wrapHorizontal = False
     wrapVertical = False    
-    optlist, args = getopt.getopt(args, "hvcar:n:w:")
+    pseudoType = None
+    optlist, args = getopt.getopt(args, "hvcar:n:w:p:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -313,6 +392,15 @@ def run(name, args):
                 wrapHorizontal = True
             if val in "vb":
                 wrapVertical = True
+        elif opt == '-p':
+            if val == 'e':
+                pseudoType = 'e'
+            elif val == 'c':
+                pseudoType = 'c'
+            else:
+                print("Invalid pseudoboolean type  '%s'" % val)
+                usage(name)
+                return
 
     if n == 0:
         print("Must have value for n")
@@ -322,7 +410,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, includeCorners, wrapHorizontal, wrapVertical)
+    b = Board(n, rootName, verbose, includeCorners, wrapHorizontal, wrapVertical, pseudoType)
     b.build()
     b.finish()
 

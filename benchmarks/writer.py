@@ -82,6 +82,7 @@ class ScheduleWriter(Writer):
     # Track potential errors
     stackDepth = 0
     decrementAnd = False
+    expectedFinal = 1
 
     def __init__(self, count, froot, verbose = False):
         Writer.__init__(self, count, froot, suffix = "schedule", verbose = verbose)
@@ -124,6 +125,20 @@ class ScheduleWriter(Writer):
 #            raise WriterException("Cannot quantify.  Stack empty")
         self.show("q %s" % " ".join([str(c) for c in vlist]))
 
+    # Issue equation or constraint.
+    def doPseudoBoolean(self, vlist, clist, const, isEquation=True):
+        # Anticipate that shifting everything from CNF evaluation to pseudoboolean reasoning
+        self.expectedFinal = 0
+        if self.stackDepth == 0:
+            print ("Warning: Cannot quantify.  Stack empty")
+        if len(vlist) != len(clist):
+            raise WriterException("Invalid equation or constraint.  %d variables, %d coefficients" % (len(vlist), len(clist)))
+        cmd = "=" if isEquation else ">="
+        slist = [cmd, str(const)]
+        slist += [("%d.%d" % (c,v)) for (c,v) in zip(clist, vlist)]
+        self.show(" ".join(slist))
+        self.stackDepth -= 1
+
     def doComment(self, cstring):
         self.show("# " + cstring)
 
@@ -131,7 +146,7 @@ class ScheduleWriter(Writer):
         self.show("i " + cstring)
 
     def finish(self):
-        if self.stackDepth != 1:
+        if self.stackDepth != self.expectedFinal:
             print("Warning: Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
 #            raise WriterException("Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
         Writer.finish(self)

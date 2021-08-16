@@ -15,7 +15,8 @@ q V_1 V_2 ... V_k
         Existentially quantify top stack element by specified variables and replace
 
 i Docstring
-        Print out BDD information about top element on stack
+        Print out BDD information about top element on stack.
+	Docstring is appended to information.
 
 s Name
         Store top stack element by Name.  Do not remove from stack
@@ -23,5 +24,15 @@ s Name
 r Name
         Retrieved named element and push onto stack
 
+= C T_1 T_2 ... T_k
+    	Pop top of stack.  Prove that it implies equation
+	with specified terms and constant C.
+	Each T of form A.V where A is integer coefficient (possibly
+	negative) and V is variable ID.  Variables should be in ascending order
 
+>= C T_1 T_2 ... T_k
+    	Pop top of stack.  Prove that it implies constraint
+	with specified terms and constant C.
+	Each T of form A.V where A is integer coefficient (possibly
+	negative) and V is variable ID.  Variables should be in ascending order
 
