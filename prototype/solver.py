@@ -635,6 +635,7 @@ class Solver:
             status = self.equationSystem.solve()
             if status == 'unsolvable':
                 self.writer.write("Equation system proved formula UNSAT\n")
+                self.equationSystem.postStatistics(status)
             else:
                 self.writer.write("Equation system thinks indicates formula may be SAT\n")
         elif self.constraintSystem is not None:

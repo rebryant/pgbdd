@@ -713,10 +713,9 @@ class EquationSystem:
         tavg = float(tc)/ecount
         self.writer.write("  Problem: %d equations, %d variables, %d nonzero coefficients.  %d total nonzeros (%.2f avg, %d max)\n" % (ecount, vcount, acount, tc, tavg, tmax))
 
-    def postStatistics(self, status, maybeSolvable):
+    def postStatistics(self, status):
         # status: "solved", "unsolvable", "normal"
-        expected = "solvable" if maybeSolvable else "unsolvable"
-        self.writer.write("  Solution status: %s (expected = %s)\n" % (status, expected))
+        self.writer.write("  Solution status: %s\n" % (status))
         sscount = self.stepCount
         pavg = float(self.pivotDegreeSum)/sscount
         pmax = self.pivotDegreeMax
