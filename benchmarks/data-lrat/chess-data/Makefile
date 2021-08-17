@@ -12,6 +12,8 @@ q: chess-$(N)-column.data
 
 nq: chess-$(N)-noquant.data
 
+e: chess-$(N)-equation.data
+
 ns: chess-$(N)-noschedule.data
 
 b: chess-$(N)-bucket.data
@@ -25,6 +27,12 @@ chess-$(N)-column.data:
 	$(CHECKER) chess-$(N)-column.cnf chess-$(N)-column.$(EXTENSION) | tee -a chess-$(N)-column.data
 	rm -f chess-$(N)-column.$(EXTENSION)
 
+chess-$(N)-equation.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-equation -p e | tee chess-$(N)-equation.data
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation.cnf -s chess-$(N)-equation.schedule -m 3 \
+		-p chess-$(N)-equation.order -o chess-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation.data
+	$(CHECKER) chess-$(N)-equation.cnf chess-$(N)-equation.$(EXTENSION) | tee -a chess-$(N)-equation.data
+	rm -f chess-$(N)-equation.$(EXTENSION)
 
 chess-$(N)-noquant.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-noquant | tee chess-$(N)-noquant.data
