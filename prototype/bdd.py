@@ -428,6 +428,8 @@ class Manager:
                 break
         return stringList
 
+     
+
     # Return node + id of clause justifying that nodeA & NodeB ==> result
     # Justification is None if it would be tautology
     def applyAndJustify(self, nodeA, nodeB):
