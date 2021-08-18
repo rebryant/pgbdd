@@ -2,12 +2,14 @@
 
 import sys
 import  getopt
+import random
+
 import writer
 
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c]" % name) 
+    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c] [-s SEED]" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
@@ -15,6 +17,7 @@ def usage(name):
     print("  -w WRAP  Wrap board horizontally (h), vertically (v), both (b) or neither (n)")
     print("  -p e|c   Generate schedule that produces pseudoboolean equations (e) or constraints (c)")
     print("  -n N     Specify size of board")
+    print("  -s SEED  Provide random seed for randomizing variables")
 
 
 def exactlyOne(vars):
@@ -124,6 +127,7 @@ class Board:
     # Squares indexed by (row, col)
     squares = {}
     variableCount = 0
+    variableList = []
     cnfWriter = None
     scheduleWriter = None
     orderWriter = None
@@ -140,19 +144,24 @@ class Board:
     # List of variable Ids for bucket ordering
     idList = []
 
-    def __init__(self, n, rootName, verbose = False, includeCorners = False, wrapHorizontal = False, wrapVertical = False, pseudoType = None):
+    def __init__(self, n, rootName, verbose = False, includeCorners = False, seed = None, wrapHorizontal = False, wrapVertical = False, pseudoType = None):
         self.n = n
-        variableCount = 2 * n * (n-1)
+        expectedVariableCount = 2 * n * (n-1)
         if wrapHorizontal:
-            variableCount += n
+            expectedVariableCount += n
         if wrapVertical:
-            variableCount += n
+            expectedVariableCount += n
         if not includeCorners:
-            variableCount -= 4
+            expectedVariableCount -= 4
             if wrapHorizontal:
-                variableCount -= 2
+                expectedVariableCount -= 2
             if wrapVertical:
-                variableCount -= 2
+                expectedVariableCount -= 2
+        self.variableList = list(range(1, expectedVariableCount+1))
+        if seed is not None:
+            random.seed(seed)
+            random.shuffle(self.variableList)
+
         self.doEquation = False
         self.doConstraint = False
         if pseudoType is not None:
@@ -165,18 +174,19 @@ class Board:
         self.includeCorners = includeCorners
         self.wrapHorizontal = wrapHorizontal
         self.wrapVertical = wrapVertical
-        self.cnfWriter = writer.CnfWriter(variableCount, rootName, self.verbose)
-        self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose)
-        self.bucketWriter = writer.OrderWriter(variableCount, rootName, self.verbose, suffix = "buckets")
-        self.orderWriter = writer.OrderWriter(variableCount, rootName, self.verbose)
+        self.cnfWriter = writer.CnfWriter(expectedVariableCount, rootName, self.verbose)
+        self.scheduleWriter = writer.ScheduleWriter(expectedVariableCount, rootName, self.verbose)
+        self.bucketWriter = writer.OrderWriter(expectedVariableCount, rootName, self.verbose, suffix = "buckets")
+        self.orderWriter = writer.OrderWriter(expectedVariableCount, rootName, self.verbose)
         self.idDict = {}
         self.squares = {}
         self.variableCount = 0
         self.idList = []
 
     def nextVariable(self):
+        var = self.variableList[self.variableCount]
         self.variableCount += 1
-        return self.variableCount
+        return var
 
     # Construct Column i.  Return lists of variables on left and right
     def doColumn(self, c):
@@ -373,7 +383,8 @@ def run(name, args):
     wrapHorizontal = False
     wrapVertical = False    
     pseudoType = None
-    optlist, args = getopt.getopt(args, "hvcar:n:w:p:")
+    seed = None
+    optlist, args = getopt.getopt(args, "hvcar:n:w:p:s:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -404,6 +415,8 @@ def run(name, args):
                 print("Invalid pseudoboolean type  '%s'" % val)
                 usage(name)
                 return
+        elif opt == '-s':
+            seed = int(val)
 
     if n == 0:
         print("Must have value for n")
@@ -413,7 +426,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, includeCorners, wrapHorizontal, wrapVertical, pseudoType)
+    b = Board(n, rootName, verbose, seed, includeCorners, wrapHorizontal, wrapVertical, pseudoType)
     b.build()
     b.finish()
 

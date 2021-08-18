@@ -243,7 +243,8 @@ class Equation:
             antecedents = [ovalidation]
             check, implication = esys.manager.justifyImply(oroot, e.root)
             if not check:
-                raise bdd.BddException("Implication failed when spawning equation %s: %s -/-> %s" % (str(e), oroot.label(), e.root.label()))
+#                raise bdd.BddException("Implication failed when spawning equation %s: %s -/-> %s" % (str(e), oroot.label(), e.root.label()))
+                esys.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), oroot.label(), e.root.label()))
             if implication != resolver.tautologyId:
                 antecedents += [implication]
             comment = "Validation of equation with BDD root %s" % e.root.label()
@@ -296,6 +297,14 @@ class Equation:
         if len(ilist) == 0:
             self.root = esys.manager.leaf1 if self.cval == 0 else esys.manager.leaf0
             return
+        # Mapping from variable Id to variable
+        varMap = { var.id : var for var in esys.manager.variables }
+        # Put it in levelized order
+        # Mapping from variable Id to level
+        levelMap = { var.id : var.level for var in esys.manager.variables }
+
+        ilist.sort(key = lambda id : levelMap[id])
+
         # Determine at what offsets will need node, starting from root and working down
         needNodes = { i : {} for i in ilist }
         previ = ilist[0]
@@ -320,7 +329,7 @@ class Equation:
             low = leafList[offset]
             noffset = esys.mbox.add(offset, self[lasti])
             high = leafList[noffset]
-            var = esys.manager.variables[lasti-1]
+            var = varMap[lasti]
             root = low if low == high else esys.manager.findOrMake(var, high, low)
             nodes[lasti][offset] = root
 
@@ -330,7 +339,7 @@ class Equation:
                 low = nodes[nexti][offset]
                 noffset = esys.mbox.add(offset, self[previ])
                 high = nodes[nexti][noffset]
-                var = esys.manager.variables[previ-1]
+                var = varMap[previ]
                 root = low if low == high else esys.manager.findOrMake(var, high, low)
                 nodes[previ][offset] = root
             nexti = previ

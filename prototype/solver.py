@@ -594,7 +594,8 @@ class Solver:
                 antecedents = [termValidation]
                 check, implication = self.manager.justifyImply(termBdd, equBdd)
                 if not check:
-                    raise bdd.BddException("Implication of equation #%d from term failed %s -/-> %s" % (eid, termBdd.label(), equBdd.label()))
+#                    raise bdd.BddException("Implication of equation #%d from term failed %s -/-> %s" % (eid, termBdd.label(), equBdd.label()))
+                    self.writer.write("WARNING: Implication of equation #%d from term failed %s -/-> %s\n" % (eid, termBdd.label(), equBdd.label()))
                 if implication != resolver.tautologyId:
                     antecedents += [implication]
                 e.validation = self.manager.prover.createClause([equBdd.id], antecedents, "Validation of equation #%d BDD %s" % (eid, equBdd.label()))
@@ -623,7 +624,8 @@ class Solver:
                 conBdd = con.bdd
                 check, implication = self.manager.justifyImply(termBdd, conBdd)
                 if not check:
-                    raise bdd.BddException("Implication of constraint #%d from term failed %s -/-> %s" % (eid, termBdd.label(), conBdd.label()))
+##                    raise bdd.BddException("Implication of constraint #%d from term failed %s -/-> %s" % (eid, termBdd.label(), conBdd.label()))
+                    self.writer.write("WARNING: Implication of constraint #%d from term failed %s -/-> %s\n" % (eid, termBdd.label(), conBdd.label()))
                 if implication != resolver.tautologyId:
                     antecedents += [implication]
                 con.validation = self.manager.prover.createClause([conBdd.id], antecedents, "Validation of constraint #%d BDD %s" % (eid, conBdd.label()))
