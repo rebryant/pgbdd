@@ -66,6 +66,7 @@ chess-$(N)-gbucket.data:
 
 data:
 	$(GRABBER) chess-*-column.data > chess-column.csv
+	$(GRABBER) chess-*-equation.data > chess-equation.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
 	$(GRABBER) chess-*-gbucket.data > chess-gbucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv

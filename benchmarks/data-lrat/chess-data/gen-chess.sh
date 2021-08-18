@@ -32,4 +32,5 @@ make q N=116
 make q N=120
 make q N=124
 make q N=128
-
+make q N=140
+make q N=150

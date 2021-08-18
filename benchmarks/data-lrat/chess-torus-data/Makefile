@@ -12,6 +12,8 @@ q: chess-torus-$(N)-column.data
 
 nq: chess-torus-$(N)-noquant.data
 
+e: chess-torus-$(N)-equation.data
+
 ns: chess-torus-$(N)-noschedule.data
 
 b: chess-torus-$(N)-bucket.data
@@ -24,6 +26,13 @@ chess-torus-$(N)-column.data:
 		-p chess-torus-$(N)-column.order -o chess-torus-$(N)-column.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-column.data
 	$(CHECKER) chess-torus-$(N)-column.cnf chess-torus-$(N)-column.$(EXTENSION) | tee -a chess-torus-$(N)-column.data
 	rm -f chess-torus-$(N)-column.$(EXTENSION)
+
+chess-torus-$(N)-equation.data:
+	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-equation -p e | tee chess-torus-$(N)-equation.data
+	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation.cnf -s chess-torus-$(N)-equation.schedule -m 3 \
+		-p chess-torus-$(N)-equation.order -o chess-torus-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation.data
+	$(CHECKER) chess-torus-$(N)-equation.cnf chess-torus-$(N)-equation.$(EXTENSION) | tee -a chess-torus-$(N)-equation.data
+	rm -f chess-torus-$(N)-equation.$(EXTENSION)
 
 
 chess-torus-$(N)-noquant.data:
@@ -58,6 +67,7 @@ chess-torus-$(N)-gbucket.data:
 
 data:
 	$(GRABBER) chess-torus-*-column.data > chess-torus-column.csv
+	$(GRABBER) chess-torus-*-equation.data > chess-torus-equation.csv
 #	$(GRABBER) chess-torus-*-bucket.data > chess-torus-bucket.csv
 #	$(GRABBER) chess-torus-*-gbucket.data > chess-torus-gbucket.csv
 #	$(GRABBER) chess-torus-*-noquant.data > chess-torus-noquant.csv
