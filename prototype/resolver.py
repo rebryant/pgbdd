@@ -265,7 +265,7 @@ class VResolver:
             return self.runSingle(targetClause, ruleIndex, comment)
 
     def cleanIndex(self, ruleIndex):
-        for k in ruleIndex.keys():
+        for k in list(ruleIndex.keys()):
             if ruleIndex[k] == tautologyId:
                 del ruleIndex[k]
 
