@@ -1,6 +1,6 @@
 INTERP = python3
 N = 10
-VLEVEL = 2
+VLEVEL = 1
 SEED=123456
 
 GENERATOR = $(INTERP) ../../chess.py
@@ -43,7 +43,6 @@ chess-$(N)-column-randomorder.data:
 
 chess-$(N)-equation.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-equation -p e | tee chess-$(N)-equation.data
-	$(RANDOMIZER) chess-$(N)-equation-randomorder.cnf $(SEED)
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation.cnf -s chess-$(N)-equation.schedule -m 3 \
 		-p chess-$(N)-equation.order -o chess-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation.data
 	$(CHECKER) chess-$(N)-equation.cnf chess-$(N)-equation.$(EXTENSION) | tee -a chess-$(N)-equation.data
@@ -51,6 +50,7 @@ chess-$(N)-equation.data:
 
 chess-$(N)-equation-randomorder.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-equation-randomorder -p e | tee chess-$(N)-equation-randomorder.data
+	$(RANDOMIZER) chess-$(N)-equation-randomorder.cnf $(SEED)
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation-randomorder.cnf -s chess-$(N)-equation-randomorder.schedule -m 3 \
 		-p chess-$(N)-equation-randomorder.order -o chess-$(N)-equation-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-randomorder.data
 	$(CHECKER) chess-$(N)-equation-randomorder.cnf chess-$(N)-equation-randomorder.$(EXTENSION) | tee -a chess-$(N)-equation-randomorder.data
