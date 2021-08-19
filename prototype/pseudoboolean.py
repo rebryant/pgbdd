@@ -317,13 +317,8 @@ class Equation:
         if len(ilist) == 0:
             self.root = esys.manager.leaf1 if self.cval == 0 else esys.manager.leaf0
             return
-        # Mapping from variable Id to variable
-        varMap = { var.id : var for var in esys.manager.variables }
-        # Put it in levelized order
-        # Mapping from variable Id to level
-        levelMap = { var.id : var.level for var in esys.manager.variables }
 
-        ilist.sort(key = lambda id : levelMap[id])
+        ilist.sort(key = lambda id : esys.levelMap[id])
 
         # Determine at what offsets will need node, starting from root and working down
         needNodes = { i : {} for i in ilist }
@@ -349,7 +344,7 @@ class Equation:
             low = leafList[offset]
             noffset = esys.mbox.add(offset, self[lasti])
             high = leafList[noffset]
-            var = varMap[lasti]
+            var = esys.varMap[lasti]
             root = low if low == high else esys.manager.findOrMake(var, high, low)
             nodes[lasti][offset] = root
 
@@ -359,7 +354,7 @@ class Equation:
                 low = nodes[nexti][offset]
                 noffset = esys.mbox.add(offset, self[previ])
                 high = nodes[nexti][noffset]
-                var = varMap[previ]
+                var = esys.varMap[previ]
                 root = low if low == high else esys.manager.findOrMake(var, high, low)
                 nodes[previ][offset] = root
             nexti = previ
@@ -516,6 +511,12 @@ class EquationSystem:
 
     # Supporting BDD operation
     manager = None
+    # Mapping from variable Id to variable
+    varMap = None
+    # Mapping from variable Id to level
+    levelMap = None
+
+
     # Tracking number of equations generated since last GC
     equationCount = 0
     # How often should GC be performed?
@@ -538,6 +539,10 @@ class EquationSystem:
         self.modulus = modulus
         self.verbose = verbose
         self.manager = manager
+        if manager is not None:
+            self.varMap = { var.id : var for var in manager.variables }
+            self.levelMap = { var.id : var.level for var in manager.variables }
+
         self.writer = SimpleWriter() if writer is None else writer
         self.randomize = False
         self.mbox = ModMath(modulus)
