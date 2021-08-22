@@ -252,11 +252,11 @@ class Equation:
                 comment = "Validation of equation with BDD root %s" % e.root.label()
             e.validation = esys.manager.prover.createClause([e.root.id], antecedents, comment)
         if not done and len(rvList) == 1:
-            (oroot, ovalidation) = rvList[0]
-            antecedents = [ovalidation]
-            check, implication = esys.manager.justifyImply(oroot, e.root)
+            (r1, v1) = rvList[0]
+            antecedents = [v1]
+            check, implication = esys.manager.justifyImply(r1, e.root)
             if not check:
-                esys.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), oroot.label(), e.root.label()))
+                esys.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), r1.label(), e.root.label()))
             if implication != resolver.tautologyId:
                 antecedents += [implication]
             done = e.root == esys.manager.leaf0
@@ -836,9 +836,68 @@ class Constraint:
         return '[' + " ".join(slist) + ']'
 
     # Generate new constraint from new set of nonzeros
-    def spawn(self, nnz, cval):
+    def spawn(self, nnz, cval, csys, operandList):
         con = Constraint(self.N, cval)
         con.nz = nnz
+        con.buildBdd(csys)
+        if noJustify:
+            return con
+        rvList = [(c.root, c.validation) for c in operandList]
+        done = False
+        while not done and len(rvList) > 2:
+            r1,v1 = rvList[0]
+            r2,v2 = rvList[1]
+            validation = None
+            antecedents = [v1,v2]
+            nr, imp = csys.manager.applyAndJustify(r1, r2)
+            if nr == csys.manager.leaf0:
+                comment = "Validation of Empty clause"
+                done = True
+            else:
+                comment = "Validation of %s" % nr.label()
+            if imp == resolver.tautologyId:
+                if nr == r1:
+                    validation = v1
+                elif nr == r2:
+                    validation = v2
+            else:
+                antecedents += [imp]
+            if validation is None:
+                validation = csys.manager.prover.createClause([nr.id], antecedents, comment)
+            rvList = [(nr,validation)] + rvList[2:]
+        if not done and len(rvList) == 2:
+            # Do final conjunction and implication in combination
+            r1,v1 = rvList[0]
+            r2,v2 = rvList[1]
+            antecedents = [v1,v2]
+            check, implication = csys.manager.applyAndJustifyImply(r1, r2, con.root)
+            if not check:
+                csys.writer.write("WARNING: Implication failed when spawning constraint %s: %s & %s -/-> %s\n" % (str(con), r1.label(), r2.label(), con.root.label()))
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            done = con.root == csys.manager.leaf0
+            if done:
+                comment = "Validation of empty clause from infeasible constraint"
+            else:
+                comment = "Validation of constraint with BDD root %s" % con.root.label()
+            con.validation = csys.manager.prover.createClause([con.root.id], antecedents, comment)
+        if not done and len(rvList) == 1:
+            r1,v1 = rvList[0]
+            antecedents = [v1]
+            check, implication = csys.manager.justifyImply(r1, con.root)
+            if not check:
+                csys.writer.write("WARNING: Implication failed when spawning constraint %s: %s -/-> %s\n" % (str(con), r1.label(), con.root.label()))
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            done = con.root == csys.manager.leaf0
+            if done:
+                comment = "Validation of empty clause from infeasible constraint"
+            else:
+                comment = "Validation of constraint with BDD root %s" % con.root.label()
+            con.validation = csys.manager.prover.createClause([con.root.id], antecedents, comment)
+        if done:
+            csys.writer.write("UNSAT\n")
+            csys.manager.summarize()
         return con
         
     # Helper function for inserting new element in dictionary
@@ -849,36 +908,92 @@ class Constraint:
             nz[i] = v
 
     # Add other constraint to self
-    def add(self, other):
+    def add(self, other, csys):
         nnz = { i : self[i] for i in self.indices() }
         for i in other.indices():
             nx = self[i] + other[i]
             self.nzInsert(nnz, i, nx)
         nc = self.cval + other.cval
-        return self.spawn(nnz, nc)
+        return self.spawn(nnz, nc, csys, [self, other])
 
     # Generate at-least-one constraint
-    def alo(self, vlist):
+    def alo(self, vlist, csys):
         nnz = { i : 1 for i in vlist }
         cval = 1
-        return self.spawn(nnz, cval)
+        return self.spawn(nnz, cval, csys, [self, other])
 
     # Generate at-most-one constraint
-    def amo(self, vlist):
+    def amo(self, vlist, csys):
         nnz = { i : -1 for i in vlist }
         cval = -1
-        return self.spawn(nnz, cval)
+        return self.spawn(nnz, cval, csys, [self, other])
 
     # Generate at-most-zero constraint
     # (i.e., all must be false)
-    def amz(self, vlist):
+    def amz(self, vlist, csys):
         nnz = { i : -1 for i in vlist }
         cval = 0
-        return self.spawn(nnz, cval)
+        return self.spawn(nnz, cval, csys, [self, other])
 
-    # Build BDD representation
-    def buildBdd(self, manager):
-        self.root = None
+    # Generate BDD representation
+    def buildBdd(self, csys):
+        ilist = self.indices()
+        if len(ilist) == 0:
+            self.root = csys.manager.leaf1 if self.cval <= 0 else csys.manager.leaf0
+            return
+
+        ilist.sort(key = lambda id : csys.levelMap[id])
+
+        # Determine at what offsets will need node, starting from root and working down
+        needNodes = { i : {} for i in ilist }
+        previ = ilist[0]
+        needNodes[previ][0] = True
+        for nexti in ilist[1:]:
+            for offset in needNodes[previ].keys():
+                # Will need this offset when variable evaluates to 0
+                needNodes[nexti][offset] = True
+                # Will need this offset when variable evaluates to 1
+                noffset = offset + self[previ]
+                needNodes[nexti][noffset] = True
+            previ = nexti
+
+        # Now build BDD from bottom up
+        rilist = list(ilist)
+        rilist.reverse()
+
+        # Start at leaves.  Determine possible offsets
+        lasti = rilist[0]
+        needLeaves = {}
+        for offset in needNodes[lasti].keys():
+            needLeaves[offset] = True
+            noffset = offset + self[lasti]
+            needLeaves[noffset] = True
+
+        leafList = { offset : (csys.manager.leaf1 if offset >= self.cval else csys.manager.leaf0) for offset in needLeaves.keys() }
+        nodes = { i : {} for i in rilist }
+
+        for offset in needNodes[lasti].keys():
+            low = leafList[offset]
+            noffset = offset + self[lasti]
+            high = leafList[noffset]
+            var = csys.varMap[lasti]
+            root = low if low == high else csys.manager.findOrMake(var, high, low)
+            nodes[lasti][offset] = root
+
+        nexti = lasti
+        for previ in rilist[1:]:
+            for offset in needNodes[previ].keys():
+                low = nodes[nexti][offset]
+                noffset = offset + self[previ]
+                high = nodes[nexti][noffset]
+                var = csys.varMap[previ]
+                root = low if low == high else csys.manager.findOrMake(var, high, low)
+                nodes[previ][offset] = root
+            nexti = previ
+            
+        self.root = nodes[ilist[0]][0]
+
+
 
     # Lexicographic ordering of constraints
     def isGreater(self, other):
@@ -898,7 +1013,7 @@ class Constraint:
         return maxsum < self.cval
 
     def __str__(self):
-        if self.N <= 40:
+        if self.N <= 0:
             return self.formatDense()
         else:
             return self.formatSparse()
@@ -1011,6 +1126,15 @@ class ConstraintSystem:
 
     # Supporting BDD operation
     manager = None
+    # Mapping from variable Id to variable
+    varMap = None
+    # Mapping from variable Id o level
+    levelMap = None
+
+    # Tracking number of constraints generated since last GC
+    constraintCount = 0
+    # How often should GC be performed?
+    gcThreshold = 50
 
     ## Accumulating data
     # Mapping from variable ID to True
@@ -1021,6 +1145,9 @@ class ConstraintSystem:
         self.N = N
         self.verbose = verbose
         self.manager = manager
+        if manager is not None:
+            self.varMap = { var.id : var for var in manager.variables }
+            self.levelMap = { var.id : var.level for var in manager.variables }
         self.writer = SimpleWriter() if writer is None else writer
         self.randomize = False
         self.sset = ConstraintSet(writer = self.writer)
@@ -1032,6 +1159,8 @@ class ConstraintSystem:
         cid = self.rset.addConstraint(con)
         for i in con.nz:
             self.varUsed[i] = True
+        if self.manager is not None:
+            con.buildBdd(self)
         return cid
 
     # Add presum list
@@ -1061,7 +1190,7 @@ class ConstraintSystem:
         while pq.qsize() > 1:
             (w1, o1, con1) = pq.get()
             (w2, o2, con2) = pq.get()
-            ncon = con1.add(con2)
+            ncon = con1.add(con2, self)
             oid = olist[idx]
             if pq.qsize() > 0:
                 # Gather statistics on this constraint, even though won't be added to rset
@@ -1071,7 +1200,7 @@ class ConstraintSystem:
         # Reduced queue to single element
         (w, o, con) = pq.get()
         self.rset.addConstraint(con)
-        
+        self.checkGC()
 
     # Reduce set of constraints by summing
     def presum(self):
@@ -1085,13 +1214,13 @@ class ConstraintSystem:
     def solve(self):
         self.sset = ConstraintSet(writer = self.writer)
         if self.verbose:
-            self.writer.write("  Initial state")
+            self.writer.write("  Initial state\n")
             self.showState()
         # Scan constraints to see if any are infeasible
         for cid in self.rset.currentCids():
             con = self.rset[cid]
             if con.isInfeasible():
-                return "unsolvable"
+                return "unsolvable\n"
         status = "normal"
 
         # Perform any presumming
@@ -1106,16 +1235,24 @@ class ConstraintSystem:
 
         if self.verbose:
             self.writer.write("  Solution status:%s\n" % status)
-            self.postStatistics(status, False)
+            self.postStatistics(status)
         return status
+
+    def checkGC(self):
+        self.constraintCount += 1
+        if self.constraintCount > self.gcThreshold:
+            clauseList = self.manager.collectGarbage()
+            self.constraintCount = 0
+            if len(clauseList) > 0:
+                self.manager.prover.deleteClauses(clauseList)
 
     def show(self):
         self.rset.show()
     
     def showState(self):
-        self.writer.write("  Processed:")
+        self.writer.write("  Processed:\n")
         self.sset.show()
-        self.writer.write("  Remaining:")
+        self.writer.write("  Remaining:\n")
         self.rset.show()
 
     def showRemainingState(self):
@@ -1130,10 +1267,9 @@ class ConstraintSystem:
         tavg = float(tc)/ccount
         self.writer.write("  Problem: %d constraints, %d variables, %d nonzero coefficients.  %d total nonzeros (%.2f avg, %d max)\n" % (ccount, vcount, acount, tc, tavg, tmax))
 
-    def postStatistics(self, status, maybeSolvable):
+    def postStatistics(self, status):
         # status: "solved", "unsolvable", "normal"
-        expected = "solvable" if maybeSolvable else "unsolvable"
-        self.writer.write("  Solution status: %s (expected = %s)\n" % (status, expected))
+        self.writer.write("  Solution status: %s\n" % (status))
         ccount = self.rset.constraintCount()
         tc = self.rset.termCount
         tmax = self.rset.termMax

@@ -468,7 +468,7 @@ class Solver:
         del self.activeIds[id1]
         del self.activeIds[id2]
         if self.prover.fileOutput() and self.verbLevel >= 3:
-            self.writer.write(comment)
+            self.writer.write("Combine: %s\n" % (comment))
         self.activeIds[self.termCount] = newTerm
         if newTerm.root == self.manager.leaf0:
             if self.prover.fileOutput() and self.verbLevel >= 1:
@@ -612,7 +612,7 @@ class Solver:
                     parts = field.split('.')
                     coeff = int(parts[0])
                     var = int(parts[1])
-                    con[v] = c
+                    con[var] = coeff
                 cid = self.constraintSystem.addConstraint(con)
                 if len(idStack) < 1:
                     raise SolverException("Line #%d.  Stack is empty" % (lineCount))
@@ -621,14 +621,14 @@ class Solver:
                 termBdd = self.activeIds[id].root
                 antecedents = [self.activeIds[id].validation]
                 del self.activeIds[id]
-                conBdd = con.bdd
+                conBdd = con.root
                 check, implication = self.manager.justifyImply(termBdd, conBdd)
                 if not check:
-##                    raise bdd.BddException("Implication of constraint #%d from term failed %s -/-> %s" % (eid, termBdd.label(), conBdd.label()))
-                    self.writer.write("WARNING: Implication of constraint #%d from term failed %s -/-> %s\n" % (eid, termBdd.label(), conBdd.label()))
+##                    raise bdd.BddException("Implication of constraint #%d from term failed %s -/-> %s" % (cid, termBdd.label(), conBdd.label()))
+                    self.writer.write("WARNING: Implication of constraint #%d from term failed %s -/-> %s\n" % (cid, termBdd.label(), conBdd.label()))
                 if implication != resolver.tautologyId:
                     antecedents += [implication]
-                con.validation = self.manager.prover.createClause([conBdd.id], antecedents, "Validation of constraint #%d BDD %s" % (eid, conBdd.label()))
+                con.validation = self.manager.prover.createClause([conBdd.id], antecedents, "Validation of constraint #%d BDD %s" % (cid, conBdd.label()))
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
 
@@ -644,8 +644,10 @@ class Solver:
             status = self.constraintSystem.solve()
             if status == 'unsolvable':
                 self.writer.write("Constraint system proved formula UNSAT\n")
+                self.constraintSystem.postStatistics(status)
             else:
-                self.writer.write("Constraint system indicates formula may be SAT\n")
+                self.writer.write("Constraint system indicates formula may be SAT:\n")
+                self.constraintSystem.show()
         
     def placeInBucket(self, buckets, id):
         term = self.activeIds[id]
