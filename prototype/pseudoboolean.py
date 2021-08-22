@@ -1137,6 +1137,16 @@ class ConstraintSystem:
     gcThreshold = 50
 
     ## Accumulating data
+    # Total number of elimination steps
+    stepCount = 0
+    # Sum of pivot degrees
+    pivotDegreeSum = 0
+    # Max of pivot degrees
+    pivotDegreeMax = 0
+    # Total number of vector operations
+    combineCount = 0
+
+
     # Mapping from variable ID to True
     varUsed = {}
 
@@ -1211,7 +1221,97 @@ class ConstraintSystem:
         if ncount < icount:
             self.writer.write("Presumming reduced constraints from %d to %d\n" % (icount, ncount))
 
+    # Given possible pivot index, give a score
+    def evaluatePivot(self, pidx):
+        cidList = self.rset.lookup(pidx)
+        posIndices = [cid for cid in cidList if self.rset[cid][pidx] > 0]
+        negIndices = [cid for cid in cidList if self.rset[cid][pidx] < 0]
+        score = 0
+        for pid in posIndices:
+            for nid in negIndices:
+                score += len(self.rset[pid]) + len(self.rset[nid]) - 2
+        return score
+
+    # Given remaining set of constraints, select pivot element and constraint id
+    def selectPivot(self):
+        bestPidx = None
+        bestScore = 0
+        idList = self.rset.currentIndices()
+        # Make sure that any ties are broken arbitrarily
+        # rather than as some artifact of the input file
+        if self.randomize:
+            random.shuffle(idList)
+        for pidx in idList:
+            score = self.evaluatePivot(pidx)
+            if bestPidx is None or score < bestScore:
+                bestPidx = pidx
+                bestScore = score
+        return bestPidx
+
+    # Perform one step of FM reduction
+    # Possible return values:
+    # "solved", "unsolvable", "normal"
+    def solutionStep(self):
+        if len(self.rset) == 0:
+            return "solved"
+        self.stepCount += 1
+        pidx = self.selectPivot()
+        if pidx is None:
+            return "solved"
+        
+
+
+        cidList = self.rset.lookup(pidx)
+        posIndices = [cid for cid in cidList if self.rset[cid][pidx] > 0]
+        negIndices = [cid for cid in cidList if self.rset[cid][pidx] < 0]
+
+        if self.verbose:
+            self.writer.write("Pivoting at element %d.  %d positive, %d negative constraints\n" % (pidx, len(posIndices), len(negIndices)))
+        
+        for pid in posIndices:
+            pcon = self.rset[pid]
+            for nid in negIndices:
+                ncon = self.rset[nid]
+                scon = pcon.add(ncon, self)
+                if scon.isInfeasible():
+                    return "unsolvable"
+                self.rset.addConstraint(scon)
+                self.combineCount += 1
+                self.checkGC()
+
+        for cid in cidList:
+            self.rset.removeConstraint(cid)
+
+        return "normal"
+            
     def solve(self):
+        self.sset = ConstraintSet(writer = self.writer)
+        if self.verbose:
+            self.writer.write("  Initial state\n")
+            self.showState()
+        # Scan constraints to see if any are infeasible
+        for cid in self.rset.currentCids():
+            con = self.rset[cid]
+            if con.isInfeasible():
+                return "unsolvable"
+        status = "normal"
+
+        # Perform any presumming
+        self.presum()
+
+        while True:
+            status = self.solutionStep()
+            # "solved", "unsolvable", "normal"
+            if status != "normal":
+                break
+            if self.verbose:
+                self.showState()
+        if self.verbose:
+            self.writer.write("  Solution status:%s\n" % status)
+            self.postStatistics(status)
+        return status
+
+    def oldSolve(self):
         self.sset = ConstraintSet(writer = self.writer)
         if self.verbose:
             self.writer.write("  Initial state\n")
