@@ -473,10 +473,10 @@ class EquationSet:
         return len(self.equDict)
 
     def currentEids(self):
-        return self.equDict.keys()
+        return list(self.equDict.keys())
 
     def currentIndices(self):
-        return self.nzMap.keys()
+        return list(self.nzMap.keys())
 
     def show(self):
         eidList = sorted(self.currentEids())
@@ -1091,10 +1091,10 @@ class ConstraintSet:
         return len(self.conDict)
 
     def currentCids(self):
-        return self.conDict.keys()
+        return list(self.conDict.keys())
 
     def currentIndices(self):
-        return self.nzMap.keys()
+        return list(self.nzMap.keys())
 
     def show(self):
         cidList = sorted(self.currentCids())
