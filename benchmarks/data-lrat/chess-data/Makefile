@@ -19,6 +19,8 @@ nq: chess-$(N)-noquant.data
 
 e: chess-$(N)-equation.data
 
+c: chess-$(N)-constraint.data
+
 ie: chess-$(N)-equation-integer.data
 
 re: chess-$(N)-equation-randomorder.data
@@ -44,14 +46,19 @@ chess-$(N)-column-randomorder.data:
 	$(CHECKER) chess-$(N)-column-randomorder.cnf chess-$(N)-column-randomorder.$(EXTENSION) | tee -a chess-$(N)-column-randomorder.data
 	rm -f chess-$(N)-column-randomorder.$(EXTENSION)
 
+chess-$(N)-equation.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-equation -p e | tee chess-$(N)-equation.data
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation.cnf -s chess-$(N)-equation.schedule -m $(MOD) \
+		-p chess-$(N)-equation.order -o chess-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation.data
+	$(CHECKER) chess-$(N)-equation.cnf chess-$(N)-equation.$(EXTENSION) | tee -a chess-$(N)-equation.data
+	rm -f chess-$(N)-equation.$(EXTENSION)
+
 chess-$(N)-equation-integer.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-equation-integer -p e | tee chess-$(N)-equation-integer.data
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation-integer.cnf -s chess-$(N)-equation-integer.schedule -m $(MOD) \
 		-p chess-$(N)-equation-integer.order -o chess-$(N)-equation-integer.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-integer.data
 	$(CHECKER) chess-$(N)-equation-integer.cnf chess-$(N)-equation-integer.$(EXTENSION) | tee -a chess-$(N)-equation-integer.data
 	rm -f chess-$(N)-equation-integer.$(EXTENSION)
-
-
 
 chess-$(N)-equation-randomorder.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-equation-randomorder -p e | tee chess-$(N)-equation-randomorder.data
@@ -60,6 +67,14 @@ chess-$(N)-equation-randomorder.data:
 		-p chess-$(N)-equation-randomorder.order -o chess-$(N)-equation-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-randomorder.data
 	$(CHECKER) chess-$(N)-equation-randomorder.cnf chess-$(N)-equation-randomorder.$(EXTENSION) | tee -a chess-$(N)-equation-randomorder.data
 	rm -f chess-$(N)-equation-randomorder.$(EXTENSION)
+
+chess-$(N)-constraint.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-constraint -p c | tee chess-$(N)-constraint.data
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint.cnf -s chess-$(N)-constraint.schedule -m $(MOD) \
+		-p chess-$(N)-constraint.order -o chess-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a chess-$(N)-constraint.data
+	$(CHECKER) chess-$(N)-constraint.cnf chess-$(N)-constraint.$(EXTENSION) | tee -a chess-$(N)-constraint.data
+	rm -f chess-$(N)-constraint.$(EXTENSION)
+
 
 chess-$(N)-noquant.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-noquant | tee chess-$(N)-noquant.data
