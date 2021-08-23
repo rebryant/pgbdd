@@ -19,11 +19,13 @@ nq: chess-$(N)-noquant.data
 
 e: chess-$(N)-equation.data
 
-c: chess-$(N)-constraint.data
-
 ie: chess-$(N)-equation-integer.data
 
 re: chess-$(N)-equation-randomorder.data
+
+c: chess-$(N)-constraint.data
+
+dc: chess-$(N)-constraint-dual.data
 
 ns: chess-$(N)-noschedule.data
 
@@ -74,6 +76,13 @@ chess-$(N)-constraint.data:
 		-p chess-$(N)-constraint.order -o chess-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a chess-$(N)-constraint.data
 	$(CHECKER) chess-$(N)-constraint.cnf chess-$(N)-constraint.$(EXTENSION) | tee -a chess-$(N)-constraint.data
 	rm -f chess-$(N)-constraint.$(EXTENSION)
+
+chess-$(N)-constraint-dual.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-constraint-dual -p d | tee chess-$(N)-constraint-dual.data
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint-dual.cnf -s chess-$(N)-constraint-dual.schedule -m $(MOD) \
+		-p chess-$(N)-constraint-dual.order -o chess-$(N)-constraint-dual.$(EXTENSION) 2>&1 | tee -a chess-$(N)-constraint-dual.data
+	$(CHECKER) chess-$(N)-constraint-dual.cnf chess-$(N)-constraint-dual.$(EXTENSION) | tee -a chess-$(N)-constraint-dual.data
+	rm -f chess-$(N)-constraint-dual.$(EXTENSION)
 
 
 chess-$(N)-noquant.data:
