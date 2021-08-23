@@ -388,6 +388,9 @@ class Equation:
                 return False
         return False
     
+    def isTrivial(self):
+        return self.cval == 0 and len(self) == 0
+
     # Does this equation have no solution with modular arithmetic
     def isInfeasible(self):
         # All zero coefficients and non-zero constant
@@ -1012,6 +1015,9 @@ class Constraint:
                 maxsum += v
         return maxsum < self.cval
 
+    def isTrivial(self):
+        return self.cval <= 0 and len(self) == 0
+
     def __str__(self):
         if self.N <= 0:
             return self.formatDense()
@@ -1146,7 +1152,6 @@ class ConstraintSystem:
     # Total number of vector operations
     combineCount = 0
 
-
     # Mapping from variable ID to True
     varUsed = {}
 
@@ -1275,7 +1280,8 @@ class ConstraintSystem:
                 scon = pcon.add(ncon, self)
                 if scon.isInfeasible():
                     return "unsolvable"
-                self.rset.addConstraint(scon)
+                if not scon.isTrivial():
+                    self.rset.addConstraint(scon)
                 self.combineCount += 1
                 self.checkGC()
 
