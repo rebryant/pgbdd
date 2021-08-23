@@ -45,6 +45,8 @@ int main(int argc, char** argv) {
     int i, k;  // pigeons i, k
     int j;     // hole j
 
+    int clause_count = 0;  // How many clauses have been generated
+
     if (argc != 2)
 	usage();
 
@@ -93,11 +95,26 @@ int main(int argc, char** argv) {
 	    printf("%d ", index);
 	}
 	printf("0\n");
+	clause_count++;
+	// Generate ALO for pigeon i
+	printf("c PSEUDO c %d\n", clause_count);
+	printf("c PSEUDO >= 1");
+	for (j=1; j <= n; j++) {
+	    int index;
+	    if (hole_major) {
+		index  = n*(j-1)+i;
+	    } else {
+		index  = n*(i-1)+j;
+	    }
+	    printf(" 1.%d", index);
+	}
+	printf("\n");
     }
 
     // for each hole we have a set of clauses ensuring that only one single
     // pigeon is placed into that hole
-    for (j=1; j <= n; j++)
+    for (j=1; j <= n; j++) {
+	int start_clause = clause_count+1;
 	for (i=1; i <= n; i++)
 	    for (k=i+1; k <= n+1; k++) {
 		int index, kindex;
@@ -109,6 +126,27 @@ int main(int argc, char** argv) {
 		    kindex = n*(k-1)+j;
 		}
 		printf("-%d -%d 0\n", index, kindex);
+		clause_count++;
 	    }
+	int last_clause = clause_count;
+	/* Generate AMO constraint for hole j */
+	printf("c PSEUDO c");
+	for (k = start_clause; k <= last_clause; k++)
+	    printf(" %d", k);
+	printf("\n");
+	int acount = last_clause - start_clause;
+	if (acount > 0)
+	    printf("c PSEUDO a %d\n", acount);
+	printf("c PSEUDO >= -1");
+	for (i=1; i <=n; i++) {
+	    int index;
+	    if (hole_major)
+		index  = n*(j-1)+i;
+	    else
+		index  = n*(i-1)+j;
+	    printf(" -1.%d", index);
+	}
+	printf("\n");
+    }
     return 0;
 }
