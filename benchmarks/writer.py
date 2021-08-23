@@ -103,9 +103,9 @@ class ScheduleWriter(Writer):
         self.decrementAnd = False
         if count+1 > self.stackDepth:
             print("Warning: Cannot perform %d And's.  Only %d elements on stack" % (count, self.stackDepth))
-#            raise WriterException("Cannot perform %d And's.  Only %d elements on stack" % (count, self.stackDepth))
-        self.show("a %d" % count)
-        self.stackDepth -= count
+        if count > 0:
+            self.show("a %d" % count)
+            self.stackDepth -= count
 
     def doStore(self, name):
         self.show("s %s" % name)

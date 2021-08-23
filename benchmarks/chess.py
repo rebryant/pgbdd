@@ -9,13 +9,13 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c] [-s SEED]" % name) 
+    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c|d] [-s SEED]" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
     print("  -c       Include corners")
     print("  -w WRAP  Wrap board horizontally (h), vertically (v), both (b) or neither (n)")
-    print("  -p e|c   Generate schedule that produces pseudoboolean equations (e) or constraints (c)")
+    print("  -p e|c|d Generate schedule that produces pseudoboolean equations (e), single constraints (c), or dual constraints (d)")
     print("  -n N     Specify size of board")
     print("  -s SEED  Provide random seed for randomizing variables")
 
@@ -141,6 +141,7 @@ class Board:
     doLinear = True
     doEquation = False
     doConstraint = False
+    doDualConstraint = False
     # List of variable Ids for bucket ordering
     idList = []
 
@@ -170,6 +171,8 @@ class Board:
                 self.doEquation = True
             elif pseudoType == 'c':
                 self.doConstraint  = True
+            elif pseudoType == 'd':
+                self.doDualConstraint = True
         self.verbose = verbose
         self.includeCorners = includeCorners
         self.wrapHorizontal = wrapHorizontal
@@ -274,6 +277,30 @@ class Board:
                     else:
                         sq.doALO(self.scheduleWriter)
 
+    def constructBoardDualConstraint(self):
+        # Generate both AMO & ALO constraints for each square
+        for r in range(self.n):
+            for c in range(self.n):
+                # Generate clauses, And them, and generate equation
+                # Each set of conjunctions is independent
+                sq = self.squares[(r,c)]
+                clist = sq.doClauses(self.cnfWriter)
+                if len(clist) > 0:
+                    self.scheduleWriter.doComment("Validating and generating both ALO and AMO constraints for square %d,%d" % (r,c))
+                    # Exploit fact that at-least-one is single clause at beginning
+                    # and rest encode at-most-one
+                    aloList = clist[0:1]
+                    amoList = clist[1:]
+                    self.scheduleWriter.newTree()
+                    self.scheduleWriter.getClauses(aloList)
+                    self.scheduleWriter.doAnd(len(aloList))
+                    sq.doALO(self.scheduleWriter)
+                    self.scheduleWriter.newTree()
+                    self.scheduleWriter.getClauses(amoList)
+                    self.scheduleWriter.doAnd(len(amoList))
+                    sq.doAMO(self.scheduleWriter)
+
+
     # Construct constraints for specified number of columns.  
     # Return lists of variables on left and right
     def treeBuild(self, leftIndex, columnCount):
@@ -309,6 +336,8 @@ class Board:
             self.constructBoardEquation()
         elif self.doConstraint:
             self.constructBoardConstraint()
+        elif self.doDualConstraint:
+            self.constructBoardDualConstraint()
         else:
             self.treeBuild(0, self.n)
 
@@ -407,12 +436,10 @@ def run(name, args):
             if val in "vb":
                 wrapVertical = True
         elif opt == '-p':
-            if val == 'e':
-                pseudoType = 'e'
-            elif val == 'c':
-                pseudoType = 'c'
+            if len(val) == 1 and val in  "ecd":
+                pseudoType = val
             else:
-                print("Invalid pseudoboolean type  '%s'" % val)
+                print("Invalid pseudoboolean type '%s'" % val)
                 usage(name)
                 return
         elif opt == '-s':
