@@ -122,6 +122,7 @@ data:
 	$(GRABBER) chess-*-equation-randomorder.data > chess-equation-randomorder.csv
 	$(GRABBER) chess-*-equation-integer.data > chess-equation-integer.csv
 	$(GRABBER) chess-*-constraint.data > chess-constraint.csv
+	$(GRABBER) chess-*-constraint-dual.data > chess-constraint-dual.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
 	$(GRABBER) chess-*-gbucket.data > chess-gbucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv
