@@ -1,17 +1,21 @@
 INTERP = python3
 N = 4
-VLEVEL = 1
+VLEVEL = 2
 
-GENERATOR = ../../pigeon-code/pigeonhole
+GDIR=../../pigeon-code
+
+GENERATOR = $(GDIR)/pigeonhole
+
+EXTRACTOR = $(GDIR)/extract_lines.py PSEUDO
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
 
 hml: pigeon-direct-$(N)-hm-linear.data
 pml: pigeon-direct-$(N)-pm-linear.data
-
 hmb: pigeon-direct-$(N)-hm-bucket.data
 pmb: pigeon-direct-$(N)-pm-bucket.data
+pc: pigeon-direct-$(N)-constraint.data
 
 pigeon-direct-$(N)-hm-bucket.data:
 	$(GENERATOR) -$(N) > pigeon-direct-$(N)-hm.cnf
@@ -36,6 +40,14 @@ pigeon-direct-$(N)-pm-linear.data:
 	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-pm.cnf -O pigeon-direct-$(N)-pm.lrat | tee pigeon-direct-$(N)-pm-linear.data
 	$(CHECKER) pigeon-direct-$(N)-pm.cnf pigeon-direct-$(N)-pm.lrat | tee -a pigeon-direct-$(N)-pm-linear.data
 	rm -f pigeon-direct-$(N)-pm.lrat
+
+pigeon-direct-$(N)-constraint.data:
+	$(GENERATOR) -$(N) > pigeon-direct-$(N)-constraint.cnf
+	$(EXTRACTOR) < pigeon-direct-$(N)-constraint.cnf > pigeon-direct-$(N)-constraint.schedule
+	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-constraint.cnf -o pigeon-direct-$(N)-constraint.lrat -s pigeon-direct-$(N)-constraint.schedule | tee pigeon-direct-$(N)-constraint.data
+	$(CHECKER) pigeon-direct-$(N)-constraint.cnf pigeon-direct-$(N)-constraint.lrat | tee -a pigeon-direct-$(N)-constraint.data
+	rm -f pigeon-direct-$(N)-constraint.lrat
+
 
 data:
 	$(GRABBER) pigeon-*-hm-bucket.data > pigeon-direct-hm-bucket.csv
