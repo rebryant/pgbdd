@@ -57,6 +57,7 @@ data:
 	$(GRABBER) pigeon-*-bucket-pm.data > pigeon-tseitin-bucket-pm.csv
 	$(GRABBER) pigeon-*-column.data > pigeon-tseitin-column.csv
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
+	$(GRABBER) pigeon-*-constraint.data > pigeon-tseitin-constraint.csv
 
 vdata:
 	$(VGRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket-verification.csv
