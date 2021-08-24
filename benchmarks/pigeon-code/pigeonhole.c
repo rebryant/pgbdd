@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
 	for (j=1; j <= n; j++) {
 	    int index;
 	    if (hole_major) {
-		index  = n*(j-1)+i;
+		index  = (n+1)*(j-1)+i;
 	    } else {
 		index  = n*(i-1)+j;
 	    }
@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
 	for (j=1; j <= n; j++) {
 	    int index;
 	    if (hole_major) {
-		index  = n*(j-1)+i;
+		index  = (n+1)*(j-1)+i;
 	    } else {
 		index  = n*(i-1)+j;
 	    }
@@ -119,8 +119,8 @@ int main(int argc, char** argv) {
 	    for (k=i+1; k <= n+1; k++) {
 		int index, kindex;
 		if (hole_major) {
-		    index  = n*(j-1)+i;
-		    kindex = n*(j-1)+k;
+		    index  = (n+1)*(j-1)+i;
+		    kindex = (n+1)*(j-1)+k;
 		} else {
 		    index  = n*(i-1)+j;
 		    kindex = n*(k-1)+j;
@@ -138,10 +138,10 @@ int main(int argc, char** argv) {
 	if (acount > 0)
 	    printf("c PSEUDO a %d\n", acount);
 	printf("c PSEUDO >= -1");
-	for (i=1; i <=n; i++) {
+	for (i=1; i <=n+1; i++) {
 	    int index;
 	    if (hole_major)
-		index  = n*(j-1)+i;
+		index  = (n+1)*(j-1)+i;
 	    else
 		index  = n*(i-1)+j;
 	    printf(" -1.%d", index);
