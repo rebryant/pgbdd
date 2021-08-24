@@ -13,6 +13,7 @@ c: pigeon-tseitin-$(N)-column.data
 b: pigeon-tseitin-$(N)-bucket.data
 pb: pigeon-tseitin-$(N)-bucket-pm.data
 l: pigeon-tseitin-$(N)-linear.data
+con: pigeon-tseitin-$(N)-constraint.data
 
 pigeon-tseitin-$(N)-column.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-column.data
@@ -42,6 +43,14 @@ pigeon-tseitin-$(N)-linear.data:
 		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-linear.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-linear.data
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
+
+pigeon-tseitin-$(N)-constraint.data:
+	$(GENERATOR) -c -n $(N) -r pigeon-tseitin-$(N)-constraint | tee pigeon-tseitin-$(N)-constraint.data
+	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-constraint.cnf -s pigeon-tseitin-$(N)-constraint.schedule \
+		-p pigeon-tseitin-$(N)-constraint.order -o pigeon-tseitin-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-constraint.data
+	$(CHECKER) pigeon-tseitin-$(N)-constraint.cnf pigeon-tseitin-$(N)-constraint.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-constraint.data
+	rm -f pigeon-tseitin-$(N)-constraint.$(EXTENSION)
+
 
 data:
 	$(GRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket.csv
