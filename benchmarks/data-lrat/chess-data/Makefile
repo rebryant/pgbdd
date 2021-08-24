@@ -27,6 +27,8 @@ c: chess-$(N)-constraint.data
 
 dc: chess-$(N)-constraint-dual.data
 
+dcr:  chess-$(N)-constraint-dual-randomorder.data
+
 ns: chess-$(N)-noschedule.data
 
 b: chess-$(N)-bucket.data
@@ -72,17 +74,26 @@ chess-$(N)-equation-randomorder.data:
 
 chess-$(N)-constraint.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-constraint -p c | tee chess-$(N)-constraint.data
-	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint.cnf -s chess-$(N)-constraint.schedule -m $(MOD) \
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint.cnf -s chess-$(N)-constraint.schedule \
 		-p chess-$(N)-constraint.order -o chess-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a chess-$(N)-constraint.data
 	$(CHECKER) chess-$(N)-constraint.cnf chess-$(N)-constraint.$(EXTENSION) | tee -a chess-$(N)-constraint.data
 	rm -f chess-$(N)-constraint.$(EXTENSION)
 
 chess-$(N)-constraint-dual.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-constraint-dual -p d | tee chess-$(N)-constraint-dual.data
-	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint-dual.cnf -s chess-$(N)-constraint-dual.schedule -m $(MOD) \
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint-dual.cnf -s chess-$(N)-constraint-dual.schedule \
 		-p chess-$(N)-constraint-dual.order -o chess-$(N)-constraint-dual.$(EXTENSION) 2>&1 | tee -a chess-$(N)-constraint-dual.data
 	$(CHECKER) chess-$(N)-constraint-dual.cnf chess-$(N)-constraint-dual.$(EXTENSION) | tee -a chess-$(N)-constraint-dual.data
 	rm -f chess-$(N)-constraint-dual.$(EXTENSION)
+
+
+chess-$(N)-constraint-dual-randomorder.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-constraint-dual-randomorder -p d | tee chess-$(N)-constraint-dual-randomorder.data
+	$(RANDOMIZER) chess-$(N)-constraint-dual-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-constraint-dual-randomorder.cnf -s chess-$(N)-constraint-dual-randomorder.schedule \
+		-p chess-$(N)-constraint-dual-randomorder.order -o chess-$(N)-constraint-dual-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-constraint-dual-randomorder.data
+	$(CHECKER) chess-$(N)-constraint-dual-randomorder.cnf chess-$(N)-constraint-dual-randomorder.$(EXTENSION) | tee -a chess-$(N)-constraint-dual-randomorder.data
+	rm -f chess-$(N)-constraint-dual-randomorder.$(EXTENSION)
 
 
 chess-$(N)-noquant.data:
@@ -123,6 +134,7 @@ data:
 	$(GRABBER) chess-*-equation-integer.data > chess-equation-integer.csv
 	$(GRABBER) chess-*-constraint.data > chess-constraint.csv
 	$(GRABBER) chess-*-constraint-dual.data > chess-constraint-dual.csv
+	$(GRABBER) chess-*-constraint-dual-randomorder.data > chess-constraint-dual-randomorder.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
 	$(GRABBER) chess-*-gbucket.data > chess-gbucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv
