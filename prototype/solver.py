@@ -457,6 +457,16 @@ class Solver:
         ids = sorted(self.activeIds.keys())
         return ids[0], ids[1]
 
+    # Remove term.  Can trigger GC, so be sure that all
+    # active BDDs have been captured as terms
+    def removeTerm(self, id):
+        term = self.activeIds[id]
+        term.root = None
+        del self.activeIds[id]
+        clauseList = self.manager.checkGC(term.size)
+        if len(clauseList) > 0:
+            self.prover.deleteClauses(clauseList)
+
     def combineTerms(self, id1, id2):
         termA = self.activeIds[id1]
         termB = self.activeIds[id2]
@@ -465,11 +475,11 @@ class Solver:
         comment = "T%d (Node %s) & T%d (Node %s)--> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
                                                                       self.termCount, newTerm.root.label())
         self.prover.comment(comment)
-        del self.activeIds[id1]
-        del self.activeIds[id2]
         if self.prover.fileOutput() and self.verbLevel >= 3:
             self.writer.write("Combine: %s\n" % (comment))
         self.activeIds[self.termCount] = newTerm
+        self.removeTerm(id1)
+        self.removeTerm(id2)
         if newTerm.root == self.manager.leaf0:
             if self.prover.fileOutput() and self.verbLevel >= 1:
                 self.writer.write("UNSAT\n")
@@ -487,12 +497,8 @@ class Solver:
         vstring = " ".join(sorted([str(v) for v in varList]))
         comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
-        del self.activeIds[id]
         self.activeIds[self.termCount] = newTerm
-        # This could be a good time for garbage collection
-        clauseList = self.manager.checkGC()
-        if len(clauseList) > 0:
-            self.prover.deleteClauses(clauseList)
+        self.removeTerm(id)
         return self.termCount
 
     def runNoSchedule(self):
@@ -586,7 +592,6 @@ class Solver:
                 idStack = idStack[:-1]
                 termBdd = self.activeIds[id].root
                 termValidation = self.activeIds[id].validation
-                del self.activeIds[id]
                 equBdd = e.root
                 if termBdd == equBdd:
                     e.validation = termValidation
@@ -599,8 +604,7 @@ class Solver:
                 if implication != resolver.tautologyId:
                     antecedents += [implication]
                 e.validation = self.manager.prover.createClause([equBdd.id], antecedents, "Validation of equation #%d BDD %s" % (eid, equBdd.label()))
-                
-
+                self.removeTerm(id)
             elif cmd == '>=':  
                 if self.constraintSystem is None:
                     nvar = len(self.litMap) // 2
@@ -620,7 +624,6 @@ class Solver:
                 idStack = idStack[:-1]
                 termBdd = self.activeIds[id].root
                 antecedents = [self.activeIds[id].validation]
-                del self.activeIds[id]
                 conBdd = con.root
                 check, implication = self.manager.justifyImply(termBdd, conBdd)
                 if not check:
@@ -629,6 +632,7 @@ class Solver:
                 if implication != resolver.tautologyId:
                     antecedents += [implication]
                 con.validation = self.manager.prover.createClause([conBdd.id], antecedents, "Validation of constraint #%d BDD %s" % (cid, conBdd.label()))
+                self.removeTerm(id)
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
 

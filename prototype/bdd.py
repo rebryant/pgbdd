@@ -220,10 +220,12 @@ class Manager:
     # GC support
     # Callback function from driver that will collect accessible roots for GC
     rootGenerator = None
-    # How many quantifications had been performed by last GC?
-    lastGC = 0
-    # How many variables should be quantified to trigger GC?
-    gcThreshold = 10
+    # Estimate of number of dead nodes (possibly overestimates)
+    deadNodeCount = 0
+    # How many dead nodes as fraction of live nodes to trigger GC
+    gcFraction = 0.10
+    # Minimum number of nodes before trigger GC
+    gcMin = 10000
     # Dictionary mapping variables to their IDs
     quantifiedVariableSet = None
     # Statistics
@@ -252,7 +254,7 @@ class Manager:
         self.andResolver = resolver.AndResolver(prover)
         self.implyResolver = resolver.ImplyResolver(prover)
         self.quantifiedVariableSet = set([])
-        self.lastGC = 0
+        self.deadNodeCount = 0
         self.cacheJustifyAdded = 0
         self.cacheNoJustifyAdded = 0
         self.applyCount = 0
@@ -783,12 +785,15 @@ class Manager:
         return newNode
             
     # Should a GC be triggered?
-    def checkGC(self):
-        newQuants = len(self.quantifiedVariableSet) - self.lastGC
-        if newQuants > self.gcThreshold:
+    def checkGC(self, newDeadCount):
+        self.deadNodeCount += newDeadCount
+        liveNodeCount = len(self.uniqueTable)
+        df = float(self.deadNodeCount) / liveNodeCount
+        if liveNodeCount >= self.gcMin and df >= self.gcFraction:
+            # Turn off trigger for garbage collection
+            self.deadNodeCount = 0
             return self.collectGarbage()
         return []
-
 
     # Create set nodes that should not be collected
     # Maintain frontier of marked nonleaf nodes
@@ -840,17 +845,19 @@ class Manager:
     # Start garbage collection.
     # Provided with partial list of accessible roots
     def collectGarbage(self):
+        oldCount = len(self.uniqueTable)
         frontier = []
         if self.rootGenerator is not None:
             frontier += self.rootGenerator()
-        frontier = [r for r in frontier if not r.isLeaf()]
+        frontier = [r for r in frontier if (r is not None and not r.isLeaf())]
         # Marking phase
         markedSet = self.doMarking(frontier)
         clauseList = self.cleanCache(markedSet)
         clauseList += self.cleanNodes(markedSet)
-        # Turn off trigger for garbage collection
-        self.lastGC = len(self.quantifiedVariableSet)
         self.gcCount += 1
+        newCount = len(self.uniqueTable)
+        if self.verbLevel >= 3:
+            self.writer.write("GC #%d %d --> %d nodes\n" % (self.gcCount, oldCount, newCount))
         return clauseList
 
     # Summarize activity
