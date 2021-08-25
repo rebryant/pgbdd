@@ -1,7 +1,7 @@
 # Support for representing pseudo Boolean formulas, either
 # as set of linear equations (possibly with modular arithmetic)
 # or set of linear constraints.
-# 
+#
 # Modular equations permits solution by Gaussian elimination
 # Constraints can be solved by Fourier-Motzin elimination
 
@@ -151,6 +151,8 @@ class Equation:
     cval = 0
     # BDD representation
     root = None
+    # BDD size
+    size = None
     # Validation step Id
     validation = None
 
@@ -166,6 +168,7 @@ class Equation:
         self.cval = self.mbox.mod(cval)
         self.nz = {}
         self.root = None
+        self.size = 0
         self.validation = None
 
     def setNz(self, nz):
@@ -316,6 +319,7 @@ class Equation:
         ilist = self.indices()
         if len(ilist) == 0:
             self.root = esys.manager.leaf1 if self.cval == 0 else esys.manager.leaf0
+            self.size = 1
             return
 
         ilist.sort(key = lambda id : esys.levelMap[id])
@@ -360,7 +364,7 @@ class Equation:
             nexti = previ
             
         self.root = nodes[ilist[0]][0]
-
+        self.size = esys.manager.getSize(self.root)
         
 
     # Perform scaling subtraction
@@ -502,10 +506,6 @@ class EquationSystem:
     mbox = None
     writer = None
 
-    # Optionally: Reduce some of the equations via summations before solving
-    # List of lists, each giving equations IDs to sum
-    presums = []
-
     ## Solver state
     # Eliminated equations
     sset = None
@@ -520,14 +520,10 @@ class EquationSystem:
     levelMap = None
 
 
-    # Tracking number of equations generated since last GC
-    equationCount = 0
-    # How often should GC be performed?
-    gcThreshold = 50
-
     ## Accumulating data
     # Mapping from variable ID to True
     varUsed = {}
+    # Number of equations
     # Total number of elimination steps
     stepCount = 0
     # Sum of pivot degrees
@@ -556,7 +552,6 @@ class EquationSystem:
         self.pivotDegreeSum = 0
         self.pivotDegreeMax = 0
         self.combineCount = 0
-        self.equationCount = 0
 
     # Add new equation to main set
     def addEquation(self, e):
@@ -566,54 +561,6 @@ class EquationSystem:
         if self.manager is not None:
             e.buildBdd(self)
         return eid
-
-    # Add presum list
-    def addPresum(self, elist):
-        self.presums.append(elist)
-
-    # Reduce set of equationss (given by their eid's) by summing
-    def sumReduce(self, elist):
-        if len(elist) == 0:
-            return
-        # This is a hack to enable randomized removal of equal weighted items from priority queue
-        # and to make sure that priority queue has totally ordered keys
-        # Have enough entries in the list to cover initial equations and partial sums
-        olist = list(range(2*len(elist)))
-        if self.randomize:
-            random.shuffle(olist)
-        # Put elements into priority queue according to nnz's
-        pq = queue.PriorityQueue()
-        for idx in range(len(elist)):
-            oid = olist[idx]
-            eid = elist[idx]
-            e = self.rset[eid]
-            self.rset.removeEquation(eid)                
-            pq.put((len(e), oid, e))
-        # Now start combining them
-        idx = len(elist)
-        while pq.qsize() > 1:
-            (w1, o1, e1) = pq.get()
-            (w2, o2, e2) = pq.get()
-            ne = e1.add(e2, self)
-            oid = olist[idx]
-            if pq.qsize() > 0:
-                # Gather statistics on this equation, even though won't be added to rset
-                self.rset.analyzeEquation(ne)
-            pq.put((len(ne), oid, ne))
-            idx += 1
-        # Reduced queue to single element
-        (w, o, e) = pq.get()
-        self.rset.addEquation(e)
-        self.checkGC()
-
-    # Reduce set of equations by summing
-    def presum(self):
-        icount = len(self.rset)
-        for elist in self.presums:
-            self.sumReduce(elist)
-        ncount = len(self.rset)
-        if ncount < icount:
-            self.writer.write("Presumming reduced equations from %d to %d\n" % (icount, ncount))
 
     # Given possible pivot index
     # find best equation to use as pivot equation and
@@ -675,23 +622,35 @@ class EquationSystem:
             return "solved"
 
         e = self.rset[eid]
-        self.rset.removeEquation(eid)
-        self.sset.addEquation(e)
         pval = e[pidx]
         if self.verbose:
             self.writer.write("Pivoting with value %d (element %d).  Using equation #%d\n" % (pval, pidx, eid))
         ne = e.normalize(pidx, self)
-
+        # Temporarily store normalized equation in rset in case trigger GC
+        # Size same as that for eid, so don't try GC yet.
+        nid = self.rset.addEquation(ne)
+        if self.verbose:
+            self.writer.write("Temporarily storing normalized equation as equation #%d.  Removing #%d\n" % (nid, eid))
+        self.rset.removeEquation(eid)
+        self.sset.addEquation(e)
         otherEids =  self.rset.lookup(pidx)
         for oeid in otherEids:
+            if oeid == nid:
+                continue
             oe = self.rset[oeid]
-            self.rset.removeEquation(oeid)
             re = oe.scaleSub(ne, pidx, self)
             if re.isInfeasible():
                 return "unsolvable"
             self.rset.addEquation(re)
+            size = oe.size
+            self.rset.removeEquation(oeid)
+            self.checkGC(size)
             self.combineCount += 1
-            self.checkGC()
+
+        # Removed normalized equation
+        size = ne.size
+        self.rset.removeEquation(nid)
+        self.checkGC(size)
         return "normal"
             
     def solve(self):
@@ -706,9 +665,6 @@ class EquationSystem:
                 return "unsolvable"
         status = "normal"
 
-        # Perform any presumming
-        self.presum()
-
         while True:
             status = self.solutionStep()
             # "solved", "unsolvable", "normal"
@@ -721,13 +677,10 @@ class EquationSystem:
             self.postStatistics(status)
         return status
 
-    def checkGC(self):
-        self.equationCount += 1
-        if self.equationCount > self.gcThreshold:
-            clauseList = self.manager.collectGarbage()
-            self.equationCount = 0
-            if len(clauseList) > 0:
-                self.manager.prover.deleteClauses(clauseList)
+    def checkGC(self, newDeadCount):
+        clauseList = self.manager.checkGC(newDeadCount)
+        if len(clauseList) > 0:
+            self.manager.prover.deleteClauses(clauseList)
 
     def show(self):
         self.rset.show()
@@ -794,6 +747,8 @@ class Constraint:
     cval = 0
     # BDD representation
     root = None
+    # BDD size
+    size = 0
     # Validation step Id
     validation = None
 
@@ -802,6 +757,7 @@ class Constraint:
         self.cval = cval
         self.nz = {}
         self.root = None
+        self.size = 0
         self.validation = None
 
     def setNz(self, nz):
@@ -943,6 +899,7 @@ class Constraint:
         ilist = self.indices()
         if len(ilist) == 0:
             self.root = csys.manager.leaf1 if self.cval <= 0 else csys.manager.leaf0
+            self.size = 1
             return
 
         ilist.sort(key = lambda id : csys.levelMap[id])
@@ -995,7 +952,7 @@ class Constraint:
             nexti = previ
             
         self.root = nodes[ilist[0]][0]
-
+        self.size = csys.manager.getSize(self.root)
 
 
     # Lexicographic ordering of constraints
@@ -1120,10 +1077,6 @@ class ConstraintSystem:
     randomize = False
     writer = None
 
-    # Optionally: Reduce some of the constraints via summations before solving
-    # List of lists, each giving constraints IDs to sum
-    presums = []
-
     ## Solver state
     # Eliminated constraints
     sset = None
@@ -1136,11 +1089,6 @@ class ConstraintSystem:
     varMap = None
     # Mapping from variable Id o level
     levelMap = None
-
-    # Tracking number of constraints generated since last GC
-    constraintCount = 0
-    # How often should GC be performed?
-    gcThreshold = 50
 
     ## Accumulating data
     # Total number of elimination steps
@@ -1177,54 +1125,6 @@ class ConstraintSystem:
         if self.manager is not None:
             con.buildBdd(self)
         return cid
-
-    # Add presum list
-    def addPresum(self, clist):
-        self.presums.append(clist)
-
-    # Reduce set of constraints (given by their cid's) by summing
-    def sumReduce(self, clist):
-        if len(clist) == 0: 
-            return
-        # This is a hack to enable randomized removal of equal weighted items from priority queue
-        # and to make sure that priority queue has totally ordered keys
-        # Have enough entries in the list to cover initial constraints and partial sums
-        olist = list(range(2*len(clist)))
-        if self.randomize:
-            random.shuffle(olist)
-        # Put elements into priority queue according to nnz's
-        pq = queue.PriorityQueue()
-        for idx in range(len(clist)):
-            oid = olist[idx]
-            cid = clist[idx]
-            con = self.rset[cid]
-            self.rset.removeConstraint(cid)                
-            pq.put((len(con), oid, con))
-        # Now start combining them
-        idx = len(clist)
-        while pq.qsize() > 1:
-            (w1, o1, con1) = pq.get()
-            (w2, o2, con2) = pq.get()
-            ncon = con1.add(con2, self)
-            oid = olist[idx]
-            if pq.qsize() > 0:
-                # Gather statistics on this constraint, even though won't be added to rset
-                self.rset.analyzeConstraint(ncon)
-            pq.put((len(ncon), oid, ncon))
-            idx += 1
-        # Reduced queue to single element
-        (w, o, con) = pq.get()
-        self.rset.addConstraint(con)
-        self.checkGC()
-
-    # Reduce set of constraints by summing
-    def presum(self):
-        icount = len(self.rset)
-        for clist in self.presums:
-            self.sumReduce(clist)
-        ncount = len(self.rset)
-        if ncount < icount:
-            self.writer.write("Presumming reduced constraints from %d to %d\n" % (icount, ncount))
 
     # Given possible pivot index, give a score
     def evaluatePivot(self, pidx):
@@ -1283,10 +1183,11 @@ class ConstraintSystem:
                 if not scon.isTrivial():
                     self.rset.addConstraint(scon)
                 self.combineCount += 1
-                self.checkGC()
 
         for cid in cidList:
+            size = self.rset[cid].size
             self.rset.removeConstraint(cid)
+            self.checkGC(size)
 
         return "normal"
             
@@ -1302,9 +1203,6 @@ class ConstraintSystem:
                 return "unsolvable"
         status = "normal"
 
-        # Perform any presumming
-        self.presum()
-
         while True:
             status = self.solutionStep()
             # "solved", "unsolvable", "normal"
@@ -1317,40 +1215,10 @@ class ConstraintSystem:
             self.postStatistics(status)
         return status
 
-    def oldSolve(self):
-        self.sset = ConstraintSet(writer = self.writer)
-        if self.verbose:
-            self.writer.write("  Initial state\n")
-            self.showState()
-        # Scan constraints to see if any are infeasible
-        for cid in self.rset.currentCids():
-            con = self.rset[cid]
-            if con.isInfeasible():
-                return "unsolvable\n"
-        status = "normal"
-
-        # Perform any presumming
-        self.presum()
-
-        self.sumReduce(self.rset.currentCids())
-
-        lastCid = self.rset.currentCids()[0]
-        lastCon = self.rset[lastCid]
-
-        status =  "unsolvable" if  lastCon.isInfeasible() else "solvable"
-
-        if self.verbose:
-            self.writer.write("  Solution status:%s\n" % status)
-            self.postStatistics(status)
-        return status
-
-    def checkGC(self):
-        self.constraintCount += 1
-        if self.constraintCount > self.gcThreshold:
-            clauseList = self.manager.collectGarbage()
-            self.constraintCount = 0
-            if len(clauseList) > 0:
-                self.manager.prover.deleteClauses(clauseList)
+    def checkGC(self, newDeadCount):
+        clauseList = self.manager.checkGC(newDeadCount)
+        if len(clauseList) > 0:
+            self.manager.prover.deleteClauses(clauseList)
 
     def show(self):
         self.rset.show()
