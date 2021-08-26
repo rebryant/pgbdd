@@ -5,9 +5,17 @@
 
 import getopt
 import sys
+import glob
+
+verbLevel = 1
+errfile = sys.stderr
+
+def ewrite(s, level):
+    if level <= verbLevel:
+        errfile.write(s)
 
 def usage(name, errfile):
-    errfile.write("Usage: %s [-h] [-i IN.cnf] [-o OUT.schedule]\n" % name)
+    ewrite("Usage: %s [-q] [-h] [-i IN.cnf] [-o OUT.schedule] [-d DIR]\n" % name, 0)
 
 def trim(s):
     while len(s) > 0 and s[-1] in '\r\n':
@@ -101,10 +109,12 @@ class Xor:
     clauses = []
     # Mapping from list of variables to the clauses containing exactly those variables
     varMap = {}
+    msgPrefix = ""
 
-    def __init__(self, clauses):
+    def __init__(self, clauses, iname):
         self.clauses = clauses
         self.varMap = {}
+        self.msgPrefix = "" if iname is None else "File %s: " % iname
         for idx in range(1, len(clauses)+1):
             clause = self.getClause(idx)
             vars = tuple(sorted([abs(l) for l in clause]))
@@ -115,7 +125,7 @@ class Xor:
             
     def getClause(self, idx):
         if idx < 1 or idx > len(self.clauses):
-            raise "Invalid clause index %d.  Allowed range 1 .. %d" % (idx, len(self.clauses))
+            raise self.msgPrefix + "Invalid clause index %d.  Allowed range 1 .. %d" % (idx, len(self.clauses))
         return self.clauses[idx-1]
                     
     # Given set of clauses over common set of variables,
@@ -153,67 +163,99 @@ class Xor:
         return result
         
     def generate(self, oname, errfile):
-        if oname is None:
-            outfile = sys.stdout
-        else:
-            try:
-                outfile = open(oname, 'w')
-            except:
-                errfile.write("Couldn't open output file '%s'\n" % oname)
-                return
         idlists = list(self.varMap.values())
         totalCount = 0
         unkCount = 0
         tlist = []
         for idlist in idlists:
             clist = [self.getClause(id) for id in idlist]
-            totalCount = len(clist)
+            totalCount += len(clist)
             t = self.classifyClauses(clist)
             tlist.append(t)
             if t is None:
                 unkCount += len(clist)
                 slist = [str(c) for c in clist]
-                errfile.write("Could not classify clauses %s\n" % ", ".join(slist))
+                ewrite("%sCould not classify clauses %s\n" % (self.msgPrefix, ", ".join(slist)), 2)
         if unkCount > 0:
-            errfile.write("Failed to classify %d/%d clauses\n" % (unkCount, totalCount))
-            outfile.close()
-            return
+            ewrite("%sFailed to classify %d/%d clauses\n" % (self.msgPrefix, unkCount, totalCount), 1)
+            return False
+        if oname is None:
+            outfile = sys.stdout
+        else:
+            try:
+                outfile = open(oname, 'w')
+            except:
+                ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 1)
+                return False
         for (idlist, t) in zip(idlists, tlist):
-            vars = [abs(lit) for lit in self.getClause(idlist[0])]
             slist = [str(id) for id in idlist]
             outfile.write("c %s\n" % " ".join(slist))
+            if len(idlist) > 1:
+                outfile.write("a %d\n" % (len(idlist)-1))
             const = 1 if t == 'xor' else 0
+            vars = [abs(lit) for lit in self.getClause(idlist[0])]
             stlist = ['1.%d' % v for v in vars]
             outfile.write("=2 %d %s\n" % (const, " ".join(stlist)))
         if oname is not None:
             outfile.close()
+        ewrite("%s%d equations extracted\n" % (self.msgPrefix, len(idlists)), 1)
+        return True
             
         
+def extract(iname, oname):
+    try:
+        reader = CnfReader(iname)
+    except Exception as ex:
+        ewrite("Couldn't read CNF file: %s" % str(ex), 1)
+        return
+    xor = Xor(reader.clauses, iname)
+    return xor.generate(oname, errfile)
+
+
+def replaceExtension(path, ext):
+    fields = path.split('.')
+    if len(fields) == 1:
+        return path + '.' + ext
+    else:
+        fields[-1] = ext
+    return ".".join(fields)
+
 def run(name, args):
+    global verbLevel
+    global errfile
     iname = None
     oname = None
-    errfile = sys.stderr
+    path = None
     ok = True
 
-    optlist, args = getopt.getopt(args, "hi:o:")
+    optlist, args = getopt.getopt(args, "hv:i:o:p:")
     for (opt, val) in optlist:
         if opt == '-h':
             ok = False
+        elif opt == '-v':
+            verbLevel = int(val)
         elif opt == '-i':
             iname = val
         elif opt == '-o':
             oname = val
             errfile = sys.stdout
+        elif opt == '-p':
+            path = val
     if not ok:
         usage(name, errfile)
         return
-    try:
-        reader = CnfReader(iname)
-    except Exception as ex:
-        errfile.write("Couldn't read CNF file: %s" % str(ex))
-        return
-    xor = Xor(reader.clauses)
-    xor.generate(oname, errfile)
+    if path is None:
+        ecode = 0 if  extract(iname, oname) else 1
+        sys.exit(ecode)
+    else:
+        if iname is not None or oname is not None:
+            ewrite("Cannot specify path + input or output name", 0)
+            usage(name)
+            sys.exit(0)
+        flist = sorted(glob.glob(path + '*.cnf'))
+        for iname in flist:
+            oname = replaceExtension(iname, 'schedule')
+            extract(iname, oname)
 
         
 def xorMaker(n, invert = False):
