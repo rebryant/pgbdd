@@ -542,7 +542,7 @@ class Solver:
                     else:
                         self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
                 continue
-            if cmd != '=' and cmd != '>=':
+            if cmd[0] != '=' and cmd != '>=':
                 try:
                     values = [int(v) for v in fields[1:]]
                 except:
@@ -571,15 +571,24 @@ class Solver:
                 idStack = idStack[:-1]
                 nid = self.quantifyTerm(id, values)
                 idStack.append(nid)
-            elif cmd == '=':
+            elif cmd[0] == '=':
                 # Equation
+                if len(cmd) > 1:
+                    try:
+                        modulus = int(cmd[1:])
+                    except:
+                        raise SolverException("Line #%d.  Couldn't read equation modulus from command '%s'" % (lineCount, cmd))
+                else:
+                    modulus = self.modulus
                 if self.equationSystem is None:
                     nvar = len(self.litMap) // 2
-                    self.equationSystem = pseudoboolean.EquationSystem(nvar, self.modulus, verbose = self.verbLevel >= 3, manager = self.manager, writer = self.writer)
+                    self.equationSystem = pseudoboolean.EquationSystem(nvar, modulus, verbose = self.verbLevel >= 3, manager = self.manager, writer = self.writer)
+                elif self.equationSystem.modulus != modulus:
+                    raise SolverException("Line #%d.  Don't support multiple moduli.  Existing %d.  New %d" % (lineCount, self.equationSystem.modulus, modulus))
                 const = int(fields[1])
                 nvar = self.equationSystem.N
                 mbox = self.equationSystem.mbox
-                e = pseudoboolean.Equation(nvar, self.modulus, const, mbox)
+                e = pseudoboolean.Equation(nvar, modulus, const, mbox)
                 for field in fields[2:]:
                     parts = field.split('.')
                     coeff = int(parts[0])
