@@ -6,6 +6,7 @@ SEED=123456
 FULLGENERATOR = ../../chew-code/parity
 GENERATOR = ../../chew-code/parity-cnf
 RANDOMIZER = ../../randomizer.py
+EXTRACTOR = ../../xor_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 UPLOADER = ../../../pcaas/upload
@@ -20,6 +21,9 @@ io: chew-$(N)-inputorder.data
 ro: chew-$(N)-randomorder.data
 nq: chew-$(N)-noquant.data
 cd: chew-$(N)-drat.data
+
+ie: chew-$(N)-io-equation.data
+re: chew-$(N)-ro-equation.data
 
 iop: chew-$(N)-inputorder-pipe.data
 rop: chew-$(N)-randomorder-pipe.data
@@ -37,6 +41,16 @@ chew-$(N)-inputorder.data:
 	$(CHECKER) chew-$(N)-inputorder.cnf chew-$(N)-inputorder.$(EXTENSION) | tee -a chew-$(N)-inputorder.data
 	rm -f chew-$(N)-inputorder.$(EXTENSION)
 
+chew-$(N)-io-equation.data:
+	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-io-equation.data
+	mv formula.cnf chew-$(N)-io-equation.cnf
+	$(EXTRACTOR) -i chew-$(N)-io-equation.cnf -o chew-$(N)-io-equation.schedule
+	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-io-equation.cnf -s chew-$(N)-io-equation.schedule \
+		-o chew-$(N)-io-equation.$(EXTENSION) 2>&1 | tee -a chew-$(N)-io-equation.data
+	$(CHECKER) chew-$(N)-io-equation.cnf chew-$(N)-io-equation.$(EXTENSION) | tee -a chew-$(N)-io-equation.data
+	rm -f chew-$(N)-inputorder.$(EXTENSION)
+
+
 chew-$(N)-inputorder-pipe.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-inputorder-pipe.data
 	mv formula.cnf chew-$(N)-inputorder-pipe.cnf
@@ -51,6 +65,17 @@ chew-$(N)-randomorder.data:
 		-o chew-$(N)-randomorder.$(EXTENSION) 2>&1 | tee -a chew-$(N)-randomorder.data
 	$(CHECKER) chew-$(N)-randomorder.cnf chew-$(N)-randomorder.$(EXTENSION) | tee -a chew-$(N)-randomorder.data
 	rm -f chew-$(N)-randomorder.$(EXTENSION)
+
+chew-$(N)-ro-equation.data:
+	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-ro-equation.data
+	mv formula.cnf chew-$(N)-ro-equation.cnf
+	$(RANDOMIZER) chew-$(N)-ro-equation.cnf $(SEED)
+	$(EXTRACTOR) -i chew-$(N)-ro-equation.cnf -o chew-$(N)-ro-equation.schedule
+	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-ro-equation.cnf -s chew-$(N)-ro-equation.schedule \
+	        -p chew-$(N)-ro-equation.order \
+		-o chew-$(N)-ro-equation.$(EXTENSION) 2>&1 | tee -a chew-$(N)-ro-equation.data
+	$(CHECKER) chew-$(N)-ro-equation.cnf chew-$(N)-ro-equation.$(EXTENSION) | tee -a chew-$(N)-ro-equation.data
+	rm -f chew-$(N)-inputorder.$(EXTENSION)
 
 chew-$(N)-randomorder-pipe.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-randomorder-pipe.data
@@ -80,6 +105,8 @@ data:
 	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
 	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-drat.csv
 	$(GRABBER) chew*-noquant.data > chew-noquant.csv
+	$(DGRABBER) chew*-io-equation.data > chew-io-equation.csv
+	$(DGRABBER) chew*-ro-equation.data > chew-ro-equation.csv
 
 vdata:
 	$(VGRABBER) chew*-inputorder.data > chew-inputorder-verification.csv
