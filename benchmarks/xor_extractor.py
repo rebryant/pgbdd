@@ -37,7 +37,7 @@ class CnfReader():
     clauses = []
     nvar = 0
     
-    def __init__(self, fname = None):
+    def __init__(self, fname = None, careful = True):
         if fname is None:
             opened = False
             self.file = sys.stdin
@@ -49,13 +49,13 @@ class CnfReader():
                 raise CnfException("Could not open file '%s'" % fname)
         self.clauses = []
         try:
-            self.readCnf()
+            self.readCnf(careful)
         except Exception as ex:
             if opened:
                 self.file.close()
             raise ex
         
-    def readCnf(self):
+    def readCnf(self, careful = True):
         lineNumber = 0
         nclause = 0
         self.nvar = 0
@@ -88,17 +88,18 @@ class CnfReader():
                 except:
                     raise CnfException("Line %d.  Non-integer field" % lineNumber)
                 # Last one should be 0
-                if lits[-1] != 0:
+                if careful and lits[-1] != 0:
                     raise CnfException("Line %d.  Clause line should end with 0" % lineNumber)
                 lits = lits[:-1]
-                vars = sorted([abs(l) for l in lits])
-                if len(vars) == 0:
-                    raise CnfException("Line %d.  Empty clause" % lineNumber)                    
-                if vars[-1] > self.nvar or vars[0] == 0:
-                    raise CnfException("Line %d.  Out-of-range literal" % lineNumber)
-                for i in range(len(vars) - 1):
-                    if vars[i] == vars[i+1]:
-                        raise CnfException("Line %d.  Opposite or repeated literal" % lineNumber)
+                if careful:
+                    vars = sorted([abs(l) for l in lits])
+                    if len(vars) == 0:
+                        raise CnfException("Line %d.  Empty clause" % lineNumber)                    
+                    if vars[-1] > self.nvar or vars[0] == 0:
+                        raise CnfException("Line %d.  Out-of-range literal" % lineNumber)
+                    for i in range(len(vars) - 1):
+                        if vars[i] == vars[i+1]:
+                            raise CnfException("Line %d.  Opposite or repeated literal" % lineNumber)
                 self.clauses.append(lits)
                 clauseCount += 1
         if clauseCount != nclause:
@@ -176,8 +177,9 @@ class Xor:
                 unkCount += len(clist)
                 slist = [str(id) for id in idlist]
                 ewrite("%sCould not classify clauses [%s]\n" % (self.msgPrefix, ", ".join(slist)), 3)
+                break
         if unkCount > 0:
-            ewrite("%sFailed to classify %d/%d clauses\n" % (self.msgPrefix, unkCount, totalCount), 2)
+            ewrite("%s%d total clauses.  Failed to classify group of %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 2)
             return False
         if oname is None:
             outfile = sys.stdout
@@ -204,7 +206,7 @@ class Xor:
         
 def extract(iname, oname):
     try:
-        reader = CnfReader(iname)
+        reader = CnfReader(iname, careful = False)
     except Exception as ex:
         ewrite("Couldn't read CNF file: %s" % str(ex), 1)
         return
