@@ -15,7 +15,7 @@ def ewrite(s, level):
         errfile.write(s)
 
 def usage(name, errfile):
-    ewrite("Usage: %s [-q] [-h] [-i IN.cnf] [-o OUT.schedule] [-d DIR]\n" % name, 0)
+    ewrite("Usage: %s [-v VLEVEL] [-h] [-i IN.cnf] [-o OUT.schedule] [-d DIR]\n" % name, 0)
 
 def trim(s):
     while len(s) > 0 and s[-1] in '\r\n':
@@ -174,10 +174,10 @@ class Xor:
             tlist.append(t)
             if t is None:
                 unkCount += len(clist)
-                slist = [str(c) for c in clist]
-                ewrite("%sCould not classify clauses %s\n" % (self.msgPrefix, ", ".join(slist)), 2)
+                slist = [str(id) for id in idlist]
+                ewrite("%sCould not classify clauses [%s]\n" % (self.msgPrefix, ", ".join(slist)), 3)
         if unkCount > 0:
-            ewrite("%sFailed to classify %d/%d clauses\n" % (self.msgPrefix, unkCount, totalCount), 1)
+            ewrite("%sFailed to classify %d/%d clauses\n" % (self.msgPrefix, unkCount, totalCount), 2)
             return False
         if oname is None:
             outfile = sys.stdout
@@ -198,7 +198,7 @@ class Xor:
             outfile.write("=2 %d %s\n" % (const, " ".join(stlist)))
         if oname is not None:
             outfile.close()
-        ewrite("%s%d equations extracted\n" % (self.msgPrefix, len(idlists)), 1)
+        ewrite("%s%d equations extracted\n" % (self.msgPrefix, len(idlists)), 2)
         return True
             
         
@@ -252,10 +252,13 @@ def run(name, args):
             ewrite("Cannot specify path + input or output name", 0)
             usage(name)
             sys.exit(0)
+        scount = 0
         flist = sorted(glob.glob(path + '*.cnf'))
         for iname in flist:
             oname = replaceExtension(iname, 'schedule')
-            extract(iname, oname)
+            if extract(iname, oname):
+                scount += 1
+        ewrite("Extracted XOR representation of %d/%d files\n" % (scount, len(flist)), 1)
 
         
 def xorMaker(n, invert = False):
