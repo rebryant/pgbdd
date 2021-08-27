@@ -15,7 +15,7 @@ def ewrite(s, level):
         errfile.write(s)
 
 def usage(name, errfile):
-    ewrite("Usage: %s [-v VLEVEL] [-h] [-i IN.cnf] [-o OUT.schedule] [-d DIR]\n" % name, 0)
+    ewrite("Usage: %s [-v VLEVEL] [-h] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
 
 def trim(s):
     while len(s) > 0 and s[-1] in '\r\n':
@@ -37,7 +37,7 @@ class CnfReader():
     clauses = []
     nvar = 0
     
-    def __init__(self, fname = None, careful = True):
+    def __init__(self, fname = None, careful = True, maxclause = None):
         if fname is None:
             opened = False
             self.file = sys.stdin
@@ -49,13 +49,13 @@ class CnfReader():
                 raise CnfException("Could not open file '%s'" % fname)
         self.clauses = []
         try:
-            self.readCnf(careful)
+            self.readCnf(careful, maxclause)
         except Exception as ex:
             if opened:
                 self.file.close()
             raise ex
         
-    def readCnf(self, careful = True):
+    def readCnf(self, careful = True, maxclause = None):
         lineNumber = 0
         nclause = 0
         self.nvar = 0
@@ -79,6 +79,8 @@ class CnfReader():
                     nclause = int(fields[2])
                 except Exception:
                     raise CnfException("Line %d.  Bad header line '%s'.  Invalid number of variables or clauses" % (lineNumber, line))
+                if maxclause is not None and nclause > maxclause:
+                    return
             else:
                 if nclause == 0:
                     raise CnfException("Line %d.  No header line.  Not cnf" % (lineNumber))
@@ -111,11 +113,13 @@ class Xor:
     # Mapping from list of variables to the clauses containing exactly those variables
     varMap = {}
     msgPrefix = ""
+    careful = True
 
-    def __init__(self, clauses, iname):
+    def __init__(self, clauses, iname, careful = True):
         self.clauses = clauses
         self.varMap = {}
         self.msgPrefix = "" if iname is None else "File %s: " % iname
+        self.careful = careful
         for idx in range(1, len(clauses)+1):
             clause = self.getClause(idx)
             vars = tuple(sorted([abs(l) for l in clause]))
@@ -125,10 +129,10 @@ class Xor:
                 self.varMap[vars] = [idx]
             
     def getClause(self, idx):
-        if idx < 1 or idx > len(self.clauses):
+        if self.careful and (idx < 1 or idx > len(self.clauses)):
             raise self.msgPrefix + "Invalid clause index %d.  Allowed range 1 .. %d" % (idx, len(self.clauses))
         return self.clauses[idx-1]
-                    
+
     # Given set of clauses over common set of variables,
     # classify as "xor", "xnor" or None
     def classifyClauses(self, clist):
@@ -204,13 +208,16 @@ class Xor:
         return True
             
         
-def extract(iname, oname):
+def extract(iname, oname, maxclause):
     try:
-        reader = CnfReader(iname, careful = False)
+        reader = CnfReader(iname, careful = False, maxclause = maxclause)
+        if len(reader.clauses) == 0:
+            ewrite("File %s contains more than %d clauses\n" % (iname, maxclause), 2)
+            return False
     except Exception as ex:
         ewrite("Couldn't read CNF file: %s" % str(ex), 1)
         return
-    xor = Xor(reader.clauses, iname)
+    xor = Xor(reader.clauses, iname, careful = False)
     return xor.generate(oname, errfile)
 
 
@@ -228,9 +235,10 @@ def run(name, args):
     iname = None
     oname = None
     path = None
+    maxclause = None
     ok = True
 
-    optlist, args = getopt.getopt(args, "hv:i:o:p:")
+    optlist, args = getopt.getopt(args, "hv:i:o:p:m:")
     for (opt, val) in optlist:
         if opt == '-h':
             ok = False
@@ -243,11 +251,13 @@ def run(name, args):
             errfile = sys.stdout
         elif opt == '-p':
             path = val
+        elif opt == '-m':
+            maxclause = int(val)
     if not ok:
         usage(name, errfile)
         return
     if path is None:
-        ecode = 0 if  extract(iname, oname) else 1
+        ecode = 0 if  extract(iname, oname, maxclause) else 1
         sys.exit(ecode)
     else:
         if iname is not None or oname is not None:
@@ -258,7 +268,7 @@ def run(name, args):
         flist = sorted(glob.glob(path + '*.cnf'))
         for iname in flist:
             oname = replaceExtension(iname, 'schedule')
-            if extract(iname, oname):
+            if extract(iname, oname, maxclause):
                 scount += 1
         ewrite("Extracted XOR representation of %d/%d files\n" % (scount, len(flist)), 1)
 
