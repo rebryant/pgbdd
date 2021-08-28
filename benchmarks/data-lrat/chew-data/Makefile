@@ -48,7 +48,7 @@ chew-$(N)-io-equation.data:
 	$(SOLVER) -v $(VLEVEL) -i chew-$(N)-io-equation.cnf -s chew-$(N)-io-equation.schedule \
 		-o chew-$(N)-io-equation.$(EXTENSION) 2>&1 | tee -a chew-$(N)-io-equation.data
 	$(CHECKER) chew-$(N)-io-equation.cnf chew-$(N)-io-equation.$(EXTENSION) | tee -a chew-$(N)-io-equation.data
-	rm -f chew-$(N)-inputorder.$(EXTENSION)
+	rm -f chew-$(N)-io-equation.$(EXTENSION)
 
 
 chew-$(N)-inputorder-pipe.data:
@@ -75,7 +75,7 @@ chew-$(N)-ro-equation.data:
 	        -p chew-$(N)-ro-equation.order \
 		-o chew-$(N)-ro-equation.$(EXTENSION) 2>&1 | tee -a chew-$(N)-ro-equation.data
 	$(CHECKER) chew-$(N)-ro-equation.cnf chew-$(N)-ro-equation.$(EXTENSION) | tee -a chew-$(N)-ro-equation.data
-	rm -f chew-$(N)-inputorder.$(EXTENSION)
+	rm -f chew-$(N)-ro-equation.$(EXTENSION)
 
 chew-$(N)-randomorder-pipe.data:
 	$(GENERATOR) $(N) $(SEED) | tee chew-$(N)-randomorder-pipe.data
@@ -103,10 +103,10 @@ chew-$(N)-noquant-pipe.data:
 data:
 	$(GRABBER) chew*-inputorder.data > chew-inputorder.csv
 	$(GRABBER) chew*-randomorder.data > chew-randomorder.csv
-	$(DGRABBER) chew*-inputorder.data chew*-drat.data > chew-drat.csv
+	$(DGRABBER) chew*-drat.data > chew-drat.csv
 	$(GRABBER) chew*-noquant.data > chew-noquant.csv
-	$(DGRABBER) chew*-io-equation.data > chew-io-equation.csv
-	$(DGRABBER) chew*-ro-equation.data > chew-ro-equation.csv
+	$(GRABBER) chew*-io-equation.data > chew-io-equation.csv
+	$(GRABBER) chew*-ro-equation.data > chew-ro-equation.csv
 
 vdata:
 	$(VGRABBER) chew*-inputorder.data > chew-inputorder-verification.csv
