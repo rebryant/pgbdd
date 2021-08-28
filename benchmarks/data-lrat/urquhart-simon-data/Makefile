@@ -39,7 +39,8 @@ urquhart-simon-$(M)-$(SEED)-ro-equation.data:
 	$(GENERATOR) $(M) $(SEED) > urquhart-simon-$(M)-$(SEED)-ro-equation.cnf | tee urquhart-simon-$(M)-$(SEED)-ro-equation.data
 	$(EXTRACTOR) -i urquhart-simon-$(M)-$(SEED)-ro-equation.cnf -o urquhart-simon-$(M)-$(SEED)-ro-equation.schedule
 	$(RANDOMIZER) urquhart-simon-$(M)-$(SEED)-ro-equation.cnf $(SEED)
-	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-$(SEED)-ro-equation.cnf -b -p urquhart-simon-$(M)-$(SEED)-ro-equation.order \
+	$(SOLVER) -v $(VLEVEL) -i urquhart-simon-$(M)-$(SEED)-ro-equation.cnf -s  urquhart-simon-$(M)-$(SEED)-ro-equation.schedule \
+		-p urquhart-simon-$(M)-$(SEED)-ro-equation.order \
 		-o urquhart-simon-$(M)-$(SEED)-ro-equation.$(EXTENSION) 2>&1 | tee -a urquhart-simon-$(M)-$(SEED)-ro-equation.data
 	$(CHECKER) urquhart-simon-$(M)-$(SEED)-ro-equation.cnf urquhart-simon-$(M)-$(SEED)-ro-equation.$(EXTENSION) | tee -a urquhart-simon-$(M)-$(SEED)-ro-equation.data
 	rm -f urquhart-simon-$(M)-$(SEED)-ro-equation.$(EXTENSION)
