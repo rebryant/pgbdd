@@ -9,13 +9,14 @@ import glob
 
 verbLevel = 1
 errfile = sys.stderr
+careful = False
 
 def ewrite(s, level):
     if level <= verbLevel:
         errfile.write(s)
 
 def usage(name, errfile):
-    ewrite("Usage: %s [-v VLEVEL] [-h] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
+    ewrite("Usage: %s [-v VLEVEL] [-h] [-c] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
 
 def trim(s):
     while len(s) > 0 and s[-1] in '\r\n':
@@ -37,7 +38,7 @@ class CnfReader():
     clauses = []
     nvar = 0
     
-    def __init__(self, fname = None, careful = True, maxclause = None):
+    def __init__(self, fname = None, maxclause = None):
         if fname is None:
             opened = False
             self.file = sys.stdin
@@ -49,13 +50,13 @@ class CnfReader():
                 raise CnfException("Could not open file '%s'" % fname)
         self.clauses = []
         try:
-            self.readCnf(careful, maxclause)
+            self.readCnf(maxclause)
         except Exception as ex:
             if opened:
                 self.file.close()
             raise ex
         
-    def readCnf(self, careful = True, maxclause = None):
+    def readCnf(self, maxclause = None):
         lineNumber = 0
         nclause = 0
         self.nvar = 0
@@ -113,15 +114,14 @@ class Xor:
     # Mapping from list of variables to the clauses containing exactly those variables
     varMap = {}
     msgPrefix = ""
-    careful = True
 
-    def __init__(self, clauses, iname, careful = True):
+    def __init__(self, clauses, iname):
         self.clauses = clauses
         self.varMap = {}
         self.msgPrefix = "" if iname is None else "File %s: " % iname
-        self.careful = careful
         for idx in range(1, len(clauses)+1):
             clause = self.getClause(idx)
+            clause.sort(key = lambda lit : abs(lit))
             vars = tuple(sorted([abs(l) for l in clause]))
             if vars in self.varMap:
                 self.varMap[vars].append(idx)
@@ -129,7 +129,7 @@ class Xor:
                 self.varMap[vars] = [idx]
             
     def getClause(self, idx):
-        if self.careful and (idx < 1 or idx > len(self.clauses)):
+        if careful and (idx < 1 or idx > len(self.clauses)):
             raise self.msgPrefix + "Invalid clause index %d.  Allowed range 1 .. %d" % (idx, len(self.clauses))
         return self.clauses[idx-1]
 
@@ -181,9 +181,14 @@ class Xor:
                 unkCount += len(clist)
                 slist = [str(id) for id in idlist]
                 ewrite("%sCould not classify clauses [%s]\n" % (self.msgPrefix, ", ".join(slist)), 3)
-                break
+                if not careful:
+                    break
+                if verbLevel >= 4:
+                    for id in idlist:
+                        clause = self.getClause(id)
+                        ewrite("    Clause #%d:%s\n" % (id, str(clause)), 4)
         if unkCount > 0:
-            ewrite("%s%d total clauses.  Failed to classify group of %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 2)
+            ewrite("%s%d total clauses.  Failed to classify %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 2)
             return False
         if oname is None:
             outfile = sys.stdout
@@ -210,14 +215,14 @@ class Xor:
         
 def extract(iname, oname, maxclause):
     try:
-        reader = CnfReader(iname, careful = False, maxclause = maxclause)
+        reader = CnfReader(iname, maxclause = maxclause)
         if len(reader.clauses) == 0:
             ewrite("File %s contains more than %d clauses\n" % (iname, maxclause), 2)
             return False
     except Exception as ex:
         ewrite("Couldn't read CNF file: %s" % str(ex), 1)
         return
-    xor = Xor(reader.clauses, iname, careful = False)
+    xor = Xor(reader.clauses, iname)
     return xor.generate(oname, errfile)
 
 
@@ -232,18 +237,21 @@ def replaceExtension(path, ext):
 def run(name, args):
     global verbLevel
     global errfile
+    global careful
     iname = None
     oname = None
     path = None
     maxclause = None
     ok = True
 
-    optlist, args = getopt.getopt(args, "hv:i:o:p:m:")
+    optlist, args = getopt.getopt(args, "hcv:i:o:p:m:")
     for (opt, val) in optlist:
         if opt == '-h':
             ok = False
         elif opt == '-v':
             verbLevel = int(val)
+        elif opt == '-c':
+            careful = True
         elif opt == '-i':
             iname = val
         elif opt == '-o':
