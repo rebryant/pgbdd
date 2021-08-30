@@ -7,12 +7,13 @@ import writer
 
 
 def usage(name):
-    print("Usage: %s: [-h][-v][-i][-n N][-t b|a|i] -r ROOT")
+    print("Usage: %s: [-h][-v][-i][-s][-n N][-t b|a|i] -r ROOT")
     print("  -h             Print this message")
     print("  -v             Include comments in output")
     print("  -i             Invert formula")
+    print("  -s             Use Sinz encoding of at-most-one constraints")
     print("  -n N           Specify number of squares")
-    print("  -t b|a|e       Specify position of Tseitin variables:")
+    print("  -t b|a|e|M     Specify position of Tseitin (& Sinz) variables:")
     print("                   b: before their defining variables (when possible, otherwise after)")
     print("                   a: after their defining variables")
     print("                   e: at end of quantifier string")
