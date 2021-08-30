@@ -10,4 +10,8 @@ make ie M=12
 make ie M=16
 make ie M=20
 make ie M=24
+make ie M=28
+make ie M=32
+make ie M=40
+make ie M=48
 
