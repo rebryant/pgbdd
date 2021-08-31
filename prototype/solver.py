@@ -648,18 +648,22 @@ class Solver:
         # Reach end of scheduler
         if self.equationSystem is not None:
             status = self.equationSystem.solve()
-            if status == 'unsolvable':
+            if status == 'failed':
+                self.writer.write("FAILED.  Equation system could not be solved\n")
+            elif status == 'unsolvable':
                 self.writer.write("Equation system proved formula UNSAT\n")
                 self.equationSystem.postStatistics(status)
             else:
-                self.writer.write("Equation system thinks indicates formula may be SAT\n")
+                self.writer.write("UNRESOLVED.  Equation system thinks indicates formula may be SAT\n")
         elif self.constraintSystem is not None:
             status = self.constraintSystem.solve()
-            if status == 'unsolvable':
+            if status == 'failed':
+                self.writer.write("FAILED.  Constraint system could not be solved\n")
+            elif status == 'unsolvable':
                 self.writer.write("Constraint system proved formula UNSAT\n")
                 self.constraintSystem.postStatistics(status)
             else:
-                self.writer.write("Constraint system indicates formula may be SAT:\n")
+                self.writer.write("UNRESOLVED.  Constraint system indicates formula may be SAT:\n")
                 self.constraintSystem.show()
         
     def placeInBucket(self, buckets, id):

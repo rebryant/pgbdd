@@ -24,7 +24,7 @@ class SimpleWriter:
 # General library for solving pseudo-boolean constraints embedded in
 # modular arithmetic
 
-class MathException(Exception):
+class PseudoBooleanException(Exception):
     form = ""
     msg = ""
 
@@ -34,23 +34,27 @@ class MathException(Exception):
             m += " (" + self.msg + ")"
         return m
 
-class ReciprocalException(MathException):
+class ReciprocalException(PseudoBooleanException):
     def __init__(self, num):
         self.form = "No Reciprocal!"
         self.msg = "denominator=%d" % num
 
 
-class ZeroException(MathException):
+class ZeroException(PseudoBooleanException):
     def __init__(self, num):
         self.form = "Zero Divide!"
         self.msg = "numerator=%d" % num
 
 
-class PivotException(MathException):
+class PivotException(PseudoBooleanException):
     def __init__(self, index):
         self.form = "Pivot=0!"
         self.msg = "index=%d" % index
 
+class FourierMotzinException(PseudoBooleanException):
+    def __init__(self, values):
+        self.form = "Out-of-range pivot!"
+        self.msg = "oob values=%s" % str(values)
 
 # Supporting modular arithmetic
 # For odd modulus m, use bias k=(m-1)/2
@@ -666,7 +670,11 @@ class EquationSystem:
         status = "normal"
 
         while True:
-            status = self.solutionStep()
+            try:
+                status = self.solutionStep()
+            except PseudoBooleanException as ex:
+                self.writer.write("  Solver failed: %s\n" % (str(ex)))
+                return "failed"
             # "solved", "unsolvable", "normal"
             if status != "normal":
                 break
@@ -1163,12 +1171,14 @@ class ConstraintSystem:
         pidx = self.selectPivot()
         if pidx is None:
             return "solved"
-        
-
 
         cidList = self.rset.lookup(pidx)
         posIndices = [cid for cid in cidList if self.rset[cid][pidx] > 0]
         negIndices = [cid for cid in cidList if self.rset[cid][pidx] < 0]
+        values = [self.rset[cid][pidx] for cid in cidList]
+        oobValues = [v for v in values if abs(v) > 1]
+        if len(oobValues) > 0:
+            raise FourierMotzinException(oobValues)
 
         if self.verbose:
             self.writer.write("Pivoting at element %d.  %d positive, %d negative constraints\n" % (pidx, len(posIndices), len(negIndices)))
@@ -1204,7 +1214,11 @@ class ConstraintSystem:
         status = "normal"
 
         while True:
-            status = self.solutionStep()
+            try:
+                status = self.solutionStep()
+            except PseudoBooleanException as ex:
+                self.writer.write("Solver Failed: %s\n" % str(ex))
+                return "failed"
             # "solved", "unsolvable", "normal"
             if status != "normal":
                 break
