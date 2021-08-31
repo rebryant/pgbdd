@@ -6,6 +6,7 @@ MOD=3
 
 GENERATOR = $(INTERP) ../../chess.py
 RANDOMIZER = ../../randomizer.py
+EXTRACTOR = ../../constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
@@ -17,7 +18,7 @@ rq: chess-$(N)-column-randomorder.data
 
 nq: chess-$(N)-noquant.data
 
-e: chess-$(N)-equation.data
+ee: chess-$(N)-extracted-equation.data
 
 ie: chess-$(N)-equation-integer.data
 
@@ -56,6 +57,14 @@ chess-$(N)-equation.data:
 		-p chess-$(N)-equation.order -o chess-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation.data
 	$(CHECKER) chess-$(N)-equation.cnf chess-$(N)-equation.$(EXTENSION) | tee -a chess-$(N)-equation.data
 	rm -f chess-$(N)-equation.$(EXTENSION)
+
+chess-$(N)-extracted-equation.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-extracted-equation -p e | tee chess-$(N)-extracted-equation.data
+	$(EXTRACTOR) -i chess-$(N)-extracted-equation.cnf -o chess-$(N)-extracted-equation.schedule -v 4 -e | tee -a chess-$(N)-extracted-equation.data
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-extracted-equation.cnf -s chess-$(N)-extracted-equation.schedule -m $(MOD) \
+		-p chess-$(N)-extracted-equation.order -o chess-$(N)-extracted-equation.$(EXTENSION) 2>&1 | tee -a chess-
+	$(CHECKER) chess-$(N)-extracted-equation.cnf chess-$(N)-extracted-equation.$(EXTENSION) | tee -a chess-$(N)-extracted-equation.data
+	rm -f chess-$(N)-extracted-equation.$(EXTENSION)
 
 chess-$(N)-equation-integer.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-equation-integer -p e | tee chess-$(N)-equation-integer.data
