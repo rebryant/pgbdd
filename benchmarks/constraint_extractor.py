@@ -162,7 +162,7 @@ class Formula:
         return Formula(varList, coeffList, const, clauseList, True)
 
     def __str__(self):
-        slist = ["%d.%d" % (c, v) for c,v in zip(self.varList, self.coeffList)]
+        slist = ["%d.%d" % (v, c) for c,v in zip(self.varList, self.coeffList)]
         symbol = "=" if self.isEquation else ">="
         return ("%s %d " % (symbol, self.const)) + " ".join(slist)
 
@@ -345,12 +345,12 @@ class ConstraintFinder:
             try:
                 outfile = open(oname, 'w')
             except:
-                ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 1)
+                ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 0)
                 return False
         for con in self.constraintList:
             con.generate(outfile)
         ccount = len(self.constraintList)
-        ewrite("%s%d formulas (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 2)
+        ewrite("%s%d formulas (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 1)
         if oname is not None:
             outfile.close()
         return True
@@ -372,7 +372,7 @@ def extract(iname, oname, maxclause, makeEquations):
             ewrite("File %s: Could not be classified (%s)\n" % (iname, reader.reason), 2)
             return False
     except Exception as ex:
-        ewrite("Couldn't read CNF file: %s" % str(ex), 1)
+        ewrite("Couldn't read CNF file: %s" % str(ex), 0)
         return
     cg = ConstraintFinder(reader.clauses, iname)
     return cg.generate(oname, errfile, makeEquations)
@@ -414,6 +414,7 @@ def run(name, args):
             errfile = sys.stdout
         elif opt == '-p':
             path = val
+            errfile = sys.stdout
         elif opt == '-m':
             maxclause = int(val)
     if not ok:
