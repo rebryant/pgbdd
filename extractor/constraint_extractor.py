@@ -6,127 +6,17 @@
 import getopt
 import sys
 import glob
+import util
 
-verbLevel = 1
-errfile = sys.stderr
-careful = False
-
-def ewrite(s, level):
-    if level <= verbLevel:
-        errfile.write(s)
-
-def usage(name, errfile):
-    ewrite("Usage: %s [-h] [-c] [-e] [-v VLEVEL] [-i IN.cnf] [-o OUT.schedule] [-p PATH] [-m MAXCLAUSE]\n" % name, 0)
-    ewrite("  -h       Print this message\n", 0)
-    ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
-    ewrite("  -c       Careful checking of CNF\n", 0)
-    ewrite("  -e       Merge constraints into equations if possible\n", 0)
-    ewrite("  -i IFILE Single input file\n", 0)
-    ewrite("  -i OFILE Single output file\n", 0)
-    ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
-    ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
-
-def trim(s):
-    while len(s) > 0 and s[-1] in '\r\n':
-        s = s[:-1]
-    return s
-
-class CnfException(Exception):
-
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return "CNF Exception: " + str(self.value)
-
-# Read CNF file.
-# Save list of clauses, each is a list of literals (zero at end removed)
-class CnfReader():
-    file = None
-    clauses = []
-    nvar = 0
-    # What was wrong with file
-    reason = None
-    
-    def __init__(self, fname = None, maxclause = None, rejectClause = None):
-        if fname is None:
-            opened = False
-            self.file = sys.stdin
-        else:
-            opened = True
-            try:
-                self.file = open(fname, 'r')
-            except Exception:
-                raise CnfException("Could not open file '%s'" % fname)
-        self.nvar = 0
-        self.clauses = []
-        self.reason = None
-        try:
-            self.readCnf(maxclause, rejectClause)
-        except Exception as ex:
-            if opened:
-                self.file.close()
-            raise ex
-        
-    def readCnf(self, maxclause = None, rejectClause = None):
-        lineNumber = 0
-        nclause = 0
-        clauseCount = 0
-        for line in self.file:
-            lineNumber += 1
-            line = trim(line)
-            if len(line) == 0:
-                continue
-            fields = line.split()
-            if len(fields) == 0:
-                continue
-            elif line[0] == 'c':
-                continue
-            elif line[0] == 'p':
-                fields = line[1:].split()
-                if len(fields) != 3 or fields[0] != 'cnf':
-                    raise CnfException("Line %d.  Bad header line '%s'.  Not cnf" % (lineNumber, line))
-                try:
-                    self.nvar = int(fields[1])
-                    nclause = int(fields[2])
-                except Exception:
-                    raise CnfException("Line %d.  Bad header line '%s'.  Invalid number of variables or clauses" % (lineNumber, line))
-                if maxclause is not None and nclause > maxclause:
-                    self.reason = "%d clauses exceeds limit of %d" % (nclause, maxclause)
-                    return
-            else:
-                if nclause == 0:
-                    raise CnfException("Line %d.  No header line.  Not cnf" % (lineNumber))
-                # Check formatting
-                try:
-                    lits = [int(s) for s in line.split()]
-                except:
-                    raise CnfException("Line %d.  Non-integer field" % lineNumber)
-                # Last one should be 0
-                if careful and lits[-1] != 0:
-                    raise CnfException("Line %d.  Clause line should end with 0" % lineNumber)
-                lits = lits[:-1]
-                # Sort literals by variable
-                lits.sort(key = lambda l: abs(l))
-                if careful:
-                    vars = [abs(l) for l in lits]
-                    if len(vars) == 0:
-                        raise CnfException("Line %d.  Empty clause" % lineNumber)                    
-                    if vars[-1] > self.nvar or vars[0] == 0:
-                        raise CnfException("Line %d.  Out-of-range literal" % lineNumber)
-                    for i in range(len(vars) - 1):
-                        if vars[i] == vars[i+1]:
-                            raise CnfException("Line %d.  Opposite or repeated literal" % lineNumber)
-                # See if this clause indicates that the CNF cannot be converted
-                if rejectClause is not None:
-                    self.reason = rejectClause(lits, clauseCount+1)
-                    if self.reason is not None:
-                        return
-                self.clauses.append(lits)
-                clauseCount += 1
-        if clauseCount != nclause:
-            raise CnfException("Line %d: Got %d clauses.  Expected %d" % (lineNumber, clauseCount, nclause))
-        return
+def usage(name):
+    util.ewrite("Usage: %s [-h] [-c] [-v VLEVEL] [-i IN.cnf] [-o OUT.schedule] [-p PATH] [-m MAXCLAUSE]\n" % name, 0)
+    util.ewrite("  -h       Print this message\n", 0)
+    util.ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
+    util.ewrite("  -c       Careful checking of CNF\n", 0)
+    util.ewrite("  -i IFILE Single input file\n", 0)
+    util.ewrite("  -i OFILE Single output file\n", 0)
+    util.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
+    util.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
 
 
 # Constraint or equation
@@ -136,13 +26,16 @@ class Formula:
     const = 0
     # Input clauses that generate this constraint
     clauseList = []
+    # Variables to quantify out
+    qvarList = []
     isEquation = False
 
-    def __init__(self, varList, coeffList, const, clauseList, isEquation):
+    def __init__(self, varList, coeffList, const, clauseList, qvarList, isEquation):
         self.varList = varList
         self.coeffList = coeffList
         self.const = const
         self.clauseList = clauseList
+        self.qvarList = qvarList
         self.isEquation = isEquation
 
     # Attempt to merge AMO and ALO constraints into single equation
@@ -159,7 +52,8 @@ class Formula:
         coeffList = alo.coeffList
         const = alo.const
         clauseList = alo.clauseList + amo.clauseList
-        return Formula(varList, coeffList, const, clauseList, True)
+        qvarList = alo.qvarList + amo.qvarList
+        return Formula(varList, coeffList, const, clauseList, qvarList, True)
 
     def __str__(self):
         slist = ["%d.%d" % (v, c) for c,v in zip(self.varList, self.coeffList)]
@@ -171,6 +65,9 @@ class Formula:
         outfile.write("c " + " ".join(slist) + "\n")
         if len(self.clauseList) > 1:
             outfile.write("a %d\n" % (len(self.clauseList) - 1))
+        if len(self.qvarList) > 1:
+            slist = [str(v) for v in self.qvarList]
+            outfile.write("q %s\n" % " ".join(slist))
         outfile.write(str(self) + "\n")
         
 
@@ -214,12 +111,12 @@ class ConstraintFinder:
                 coeffList = [1]
                 const = 1
             clauseList = [cid]
-            self.constraintList.append(Formula(varList, coeffList, const, clauseList, False))
+            self.constraintList.append(Formula(varList, coeffList, const, clauseList, [], False))
             del self.clauseDict[cid]
         self.ucount = len(self.constraintList)-startCount
 
 
-    def findAlos(self):
+    def findDirectAlos(self):
         startCount = len(self.constraintList)
         idList = sorted(self.clauseDict.keys())
         for cid in idList:
@@ -235,7 +132,7 @@ class ConstraintFinder:
             coeffList = [1] * len(clause)
             const = 1
             clauseList = [cid]
-            self.constraintList.append(Formula(varList, coeffList, const, clauseList, False))
+            self.constraintList.append(Formula(varList, coeffList, const, clauseList, [], False))
             del self.clauseDict[cid]
         self.aloCount = len(self.constraintList)-startCount
 
@@ -294,50 +191,50 @@ class ConstraintFinder:
                     del idSet[pair]
                     del edgeMap[v1][v2]
                     del edgeMap[v2][v1]
-            con = Formula(varList, coeffList, const, clauseList, False)
+            con = Formula(varList, coeffList, const, clauseList, [], False)
             self.constraintList.append(con)
         self.amoCount = len(self.constraintList)-startCount
 
-    def find(self, makeEquations):
+    def find(self):
         self.findUnits()
-        self.findAlos()
+        self.findDirectAlos()
         self.findAmos()
-        if makeEquations:
-            # Create mapping from variables to constraints
-            vdict = {}
-            for con in self.constraintList:
-                tup = tuple(con.varList)
-                if tup in vdict:
-                    vdict[tup].append(con)
-                else:
-                    vdict[tup] = [con]
-            nclist = []
-            for tup in vdict.keys():
-                merged = False
-                if len(vdict[tup]) == 2:
-                    con1, con2 = vdict[tup]
-                    eq = con1.e1Merge(con2)
-                    if eq is not None:
-                        nclist.append(eq)
-                        merged = True
-                        self.aloCount -= 1
-                        self.amoCount -= 1
-                        self.eqCount += 1
-                if not merged:
-                    nclist += vdict[tup]
-            self.constraintList = nclist
+        # Combine constraints into equations when possible
+        # Create mapping from variables to constraints
+        vdict = {}
+        for con in self.constraintList:
+            tup = tuple(con.varList)
+            if tup in vdict:
+                vdict[tup].append(con)
+            else:
+                vdict[tup] = [con]
+        nclist = []
+        for tup in vdict.keys():
+            merged = False
+            if len(vdict[tup]) == 2:
+                con1, con2 = vdict[tup]
+                eq = con1.e1Merge(con2)
+                if eq is not None:
+                    nclist.append(eq)
+                    merged = True
+                    self.aloCount -= 1
+                    self.amoCount -= 1
+                    self.eqCount += 1
+            if not merged:
+                nclist += vdict[tup]
+        self.constraintList = nclist
 
 
-    def generate(self, oname, errfile, makeEquations):
-        self.find(makeEquations)
+    def generate(self, oname):
+        self.find()
         ccount = len(self.clauseDict)
         if ccount > 0:
-            if verbLevel >= 3:
+            if util.verbLevel >= 3:
                 clist = sorted(self.clauseDict.keys())
                 slist = [str(c) for c in clist]
-                ewrite("%sCould not classify %d clauses: [%s]\n" % (self.msgPrefix, ccount, " ".join(slist)), 3)
+                util.ewrite("%sCould not classify %d clauses: [%s]\n" % (self.msgPrefix, ccount, " ".join(slist)), 3)
             else:
-                ewrite("%sCould not classify %d clauses\n" % (self.msgPrefix, ccount), 2)
+                util.ewrite("%sCould not classify %d clauses\n" % (self.msgPrefix, ccount), 2)
             return False
         if oname is None:
             outfile = sys.stdout
@@ -345,12 +242,12 @@ class ConstraintFinder:
             try:
                 outfile = open(oname, 'w')
             except:
-                ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 0)
+                util.ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 0)
                 return False
         for con in self.constraintList:
             con.generate(outfile)
         ccount = len(self.constraintList)
-        ewrite("%s%d formulas (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 1)
+        util.ewrite("%s%d formulas (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 1)
         if oname is not None:
             outfile.close()
         return True
@@ -365,17 +262,17 @@ def rejectClause(lits, cid):
         return "Clause #%d.  Too many negative literals" % cid
     return None
 
-def extract(iname, oname, maxclause, makeEquations):
+def extract(iname, oname, maxclause):
     try:
-        reader = CnfReader(iname, maxclause = maxclause, rejectClause = rejectClause)
+        reader = util.CnfReader(iname, maxclause = maxclause, rejectClause = rejectClause)
         if reader.reason is not None:
-            ewrite("File %s: Could not be classified (%s)\n" % (iname, reader.reason), 2)
+            util.ewrite("File %s: Could not be classified (%s)\n" % (iname, reader.reason), 2)
             return False
     except Exception as ex:
-        ewrite("Couldn't read CNF file: %s" % str(ex), 0)
+        util.ewrite("Couldn't read CNF file: %s" % str(ex), 0)
         return
     cg = ConstraintFinder(reader.clauses, iname)
-    return cg.generate(oname, errfile, makeEquations)
+    return cg.generate(oname)
 
 
 def replaceExtension(path, ext):
@@ -387,54 +284,48 @@ def replaceExtension(path, ext):
     return ".".join(fields)
 
 def run(name, args):
-    global verbLevel
-    global errfile
-    global careful
     iname = None
     oname = None
     path = None
     maxclause = None
     ok = True
-    makeEquations = False
 
-    optlist, args = getopt.getopt(args, "hcev:i:o:p:m:")
+    optlist, args = getopt.getopt(args, "hcv:i:o:p:m:")
     for (opt, val) in optlist:
         if opt == '-h':
             ok = False
         elif opt == '-v':
-            verbLevel = int(val)
+            util.verbLevel = int(val)
         elif opt == '-c':
-            careful = True
-        elif opt == '-e':
-            makeEquations = True
+            util.careful = True
         elif opt == '-i':
             iname = val
         elif opt == '-o':
             oname = val
-            errfile = sys.stdout
+            util.errfile = sys.stdout
         elif opt == '-p':
             path = val
-            errfile = sys.stdout
+            util.errfile = sys.stdout
         elif opt == '-m':
             maxclause = int(val)
     if not ok:
-        usage(name, errfile)
+        usage(name)
         return
     if path is None:
-        ecode = 0 if  extract(iname, oname, maxclause, makeEquations) else 1
+        ecode = 0 if  extract(iname, oname, maxclause) else 1
         sys.exit(ecode)
     else:
         if iname is not None or oname is not None:
-            ewrite("Cannot specify path + input or output name", 0)
+            util.ewrite("Cannot specify path + input or output name", 0)
             usage(name)
             sys.exit(0)
         scount = 0
         flist = sorted(glob.glob(path + '*.cnf'))
         for iname in flist:
             oname = replaceExtension(iname, 'schedule')
-            if extract(iname, oname, maxclause, makeEquations):
+            if extract(iname, oname, maxclause):
                 scount += 1
-        ewrite("Extracted Constraint representation of %d/%d files\n" % (scount, len(flist)), 1)
+        util.ewrite("Extracted Constraint representation of %d/%d files\n" % (scount, len(flist)), 1)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
