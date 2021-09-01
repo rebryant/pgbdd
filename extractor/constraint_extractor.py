@@ -24,7 +24,7 @@ class Formula:
     varList = []
     coeffList = []
     const = 0
-    # Input clauses that generate this constraint
+    # Input clause Ids that generate this constraint
     clauseList = []
     # Variables to quantify out
     qvarList = []
@@ -92,6 +92,7 @@ class ConstraintFinder:
         self.ucount = 0
         self.aloCount = 0
         self.amoCount = 0
+        self.amoCount = 0
         self.eqCount = 0
 
     def findUnits(self):
@@ -115,8 +116,7 @@ class ConstraintFinder:
             del self.clauseDict[cid]
         self.ucount = len(self.constraintList)-startCount
 
-
-    def findDirectAlos(self):
+    def findAlos(self):
         startCount = len(self.constraintList)
         idList = sorted(self.clauseDict.keys())
         for cid in idList:
@@ -136,7 +136,100 @@ class ConstraintFinder:
             del self.clauseDict[cid]
         self.aloCount = len(self.constraintList)-startCount
 
-    def findAmos(self):
+    # Classify vars regarding how they occur in binary clauses
+    # Generate mapping from variable to pair (pos,neg), where each element of the pair is True or False
+    def classifyVars(self):
+        polarityDict = {}
+        for clause in self.clauseDict.values():
+            if len(clause) != 2:
+                continue
+            for lit in clause:
+                var = abs(lit)
+                pos,neg = False, False
+                if var in polarityDict:
+                    pos,neg = polarityDict[var]
+                if lit < 0:
+                    neg = True
+                else:
+                    pos = True
+                polarityDict[var] = (pos,neg)
+        return polarityDict
+
+    def findEncodedAmos(self):
+        startCount = len(self.constraintList)
+        # Classify variables as problem variables or encoding variables
+        polarityDict = self.classifyVars()
+        # Encoding variables occur both positively and negatively
+        # Build map from each encoding variable to the clauses that contain it
+        evarMap = { var : [] for var in polarityDict.keys() if polarityDict[var] == (True,True) }
+        # Build map from each program variable to the clauses that contain it
+        pvarMap = { var : [] for var in polarityDict.keys() if polarityDict[var] == (False,True) }
+        for cid in self.clauseDict.keys():
+            clause = self.clauseDict[cid]
+            assigned = False
+            for lit in clause:
+                var = abs(lit)
+                if var in evarMap:
+                    evarMap[var].append(cid)
+                elif var in pvarMap:
+                    pvarMap[var].append(cid)
+        # Build up clusters, each containing set of encoding and program variables
+        # Do so by following chains of encoding variables
+        while len(evarMap) > 0:
+            # Maps from variables to True/False
+            pmap = {}
+            emap = {}
+            # Mapping from clause Ids to True/False
+            idmap = {}
+            # Grab an encoding variable as starting point
+            for ev in evarMap.keys():
+                break
+            traceList = [ev]
+            # Follow transitive closure from pairs of encoding variables
+            while len(traceList) > 0:
+                ev = traceList[0]
+                traceList = traceList[1:]
+                emap[ev] = True
+                for cid in evarMap[ev]:
+                    idmap[cid] = True
+                    clause = self.clauseDict[cid]
+                    for lit in clause:
+                        var = abs(lit)
+                        if var == ev or var in emap or var in pmap:
+                            continue
+                        if var in evarMap:
+                            traceList.append(var)
+                        else:
+                            pmap[var] = True
+                del evarMap[ev]
+
+            # Now add remaining clauses that contain only variables in cluster
+            for pv in pmap.keys():
+                for cid in pvarMap[pv]:
+                    if cid not in self.clauseDict:
+                        continue
+                    clause = self.clauseDict[cid]
+                    inCluster = True
+                    for lit in clause:
+                        var = abs(lit)
+                        if var not in pmap and var not in emap:
+                            inCluster = False
+                    if inCluster:
+                        idmap[cid] = True
+
+            varList = sorted(pmap.keys())
+            coeffList = [-1] * len(varList)
+            const = -1
+            qvarList = sorted(emap.keys())
+            clauseList = sorted(idmap.keys())
+            for cid in clauseList:
+                del self.clauseDict[cid]
+            con = Formula(varList, coeffList, const, clauseList, qvarList, False)
+            self.constraintList.append(con)
+        self.amoCount += len(self.constraintList)-startCount
+                        
+
+    def findDirectAmos(self):
         startCount = len(self.constraintList)
         # Mapping from variable to map from adjacent variables to True/False
         # Map in both directions
@@ -191,14 +284,16 @@ class ConstraintFinder:
                     del idSet[pair]
                     del edgeMap[v1][v2]
                     del edgeMap[v2][v1]
+            clauseList.sort()
             con = Formula(varList, coeffList, const, clauseList, [], False)
             self.constraintList.append(con)
-        self.amoCount = len(self.constraintList)-startCount
+        self.amoCount += len(self.constraintList)-startCount
 
     def find(self):
         self.findUnits()
-        self.findDirectAlos()
-        self.findAmos()
+        self.findAlos()
+        self.findEncodedAmos()
+        self.findDirectAmos()
         # Combine constraints into equations when possible
         # Create mapping from variables to constraints
         vdict = {}
@@ -253,7 +348,8 @@ class ConstraintFinder:
         return True
         
 # Reasons to reject an entire CNF file due to clause that cannot match constraints
-def rejectClause(lits, cid):
+# Only for direct encodings of AMO
+def directRejectClause(lits, cid):
     # Mixed clause
     if min(lits) < 0 and max(lits) > 0:
         return "Clause #%d.  Mixed polarity" % cid
@@ -264,7 +360,7 @@ def rejectClause(lits, cid):
 
 def extract(iname, oname, maxclause):
     try:
-        reader = util.CnfReader(iname, maxclause = maxclause, rejectClause = rejectClause)
+        reader = util.CnfReader(iname, maxclause = maxclause, rejectClause = None)
         if reader.reason is not None:
             util.ewrite("File %s: Could not be classified (%s)\n" % (iname, reader.reason), 2)
             return False
