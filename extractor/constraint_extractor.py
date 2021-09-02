@@ -70,6 +70,7 @@ class Formula:
 
     def generate(self, outfile):
         schedule = self.qschedule
+        first = True
         while len(schedule) > 0:
             clauseList = schedule[0]
             qvarList = [] if len(schedule) == 1 else schedule[1]
@@ -77,12 +78,14 @@ class Formula:
             slist = [str(c) for c in clauseList]
             if len(clauseList) > 0:
                 outfile.write("c " + " ".join(slist) + "\n")
-                if len(clauseList) > 1:
-                    outfile.write("a %d\n" % (len(clauseList) - 1))
+                ccount = len(clauseList)-1 if first else len(clauseList)
+                first = False
+                if ccount > 0:
+                    outfile.write("a %d\n" % ccount)
             if len(qvarList) > 0:
                 slist = [str(v) for v in qvarList]
                 outfile.write("q %s\n" % " ".join(slist))
-                outfile.write(str(self) + "\n")
+        outfile.write(str(self) + "\n")
         
 
 class ConstraintFinder:
