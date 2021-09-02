@@ -24,19 +24,28 @@ class Formula:
     varList = []
     coeffList = []
     const = 0
-    # Input clause Ids that generate this constraint
-    clauseList = []
-    # Variables to quantify out
-    qvarList = []
+    # Quantification schedule consists of list that alternates between
+    # Ids of clauses to conjoin
+    # and Ids of variables to quantify
+    qschedule = []
     isEquation = False
 
-    def __init__(self, varList, coeffList, const, clauseList, qvarList, isEquation):
+    def __init__(self, varList, coeffList, const, qschedule, isEquation):
         self.varList = varList
         self.coeffList = coeffList
         self.const = const
-        self.clauseList = clauseList
-        self.qvarList = qvarList
+        self.qschedule = qschedule
         self.isEquation = isEquation
+
+    # Merge two quantification schedules
+    def mergeSchedules(self, schedA, schedB):
+        if len(schedA) == 0:
+            return schedB
+        if len(schedB) == 0:
+            return schedA
+        prefix = [schedA[0] + schedB[0]]
+        suffix = self.mergeSchedules(schedA[1:], schedB[1:])
+        return prefix + suffix
 
     # Attempt to merge AMO and ALO constraints into single equation
     # Assume they have identical variable lists, but check other requirements
@@ -51,9 +60,8 @@ class Formula:
                 return None
         coeffList = alo.coeffList
         const = alo.const
-        clauseList = alo.clauseList + amo.clauseList
-        qvarList = alo.qvarList + amo.qvarList
-        return Formula(varList, coeffList, const, clauseList, qvarList, True)
+        qschedule = self.mergeSchedules(self.qschedule, other.qschedule)
+        return Formula(varList, coeffList, const, qschedule, True)
 
     def __str__(self):
         slist = ["%d.%d" % (v, c) for c,v in zip(self.varList, self.coeffList)]
@@ -61,14 +69,20 @@ class Formula:
         return ("%s %d " % (symbol, self.const)) + " ".join(slist)
 
     def generate(self, outfile):
-        slist = [str(c) for c in self.clauseList]
-        outfile.write("c " + " ".join(slist) + "\n")
-        if len(self.clauseList) > 1:
-            outfile.write("a %d\n" % (len(self.clauseList) - 1))
-        if len(self.qvarList) > 1:
-            slist = [str(v) for v in self.qvarList]
-            outfile.write("q %s\n" % " ".join(slist))
-        outfile.write(str(self) + "\n")
+        schedule = self.qschedule
+        while len(schedule) > 0:
+            clauseList = schedule[0]
+            qvarList = [] if len(schedule) == 1 else schedule[1]
+            schedule = schedule[2:]
+            slist = [str(c) for c in clauseList]
+            if len(clauseList) > 0:
+                outfile.write("c " + " ".join(slist) + "\n")
+                if len(clauseList) > 1:
+                    outfile.write("a %d\n" % (len(clauseList) - 1))
+            if len(qvarList) > 0:
+                slist = [str(v) for v in qvarList]
+                outfile.write("q %s\n" % " ".join(slist))
+                outfile.write(str(self) + "\n")
         
 
 class ConstraintFinder:
@@ -112,7 +126,7 @@ class ConstraintFinder:
                 coeffList = [1]
                 const = 1
             clauseList = [cid]
-            self.constraintList.append(Formula(varList, coeffList, const, clauseList, [], False))
+            self.constraintList.append(Formula(varList, coeffList, const, [clauseList, []], False))
             del self.clauseDict[cid]
         self.ucount = len(self.constraintList)-startCount
 
@@ -132,7 +146,7 @@ class ConstraintFinder:
             coeffList = [1] * len(clause)
             const = 1
             clauseList = [cid]
-            self.constraintList.append(Formula(varList, coeffList, const, clauseList, [], False))
+            self.constraintList.append(Formula(varList, coeffList, const, [clauseList, []], False))
             del self.clauseDict[cid]
         self.aloCount = len(self.constraintList)-startCount
 
@@ -224,7 +238,7 @@ class ConstraintFinder:
             clauseList = sorted(idmap.keys())
             for cid in clauseList:
                 del self.clauseDict[cid]
-            con = Formula(varList, coeffList, const, clauseList, qvarList, False)
+            con = Formula(varList, coeffList, const, [clauseList, qvarList], False)
             self.constraintList.append(con)
         self.amoCount += len(self.constraintList)-startCount
                         
@@ -285,7 +299,7 @@ class ConstraintFinder:
                     del edgeMap[v1][v2]
                     del edgeMap[v2][v1]
             clauseList.sort()
-            con = Formula(varList, coeffList, const, clauseList, [], False)
+            con = Formula(varList, coeffList, const, [clauseList, []], False)
             self.constraintList.append(con)
         self.amoCount += len(self.constraintList)-startCount
 
