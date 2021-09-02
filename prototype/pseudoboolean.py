@@ -34,16 +34,16 @@ class PseudoBooleanException(Exception):
             m += " (" + self.msg + ")"
         return m
 
-class ReciprocalException(PseudoBooleanException):
-    def __init__(self, num):
-        self.form = "No Reciprocal!"
-        self.msg = "denominator=%d" % num
-
 
 class ZeroException(PseudoBooleanException):
     def __init__(self, num):
         self.form = "Zero Divide!"
         self.msg = "numerator=%d" % num
+
+class ReciprocalException(PseudoBooleanException):
+    def __init__(self, num):
+        self.form = "No reciprocal!"
+        self.msg = "value=%d" % num
 
 
 class PivotException(PseudoBooleanException):
@@ -60,9 +60,10 @@ class FourierMotzinException(PseudoBooleanException):
 # For odd modulus m, use bias k=(m-1)/2
 # I.e., Numbers between -k and k to represent range of values
 # For even number, will be -k to k+1
-class ModMath:
 
-    modulus = 3 # Must be prime
+# Modulus of <= 0 means do true integer arithmetic.  Reciprocals only valid for -1 and +1
+class ModMath:
+    modulus = 3 # Must be prime or 0
     minValue = -1 # -[(modulus-1)/2] for odd, -[modulus/2-1] for even
     maxValue = 1
     reciprocals = {} # Dictionary mapping x to 1/x
@@ -75,8 +76,12 @@ class ModMath:
     def __init__(self, modulus = 3):
         self.reciprocals = {}
         self.modulus = modulus
-        self.minValue = -((self.modulus-1)//2)
-        self.maxValue = self.minValue + self.modulus - 1
+        if modulus > 0:
+            self.minValue = -((self.modulus-1)//2)
+            self.maxValue = self.minValue + self.modulus - 1
+        else:
+            self.minValue = -1
+            self.maxValue = +1
         self.opcount = 0
         for x in range(self.minValue,self.maxValue+1):
             if x == 0:
@@ -95,6 +100,8 @@ class ModMath:
 
     # Convert to canonical value
     def mod(self, x):
+        if self.modulus <= 0:
+            return x
         mx = x % self.modulus
         if mx > self.maxValue:
             mx -= self.modulus
@@ -121,6 +128,8 @@ class ModMath:
     def recip(self, x):
         if x == 0:
             raise ZeroException(1)
+        if x not in self.reciprocals:
+            raise ReciprocalException(x)
         return self.reciprocals[x]
 
     def div(self, x, y):
@@ -344,7 +353,19 @@ class Equation:
         # Now build BDD from bottom up
         rilist = list(ilist)
         rilist.reverse()
-        leafList = { offset : (esys.manager.leaf1 if offset == self.cval else esys.manager.leaf0) for offset in esys.mbox.values() }
+
+        if esys.mbox.modulus == 0:
+            # Unbounded range.  Need to consider all possible offsets
+            lasti = rilist[0]
+            needLeaves = {}
+            for offset in needNodes[lasti].keys():
+                needLeaves[offset] = True
+                noffset = offset + self[lasti]
+                needLeaves[noffset] = True
+            valueList = needLeaves.keys()
+        else:
+            valueList = esys.mbox.values()
+        leafList = { offset : (esys.manager.leaf1 if offset == self.cval else esys.manager.leaf0) for offset in valueList }
         nodes = { i : {} for i in rilist }
 
         lasti = rilist[0]

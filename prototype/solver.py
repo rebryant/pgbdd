@@ -396,7 +396,8 @@ class Solver:
     countSolutions = True
 
     # Support for equations
-    modulus = 2
+    # Modulus of 0 means unbounded
+    modulus = 0
     equationSystem = None
     # Support for constraints
     constraintSystem = None
@@ -573,16 +574,16 @@ class Solver:
                 idStack.append(nid)
             elif cmd[0] == '=':
                 # Equation
+                modulus = self.modulus
                 if len(cmd) > 1:
                     try:
                         modulus = int(cmd[1:])
                     except:
                         raise SolverException("Line #%d.  Couldn't read equation modulus from command '%s'" % (lineCount, cmd))
-                else:
-                    modulus = self.modulus
                 if self.equationSystem is None:
                     nvar = len(self.litMap) // 2
                     self.equationSystem = pseudoboolean.EquationSystem(nvar, modulus, verbose = self.verbLevel >= 3, manager = self.manager, writer = self.writer)
+                    self.modulus = modulus
                 elif self.equationSystem.modulus != modulus:
                     raise SolverException("Line #%d.  Don't support multiple moduli.  Existing %d.  New %d" % (lineCount, self.equationSystem.modulus, modulus))
                 const = int(fields[1])
@@ -830,7 +831,7 @@ def run(name, args):
     scheduler = None
     verbLevel = 1
     logName = None
-    modulus = 2
+    modulus = 0
 
     optlist, args = getopt.getopt(args, "hbB:v:i:o:M:p:s:m:L:")
     for (opt, val) in optlist:
