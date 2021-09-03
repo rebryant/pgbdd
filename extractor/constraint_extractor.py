@@ -6,6 +6,8 @@
 import getopt
 import sys
 import glob
+import queue
+
 import util
 
 def usage(name):
@@ -172,6 +174,78 @@ class ConstraintFinder:
                 polarityDict[var] = (pos,neg)
         return polarityDict
 
+    # Given clauses encoding constraint, plus list of
+    # encoding variables.  Find interleaving of clauses
+    # and variables for quantification
+    def linearizeSchedule(self, clauseList, qvarList):
+#        util.ewrite("Finding schedule for variables %s, clauses %s\n" % (str(qvarList),str(clauseList)), 0)
+        # Undirected graph formed by binary clauses of encoding variables.
+        # Generally will be acylic.  (Often a linear chain)
+        # Can create ordering of variables by working from tips of graph inward.
+        # Construct graph by Finding adjacencies among encoding variables
+        neighborDict = { var : [] for var in qvarList }
+        for cid in clauseList:
+            clause = self.clauseDict[cid]
+            if len(clause) != 2:
+                continue
+            lit1, lit2 = clause
+            var1, var2 = abs(lit1), abs(lit2)
+            if var1 in qvarList and var2 in qvarList:
+                neighborDict[var1].append(var2)
+                neighborDict[var2].append(var1)
+        # Linearize the encoding variables
+        orderedVarList = []
+        restVarList = qvarList
+        while len(orderedVarList) < len(qvarList):
+            unitVarList = [var for var in restVarList if len(neighborDict[var]) <= 1]
+            restVarList = [var for var in restVarList if len(neighborDict[var]) > 1]
+            if len(unitVarList) == 0:
+                # Must have cycle in graph.  Order remaining variables arbitrarily
+                orderedVarList += restVarList
+                break
+            while len(unitVarList) > 1:
+                var = unitVarList[0]
+                unitVarList = unitVarList[1:]
+                if var in orderedVarList:
+                    # Already processed
+                    continue
+                orderedVarList.append(var)
+                if len(neighborDict[var]) == 0:
+                    continue
+                ovar = neighborDict[var][0]
+                neighborDict[var] = []
+                neighborDict[ovar] = [nvar for nvar in neighborDict[ovar] if nvar != var]
+                if len(neighborDict[ovar]) == 0:
+                    orderedVarList.append(ovar)
+                elif len(neighborDict[ovar]) == 1:
+                    # Give priority to neighbor
+                    unitVarList = [ovar] + unitVarList
+
+#        util.ewrite("Ordered variables as %s\n" % (str(orderedVarList)), 0)
+
+        # Now order clauses according to latest variable in clause
+        maxLevel = len(orderedVarList)
+        varLevelDict = { orderedVarList[level] : level for level in range(maxLevel) }
+        clauseSchedule = [[] for idx in range(maxLevel+1)]
+
+        for cid in clauseList:
+            clause = self.clauseDict[cid]
+            vars = [abs(lit) for lit in clause]
+            levels = [(varLevelDict[var] if var in varLevelDict else maxLevel) for var in vars]
+            level = min(levels)
+#            if level == maxLevel:
+#                util.ewrite("  Clause #%d %s.  Level = %d  (No encoding vars)\n" % (cid, str(clause), level), 0)
+#            else:
+#                util.ewrite("  Clause #%d %s.  Level = %d  Var=%d\n" % (cid, str(clause), level, orderedVarList[level]), 0)
+            clauseSchedule[level].append(cid)
+        qschedule = []
+        for level in range(maxLevel):
+            qschedule += [clauseSchedule[level], [orderedVarList[level]]]
+        if len(clauseSchedule[maxLevel]) > 0:
+            qschedule += [clauseSchedule[maxLevel], []]
+#        util.ewrite("Created schedule %s\n" % (str(qschedule)), 0)
+        return qschedule
+
     def findEncodedAmos(self):
         startCount = len(self.constraintList)
         # Classify variables as problem variables or encoding variables
@@ -239,9 +313,10 @@ class ConstraintFinder:
             const = -1
             qvarList = sorted(emap.keys())
             clauseList = sorted(idmap.keys())
+            qschedule = self.linearizeSchedule(clauseList, qvarList)
             for cid in clauseList:
                 del self.clauseDict[cid]
-            con = Formula(varList, coeffList, const, [clauseList, qvarList], False)
+            con = Formula(varList, coeffList, const, qschedule, False)
             self.constraintList.append(con)
         self.amoCount += len(self.constraintList)-startCount
                         

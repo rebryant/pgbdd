@@ -526,6 +526,8 @@ class Solver:
             if len(fields) == 0:
                 continue
             cmd = fields[0]
+            if self.verbLevel >= 3:
+                self.writer.write("Processing schedule command #%d: %s\n" % (lineCount, line))
             if cmd == '#':
                 continue
             if cmd == 'i':  # Information request
@@ -814,9 +816,9 @@ def readScheduler(fname, writer = None):
         lineCount += 1
         fields = line.split()
         if len(fields) == 0:
-            continue
+            line = ""
         if fields[0][0] == '#':
-            continue
+            line = ""
         actionList.append(line)
     return actionList
 
