@@ -24,6 +24,8 @@ ie: chess-$(N)-equation-integer.data
 
 re: chess-$(N)-equation-randomorder.data
 
+rie: chess-$(N)-equation-integer-randomorder.data
+
 c: chess-$(N)-constraint.data
 
 dc: chess-$(N)-constraint-dual.data
@@ -80,6 +82,15 @@ chess-$(N)-equation-randomorder.data:
 		-p chess-$(N)-equation-randomorder.order -o chess-$(N)-equation-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-randomorder.data
 	$(CHECKER) chess-$(N)-equation-randomorder.cnf chess-$(N)-equation-randomorder.$(EXTENSION) | tee -a chess-$(N)-equation-randomorder.data
 	rm -f chess-$(N)-equation-randomorder.$(EXTENSION)
+
+chess-$(N)-equation-integer-randomorder.data:
+	$(GENERATOR) -n $(N) -r chess-$(N)-equation-integer-randomorder -p e | tee chess-$(N)-equation-integer-randomorder.data
+	$(RANDOMIZER) chess-$(N)-equation-integer-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation-integer-randomorder.cnf -s chess-$(N)-equation-integer-randomorder.schedule \
+		-p chess-$(N)-equation-integer-randomorder.order -o chess-$(N)-equation-integer-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-integer-randomorder.data
+	$(CHECKER) chess-$(N)-equation-integer-randomorder.cnf chess-$(N)-equation-integer-randomorder.$(EXTENSION) | tee -a chess-$(N)-equation-integer-randomorder.data
+	rm -f chess-$(N)-equation-integer-randomorder.$(EXTENSION)
+
 
 chess-$(N)-constraint.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-constraint -p c | tee chess-$(N)-constraint.data

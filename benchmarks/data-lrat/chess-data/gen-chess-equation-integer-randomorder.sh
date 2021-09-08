@@ -1,0 +1,19 @@
+#!/bin/bash
+make rie N=004
+make rie N=008
+make rie N=012
+make rie N=016
+make rie N=020
+make rie N=024
+make rie N=028
+make rie N=032
+make rie N=040
+make rie N=048
+make rie N=056
+make rie N=060
+make rie N=064
+#make rie N=072
+#make rie N=080
+#make rie N=096
+#make rie N=112
+#make rie N=128

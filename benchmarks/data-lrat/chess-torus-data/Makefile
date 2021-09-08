@@ -14,6 +14,8 @@ nq: chess-torus-$(N)-noquant.data
 
 e: chess-torus-$(N)-equation.data
 
+ie: chess-torus-$(N)-equation-integer.data
+
 c: chess-torus-$(N)-constraint.data
 
 dc: chess-torus-$(N)-constraint-dual.data
@@ -37,6 +39,13 @@ chess-torus-$(N)-equation.data:
 		-p chess-torus-$(N)-equation.order -o chess-torus-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation.data
 	$(CHECKER) chess-torus-$(N)-equation.cnf chess-torus-$(N)-equation.$(EXTENSION) | tee -a chess-torus-$(N)-equation.data
 	rm -f chess-torus-$(N)-equation.$(EXTENSION)
+
+chess-torus-$(N)-equation-integer.data:
+	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-equation-integer -p e | tee chess-torus-$(N)-equation-integer.data
+	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-integer.cnf -s chess-torus-$(N)-equation-integer.schedule \
+		-p chess-torus-$(N)-equation-integer.order -o chess-torus-$(N)-equation-integer.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer.data
+	$(CHECKER) chess-torus-$(N)-equation-integer.cnf chess-torus-$(N)-equation-integer.$(EXTENSION) | tee -a chess-torus-$(N)-equation-integer.data
+	rm -f chess-torus-$(N)-equation-integer.$(EXTENSION)
 
 chess-torus-$(N)-constraint.data:
 	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-constraint -p c | tee chess-torus-$(N)-constraint.data

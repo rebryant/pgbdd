@@ -12,10 +12,10 @@ make e N=040
 make e N=048
 make e N=056
 make e N=064
-make e N=080
-make e N=096
-make e N=112
-make e N=128
+#make e N=080
+#make e N=096
+#make e N=112
+#make e N=128
 #make e N=144
 #make e N=160
 
