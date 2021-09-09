@@ -1,19 +1,22 @@
 INTERP = python3
 N = 10
 VLEVEL = 1
+SEED=123456
 
 GENERATOR = $(INTERP) ../../pigeon-sinz.py
+RANDOMIZER = ../../randomizer.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
 VGRABBER = ../../grab_verification.py
-EXTENSION = lrat
+EXTENSION = lratb
 
 c: pigeon-tseitin-$(N)-column.data
 b: pigeon-tseitin-$(N)-bucket.data
 pb: pigeon-tseitin-$(N)-bucket-pm.data
 l: pigeon-tseitin-$(N)-linear.data
 con: pigeon-tseitin-$(N)-constraint.data
+rcon: pigeon-tseitin-$(N)-constraint-randomorder.data
 
 pigeon-tseitin-$(N)-column.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-column.data
@@ -50,6 +53,15 @@ pigeon-tseitin-$(N)-constraint.data:
 		-p pigeon-tseitin-$(N)-constraint.order -o pigeon-tseitin-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-constraint.data
 	$(CHECKER) pigeon-tseitin-$(N)-constraint.cnf pigeon-tseitin-$(N)-constraint.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-constraint.data
 	rm -f pigeon-tseitin-$(N)-constraint.$(EXTENSION)
+
+pigeon-tseitin-$(N)-constraint-randomorder.data:
+	$(GENERATOR) -c -n $(N) -r pigeon-tseitin-$(N)-constraint-randomorder | tee pigeon-tseitin-$(N)-constraint-randomorder.data
+	$(RANDOMIZER) pigeon-tseitin-$(N)-constraint-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-constraint-randomorder.cnf -s pigeon-tseitin-$(N)-constraint-randomorder.schedule \
+		-p pigeon-tseitin-$(N)-constraint-randomorder.order -o pigeon-tseitin-$(N)-constraint-randomorder.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-constraint-randomorder.data
+	$(CHECKER) pigeon-tseitin-$(N)-constraint-randomorder.cnf pigeon-tseitin-$(N)-constraint-randomorder.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-constraint-randomorder.data
+	rm -f pigeon-tseitin-$(N)-constraint-randomorder.$(EXTENSION)
+
 
 
 data:

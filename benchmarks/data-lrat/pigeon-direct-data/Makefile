@@ -1,6 +1,6 @@
 INTERP = python3
 N = 4
-VLEVEL = 2
+VLEVEL = 1
 SEED=123456
 
 GDIR=../../pigeon-code
@@ -12,7 +12,7 @@ EXTRACTOR = $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
-EXTENSION = lrat
+EXTENSION = lratb
 
 hml: pigeon-direct-$(N)-hm-linear.data
 pml: pigeon-direct-$(N)-pm-linear.data
