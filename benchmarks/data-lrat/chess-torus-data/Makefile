@@ -1,12 +1,14 @@
 INTERP = python3
 N = 10
-VLEVEL = 2
+VLEVEL = 1
+SEED=123456
 
 GENERATOR = $(INTERP) ../../chess.py
+RANDOMIZER = ../../randomizer.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
-EXTENSION = lrat
+EXTENSION = lratb
 
 q: chess-torus-$(N)-column.data
 
@@ -15,6 +17,8 @@ nq: chess-torus-$(N)-noquant.data
 e: chess-torus-$(N)-equation.data
 
 ie: chess-torus-$(N)-equation-integer.data
+
+rie: chess-torus-$(N)-equation-integer-randomorder.data
 
 c: chess-torus-$(N)-constraint.data
 
@@ -46,6 +50,15 @@ chess-torus-$(N)-equation-integer.data:
 		-p chess-torus-$(N)-equation-integer.order -o chess-torus-$(N)-equation-integer.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer.data
 	$(CHECKER) chess-torus-$(N)-equation-integer.cnf chess-torus-$(N)-equation-integer.$(EXTENSION) | tee -a chess-torus-$(N)-equation-integer.data
 	rm -f chess-torus-$(N)-equation-integer.$(EXTENSION)
+
+chess-torus-$(N)-equation-integer-randomorder.data:
+	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-equation-integer-randomorder -p e | tee chess-torus-$(N)-equation-integer-randomorder.data
+	$(RANDOMIZER) chess-torus-$(N)-equation-integer-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-integer-randomorder.cnf -s chess-torus-$(N)-equation-integer-randomorder.schedule \
+		-p chess-torus-$(N)-equation-integer-randomorder.order \
+		-o chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer-randomorder.data
+	$(CHECKER) chess-torus-$(N)-equation-integer-randomorder.cnf chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION) | tee -a chess-torus-$(N)-equation-integer-randomorder.data
+	rm -f chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION)
 
 chess-torus-$(N)-constraint.data:
 	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-constraint -p c | tee chess-torus-$(N)-constraint.data
@@ -96,6 +109,7 @@ data:
 	$(GRABBER) chess-torus-*-column.data > chess-torus-column.csv
 	$(GRABBER) chess-torus-*-equation.data > chess-torus-equation.csv
 	$(GRABBER) chess-torus-*-equation-integer.data > chess-torus-equation-integer.csv
+	$(GRABBER) chess-torus-*-equation-integer-randomorder.data > chess-torus-equation-integer-randomorder.csv
 	$(GRABBER) chess-torus-*-constraint.data > chess-torus-constraint.csv
 	$(GRABBER) chess-torus-*-constraint-dual.data > chess-torus-constraint-dual.csv
 #	$(GRABBER) chess-torus-*-bucket.data > chess-torus-bucket.csv
