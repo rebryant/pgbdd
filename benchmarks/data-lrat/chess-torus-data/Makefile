@@ -95,6 +95,7 @@ chess-torus-$(N)-gbucket.data:
 data:
 	$(GRABBER) chess-torus-*-column.data > chess-torus-column.csv
 	$(GRABBER) chess-torus-*-equation.data > chess-torus-equation.csv
+	$(GRABBER) chess-torus-*-equation-integer.data > chess-torus-equation-integer.csv
 	$(GRABBER) chess-torus-*-constraint.data > chess-torus-constraint.csv
 	$(GRABBER) chess-torus-*-constraint-dual.data > chess-torus-constraint-dual.csv
 #	$(GRABBER) chess-torus-*-bucket.data > chess-torus-bucket.csv
