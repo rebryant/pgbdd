@@ -6,7 +6,8 @@ MOD=3
 
 GENERATOR = $(INTERP) ../../chess.py
 RANDOMIZER = ../../randomizer.py
-EXTRACTOR = ../../constraint_extractor.py
+EXDIR = ../../../extractor
+EXTRACTOR = $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
