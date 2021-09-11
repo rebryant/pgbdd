@@ -12,7 +12,7 @@ def usage(name):
     print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c|d] [-s SEED]" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
-    print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, ROOT.schedule, and ROOT.buckets")
+    print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, and possibly ROOT.order, ROOT.schedule")
     print("  -c       Include corners")
     print("  -w WRAP  Wrap board horizontally (h), vertically (v), both (b) or neither (n)")
     print("  -p e|c|d Generate schedule that produces pseudoboolean equations (e), single constraints (c), or dual constraints (d)")
@@ -131,7 +131,6 @@ class Board:
     cnfWriter = None
     scheduleWriter = None
     orderWriter = None
-    bucketWriter = None
     verbose = False
     includeCorners = False
     wrapHorizontal = False
@@ -142,8 +141,6 @@ class Board:
     doEquation = False
     doConstraint = False
     doDualConstraint = False
-    # List of variable Ids for bucket ordering
-    idList = []
 
     def __init__(self, n, rootName, verbose = False, includeCorners = False, seed = None, wrapHorizontal = False, wrapVertical = False, pseudoType = None):
         self.n = n
@@ -179,7 +176,6 @@ class Board:
         self.wrapVertical = wrapVertical
         self.cnfWriter = writer.CnfWriter(expectedVariableCount, rootName, self.verbose)
         self.scheduleWriter = writer.ScheduleWriter(expectedVariableCount, rootName, self.verbose)
-        self.bucketWriter = writer.OrderWriter(expectedVariableCount, rootName, self.verbose, suffix = "buckets")
         self.orderWriter = writer.OrderWriter(expectedVariableCount, rootName, self.verbose)
         self.idDict = {}
         self.squares = {}
@@ -383,24 +379,11 @@ class Board:
             for c in range(n):
                 self.squares[(r,c)] = Square(r, c, n, self.idDict)
 
-        # Generate bucket ordering
-        for c in range(n):
-            blist = []
-            for r in range(n):
-                if (r,c,True) in self.idDict:
-                    blist.append(self.idDict[(r,c,True)])
-            for r in range(n):
-                if (r,c,False) in self.idDict:
-                    blist.append(self.idDict[(r,c,False)])
-            self.bucketWriter.doOrder(blist)
-
-
         self.constructBoard()
 
     def finish(self):
         self.cnfWriter.finish()
         self.orderWriter.finish()
-        self.bucketWriter.finish()
         self.scheduleWriter.finish()
     
                            
