@@ -12,9 +12,6 @@ import queue
 import bdd
 import resolver
 
-# Debug: Don't try to justify equational reasoning
-noJustify = False
-
 # In case don't have logger
 class SimpleWriter:
 
@@ -226,8 +223,6 @@ class Equation:
         e = Equation(self.N, self.modulus, cval, self.mbox)
         e.nz = nnz
         e.buildBdd(esys)
-        if noJustify:
-            return e
         rvList = [(eq.root,eq.validation) for eq in operandList]
         done = False
         while not done and len(rvList) > 2:
@@ -251,26 +246,17 @@ class Equation:
             if validation is None:
                 validation = esys.manager.prover.createClause([nr.id], antecedents, comment)
             rvList = [(nr,validation)] + rvList[2:]
-        if not done and len(rvList) == 2:
-            # Do final conjunction and implication in combination
-            r1,v1 = rvList[0]
-            r2,v2 = rvList[1]
-            antecedents = [v1,v2]
-            check, implication = esys.manager.applyAndJustifyImply(r1, r2, e.root)
-            if not check:
-                esys.writer.write("WARNING: Implication failed when spawning equation %s: %s & %s -/-> %s\n" % (str(e), r1.label(), r2.label(), e.root.label()))
-            if implication != resolver.tautologyId:
-                antecedents += [implication]
-            done = e.root == esys.manager.leaf0
-            if done:
-                comment = "Validation of empty clause from infeasible equation"
+        if not done: 
+            if len(rvList) == 2:
+                # Do final conjunction and implication in combination
+                r1,v1 = rvList[0]
+                r2,v2 = rvList[1]
+                antecedents = [v1,v2]
+                check, implication = esys.manager.applyAndJustifyImply(r1, r2, e.root)
             else:
-                comment = "Validation of equation with BDD root %s" % e.root.label()
-            e.validation = esys.manager.prover.createClause([e.root.id], antecedents, comment)
-        if not done and len(rvList) == 1:
-            (r1, v1) = rvList[0]
-            antecedents = [v1]
-            check, implication = esys.manager.justifyImply(r1, e.root)
+                (r1, v1) = rvList[0]
+                antecedents = [v1]
+                check, implication = esys.manager.justifyImply(r1, e.root)
             if not check:
                 esys.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), r1.label(), e.root.label()))
             if implication != resolver.tautologyId:
