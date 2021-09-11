@@ -14,10 +14,12 @@ class Writer:
     suffix = None
     verbose = False
     expectedVariableCount = None
+    isNull = False
 
-    def __init__(self, count, froot, suffix = None, verbose = False):
+    def __init__(self, count, froot, suffix = None, verbose = False, isNull = False):
         self.expectedVariableCount = count
         self.verbose = verbose
+        self.isNull = isNull
         if suffix is not None:
             self.suffix = suffix 
             fname = froot if self.suffix is None else froot + "." + self.suffix
@@ -33,6 +35,8 @@ class Writer:
         return line
 
     def show(self, line):
+        if self.isNull:
+            return
         line = self.trim(line)
         if self.verbose:
             print(line)
@@ -40,6 +44,8 @@ class Writer:
             self.outfile.write(line + '\n')
 
     def finish(self):
+        if self.isNull:
+            return
         if self.outfile is None:
             return
         self.outfile.close()
@@ -69,6 +75,8 @@ class CnfWriter(Writer):
         return self.clauseCount
 
     def finish(self):
+        if self.isNull:
+            return
         if self.outfile is None:
             return
         self.show("p cnf %d %d" % (self.expectedVariableCount, self.clauseCount))
@@ -121,6 +129,8 @@ class ScheduleWriter(Writer):
         self.show("e")
 
     def doQuantify(self, vlist):
+        if self.isNull:
+            return
         if self.stackDepth == 0:
             print ("Warning: Cannot quantify.  Stack empty")
 #            raise WriterException("Cannot quantify.  Stack empty")
@@ -128,6 +138,8 @@ class ScheduleWriter(Writer):
 
     # Issue equation or constraint.
     def doPseudoBoolean(self, vlist, clist, const, isEquation=True):
+        if self.isNull:
+            return
         # Anticipate that shifting everything from CNF evaluation to pseudoboolean reasoning
         self.expectedFinal = 0
         if self.stackDepth == 0:
@@ -147,6 +159,8 @@ class ScheduleWriter(Writer):
         self.show("i " + cstring)
 
     def finish(self):
+        if self.isNull:
+            return
         if self.stackDepth != self.expectedFinal:
             print("Warning: Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
 #            raise WriterException("Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
@@ -166,6 +180,8 @@ class OrderWriter(Writer):
         self.variableList += vlist
 
     def finish(self):
+        if self.isNull:
+            return
         if self.expectedVariableCount != len(self.variableList):
 #            raise WriterException("Incorrect number of variables in ordering %d != %d" % (
 #                len(self.variableList), self.expectedVariableCount))
