@@ -20,6 +20,8 @@ class Writer:
         self.expectedVariableCount = count
         self.verbose = verbose
         self.isNull = isNull
+        if isNull:
+            return
         if suffix is not None:
             self.suffix = suffix 
             fname = froot if self.suffix is None else froot + "." + self.suffix
@@ -92,8 +94,8 @@ class ScheduleWriter(Writer):
     decrementAnd = False
     expectedFinal = 1
 
-    def __init__(self, count, froot, verbose = False):
-        Writer.__init__(self, count, froot, suffix = "schedule", verbose = verbose)
+    def __init__(self, count, froot, verbose = False, isNull = False):
+        Writer.__init__(self, count, froot, suffix = "schedule", verbose = verbose, isNull = isNull)
         self.stackDepth = 0
         self.decrementAnd = False
     
@@ -169,10 +171,10 @@ class ScheduleWriter(Writer):
 class OrderWriter(Writer):
     variableList = []
 
-    def __init__(self, count, froot, verbose = False, suffix = None):
+    def __init__(self, count, froot, verbose = False, suffix = None, isNull = False):
         if suffix is None:
             suffix = "order"
-        Writer.__init__(self, count, froot, suffix = suffix, verbose = verbose)
+        Writer.__init__(self, count, froot, suffix = suffix, verbose = verbose, isNull = isNull)
         self.variableList = []
 
     def doOrder(self, vlist):

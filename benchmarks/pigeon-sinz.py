@@ -7,12 +7,13 @@ import writer
 
 # Generate files for pigeonhole problem using Sinz's represent of AtMost1 constraints
 def usage(name):
-    print("Usage: %s [-h] [-p] [-c] [-v] [-r ROOT] -n N" % name) 
+    print("Usage: %s [-h] [-p] [-C] [-c] [-v] [-r ROOT] -n N" % name) 
     print("  -h       Print this message")
     print("  -p       Use pigeon-major variable ordering")
+    print("  -C       Generate clauses only.  No order or schedule")
     print("  -c       Generate schedule that produces pseudoboolean constraints")
     print("  -v       Run in verbose mode")
-    print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, ROOT.order, and ROOT.schedule")
+    print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, and possibly ROOT.order, and ROOT.schedule")
     print("  -n N     Specify number of holes (pigeons = n+1)")
 
 
@@ -74,14 +75,14 @@ class Configuration:
     verbose = False
     n = None
 
-    def __init__(self, n, rootName, doConstraints = False, verbose = False):
+    def __init__(self, n, rootName, doConstraints = False, verbose = False, clauseOnly = False):
         self.n = n
         variableCount = (n+1)*n + n*n
         self.doConstraints = doConstraints
         self.verbose = verbose
         self.cnfWriter = writer.CnfWriter(variableCount, rootName, self.verbose)
-        self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose)
-        self.orderWriter = writer.OrderWriter(variableCount, rootName, self.verbose)
+        self.scheduleWriter = writer.ScheduleWriter(variableCount, rootName, self.verbose, isNull = clauseOnly)
+        self.orderWriter = writer.OrderWriter(variableCount, rootName, self.verbose, isNull = clauseOnly)
         self.idDict = {}
         self.positions = {}
         self.variableCount = 0
@@ -211,8 +212,9 @@ def run(name, args):
     n = 0
     pigeonMajor = False
     rootName = None
+    clauseOnly = False
     
-    optlist, args = getopt.getopt(args, "hvpcr:n:")
+    optlist, args = getopt.getopt(args, "hvpCcr:n:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -223,6 +225,8 @@ def run(name, args):
             pigeonMajor = True
         elif opt == '-c':
             doConstraints = True
+        elif opt == '-C':
+            clauseOnly = True
         elif opt == '-r':
             rootName = val
         elif opt == '-n':
@@ -236,7 +240,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    c = Configuration(n, rootName, doConstraints, verbose)
+    c = Configuration(n, rootName, doConstraints, verbose, clauseOnly)
     c.build(pigeonMajor)
     c.finish()
 

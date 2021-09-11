@@ -9,9 +9,10 @@ import writer
 
 # Generate files for mutilated chessboard problem
 def usage(name):
-    print("Usage: %s [-h] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c|d] [-s SEED]" % name) 
+    print("Usage: %s [-h] [-C] [-c] [-v] [-r ROOT] -n N [-w n|h|v|b] [-p e|c|d] [-s SEED]" % name) 
     print("  -h       Print this message")
     print("  -v       Run in verbose mode")
+    print("  -C       Generate clauses only.  No order or schedule")
     print("  -r ROOT  Specify root name for files.  Will generate ROOT.cnf, and possibly ROOT.order, ROOT.schedule")
     print("  -c       Include corners")
     print("  -w WRAP  Wrap board horizontally (h), vertically (v), both (b) or neither (n)")
@@ -142,7 +143,7 @@ class Board:
     doConstraint = False
     doDualConstraint = False
 
-    def __init__(self, n, rootName, verbose = False, includeCorners = False, seed = None, wrapHorizontal = False, wrapVertical = False, pseudoType = None):
+    def __init__(self, n, rootName, verbose = False, includeCorners = False, seed = None, wrapHorizontal = False, wrapVertical = False, pseudoType = None, clauseOnly = False):
         self.n = n
         expectedVariableCount = 2 * n * (n-1)
         if wrapHorizontal:
@@ -175,8 +176,8 @@ class Board:
         self.wrapHorizontal = wrapHorizontal
         self.wrapVertical = wrapVertical
         self.cnfWriter = writer.CnfWriter(expectedVariableCount, rootName, self.verbose)
-        self.scheduleWriter = writer.ScheduleWriter(expectedVariableCount, rootName, self.verbose)
-        self.orderWriter = writer.OrderWriter(expectedVariableCount, rootName, self.verbose)
+        self.scheduleWriter = writer.ScheduleWriter(expectedVariableCount, rootName, self.verbose, isNull=clauseOnly)
+        self.orderWriter = writer.OrderWriter(expectedVariableCount, rootName, self.verbose, isNull=clauseOnly)
         self.idDict = {}
         self.squares = {}
         self.variableCount = 0
@@ -395,8 +396,9 @@ def run(name, args):
     wrapHorizontal = False
     wrapVertical = False    
     pseudoType = None
+    clauseOnly = False
     seed = None
-    optlist, args = getopt.getopt(args, "hvcar:n:w:p:s:")
+    optlist, args = getopt.getopt(args, "hvCcar:n:w:p:s:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -405,6 +407,8 @@ def run(name, args):
             verbose = True
         elif opt == '-c':
             includeCorners = True
+        elif opt == '-C':
+            clauseOnly = True
         elif opt == '-r':
             rootName = val
         elif opt == '-n':
@@ -436,7 +440,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, seed, includeCorners, wrapHorizontal, wrapVertical, pseudoType)
+    b = Board(n, rootName, verbose, seed, includeCorners, wrapHorizontal, wrapVertical, pseudoType, clauseOnly)
     b.build()
     b.finish()
 
