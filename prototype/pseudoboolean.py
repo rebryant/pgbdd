@@ -72,6 +72,13 @@ class ModMath:
 
     def __init__(self, modulus = 3):
         self.reciprocals = {}
+        self.setModulus(modulus)
+        # Reset count
+        self.opcount = 0
+        self.usedValues = {}
+
+    def setModulus(self, modulus):
+        self.reciprocals = {}
         self.modulus = modulus
         if modulus > 0:
             self.minValue = -((self.modulus-1)//2)
@@ -91,9 +98,7 @@ class ModMath:
                     break
             if not found:
                 raise ReciprocalException(x)
-        # Reset count
-        self.opcount = 0
-        self.usedValues = {}
+
 
     # Convert to canonical value
     def mod(self, x):
@@ -222,57 +227,23 @@ class Equation:
     def spawn(self, nnz, cval, esys, operandList):
         e = Equation(self.N, self.modulus, cval, self.mbox)
         e.nz = nnz
-        e.buildBdd(esys)
-        rvList = [(eq.root,eq.validation) for eq in operandList]
-        done = False
-        while not done and len(rvList) > 2:
-            r1,v1 = rvList[0]
-            r2,v2 = rvList[1]
-            validation = None
-            antecedents = [v1,v2]
-            nr,imp = esys.manager.applyAndJustify(r1, r2)
-            if nr == esys.manager.leaf0:
-                comment = "Validation of Empty clause"
-                done = True
-            else:
-                comment = "Validation of %s" % nr.label()
-            if imp == resolver.tautologyId:
-                if nr == r1:
-                    validation = v1
-                elif nr == r2:
-                    validation = v2
-            else:
-                antecedents += [imp]
-            if validation is None:
-                validation = esys.manager.prover.createClause([nr.id], antecedents, comment)
-            rvList = [(nr,validation)] + rvList[2:]
-        if not done: 
-            if len(rvList) == 2:
-                # Do final conjunction and implication in combination
-                r1,v1 = rvList[0]
-                r2,v2 = rvList[1]
-                antecedents = [v1,v2]
-                check, implication = esys.manager.applyAndJustifyImply(r1, r2, e.root)
-            else:
-                (r1, v1) = rvList[0]
-                antecedents = [v1]
-                check, implication = esys.manager.justifyImply(r1, e.root)
-            if not check:
-                esys.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), r1.label(), e.root.label()))
-            if implication != resolver.tautologyId:
-                antecedents += [implication]
-            done = e.root == esys.manager.leaf0
-            if done:
-                comment = "Validation of empty clause from infeasible equation"
-            else:
-                comment = "Validation of equation with BDD root %s" % e.root.label()
-            e.validation = esys.manager.prover.createClause([e.root.id], antecedents, comment)
-        if done:
-            esys.writer.write("UNSAT\n")
-            esys.manager.summarize()
+        if esys.delayedJustification:
+            esys.justificationSteps.append((e, operandList))
+        else:
+            esys.justifyEquation(e, operandList)
         return e
 
-    
+    # Restructure the equation with a new mbox and modulus.  Justify that
+    # it is implied by previous version
+    def restructure(self, esys):
+        mbox = esys.mbox
+        modulus = mbox.modulus
+        ncval = mbox.mod(self.cval)
+        e = Equation(self.N, modulus, ncval, mbox)
+        e.nz = { i : mbox.mod(self[i]) for i in self.indices() }
+        esys.justifyEquation(e, [self])
+        return e
+
     # Normalize vector so that element at pivot position == 1
     # By dividing all entries by the existing value
     # Returns new vector
@@ -334,6 +305,9 @@ class Equation:
             return
 
         ilist.sort(key = lambda id : esys.levelMap[id])
+        # Put values into range
+        nnz = { i : self.mbox.mod(self.nz[i]) for i in ilist }
+        ncval = self.mbox.mod(self.cval)
 
         # Determine at what offsets will need node, starting from root and working down
         needNodes = { i : {} for i in ilist }
@@ -344,7 +318,7 @@ class Equation:
                 # Will need this offset when variable evaluates to 0
                 needNodes[nexti][offset] = True
                 # Will need this offset when variable evaluates to 1
-                noffset = esys.mbox.add(offset, self[previ])
+                noffset = esys.mbox.add(offset, nnz[previ])
                 needNodes[nexti][noffset] = True
             previ = nexti
 
@@ -358,18 +332,19 @@ class Equation:
             needLeaves = {}
             for offset in needNodes[lasti].keys():
                 needLeaves[offset] = True
-                noffset = offset + self[lasti]
+                noffset = offset + nnz[lasti]
                 needLeaves[noffset] = True
             valueList = needLeaves.keys()
         else:
             valueList = esys.mbox.values()
-        leafList = { offset : (esys.manager.leaf1 if offset == self.cval else esys.manager.leaf0) for offset in valueList }
+
+        leafList = { offset : (esys.manager.leaf1 if offset == ncval else esys.manager.leaf0) for offset in valueList }
         nodes = { i : {} for i in rilist }
 
         lasti = rilist[0]
         for offset in needNodes[lasti].keys():
             low = leafList[offset]
-            noffset = esys.mbox.add(offset, self[lasti])
+            noffset = esys.mbox.add(offset, nnz[lasti])
             high = leafList[noffset]
             var = esys.varMap[lasti]
             root = low if low == high else esys.manager.findOrMake(var, high, low)
@@ -379,7 +354,7 @@ class Equation:
         for previ in rilist[1:]:
             for offset in needNodes[previ].keys():
                 low = nodes[nexti][offset]
-                noffset = esys.mbox.add(offset, self[previ])
+                noffset = esys.mbox.add(offset, nnz[previ])
                 high = nodes[nexti][noffset]
                 var = esys.varMap[previ]
                 root = low if low == high else esys.manager.findOrMake(var, high, low)
@@ -535,13 +510,17 @@ class EquationSystem:
     # Remaining equations
     rset = None
 
+    # Operating with/without BDD justification
+    delayedJustification = True
+    # When not doing justifications, record equations and their dependencies for future justification
+    # Each element is tuple (e, [dlist]).  For original equations, dlist is empty
+    justificationSteps = []
     # Supporting BDD operation
     manager = None
     # Mapping from variable Id to variable
     varMap = None
     # Mapping from variable Id to level
     levelMap = None
-
 
     ## Accumulating data
     # Mapping from variable ID to True
@@ -560,6 +539,7 @@ class EquationSystem:
         self.N = N
         self.modulus = modulus
         self.verbose = verbose
+        self.justificationSteps = []
         self.manager = manager
         if manager is not None:
             self.varMap = { var.id : var for var in manager.variables }
@@ -581,9 +561,111 @@ class EquationSystem:
         eid = self.rset.addEquation(e)
         for i in e.nz:
             self.varUsed[i] = True
+        if self.delayedJustification:
+            self.justificationSteps.append((e,[]))
         if self.manager is not None:
             e.buildBdd(self)
         return eid
+
+    def justifyEquation(self, e, operandList):
+        e.buildBdd(self)
+        rvList = [(eq.root,eq.validation) for eq in operandList]
+        done = False
+        while not done and len(rvList) > 2:
+            r1,v1 = rvList[0]
+            r2,v2 = rvList[1]
+            validation = None
+            antecedents = [v1,v2]
+            nr,imp = self.manager.applyAndJustify(r1, r2)
+            if nr == self.manager.leaf0:
+                comment = "Validation of Empty clause"
+                done = True
+            else:
+                comment = "Validation of %s" % nr.label()
+            if imp == resolver.tautologyId:
+                if nr == r1:
+                    validation = v1
+                elif nr == r2:
+                    validation = v2
+            else:
+                antecedents += [imp]
+            if validation is None:
+                validation = self.manager.prover.createClause([nr.id], antecedents, comment)
+            rvList = [(nr,validation)] + rvList[2:]
+        if not done: 
+            if len(rvList) == 2:
+                # Do final conjunction and implication in combination
+                r1,v1 = rvList[0]
+                r2,v2 = rvList[1]
+                antecedents = [v1,v2]
+                check, implication = self.manager.applyAndJustifyImply(r1, r2, e.root)
+            else:
+                (r1, v1) = rvList[0]
+                antecedents = [v1]
+                check, implication = self.manager.justifyImply(r1, e.root)
+            if not check:
+                self.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), r1.label(), e.root.label()))
+            if implication != resolver.tautologyId:
+                antecedents += [implication]
+            done = e.root == self.manager.leaf0
+            if done:
+                comment = "Validation of empty clause from infeasible equation"
+            else:
+                comment = "Validation of equation with BDD root %s" % e.root.label()
+            e.validation = self.manager.prover.createClause([e.root.id], antecedents, comment)
+        if done:
+            self.writer.write("UNSAT\n")
+            self.manager.summarize()
+        return done
+
+    # Perform justifications after the fact.
+    # Use equation that was found to be infeasible to set new modulus
+    def performJustificationOld(self, laste):
+        p = self.mbox.modulus
+        self.writer.write("Performing justification of %d steps.  New modulus = %d.\n" % (len(self.justificationSteps), p))
+        for e, dlist in self.justificationSteps:
+            if len(dlist) == 0:
+                pass
+            else:
+                oplist = [oe for oe in dlist]
+                self.writer.write("Attempting to justify %s\n" % str(e))
+                for oe in oplist:
+                    self.writer.write("  Operand %s (BDD %s)\n" % (str(oe), str(oe.root)))
+                done = self.justifyEquation(e, oplist)
+                if done:
+                    self.writer.write("Justification completed?\n")
+
+
+    def isPrime(self, p):
+        if p <= 1:
+            return False
+        for x in range(2,p):
+            if p % x == 0:
+                return False
+        return True
+
+    # Perform justifications after the fact.
+    # Use equation that was found to be infeasible to set new modulus
+    def performJustification(self, laste):
+        emap = { }
+        p = self.mbox.modulus
+        if p == 0:
+            # Choose a new modulus
+            p = 2
+            while not self.isPrime(p) or laste.cval % p == 0:
+                p += 1
+            self.mbox.setModulus(p)
+        self.writer.write("Performing justification of %d steps.  New modulus = %d.\n" % (len(self.justificationSteps), p))
+        for e, dlist in self.justificationSteps:
+            if len(dlist) == 0:
+                ne = e.restructure(self)
+                emap[e] = ne
+            else:
+                oplist = [(emap[oe] if oe in emap else oe) for oe in dlist]
+                done = self.justifyEquation(e, oplist)
+                if done:
+                    self.writer.write("Justification completed?\n")
+
 
     # Given possible pivot index
     # find best equation to use as pivot equation and
@@ -634,15 +716,15 @@ class EquationSystem:
         return (bestPidx, bestEid)
 
     # Perform one step of LU decomposition
-    # Possible return values:
+    # Return (status, finalequation), where status is
     # "solved", "unsolvable", "normal"
     def solutionStep(self):
         if len(self.rset) == 0:
-            return "solved"
+            return ("solved", None)
         self.stepCount += 1
         (pidx, eid) = self.selectPivot()
         if pidx is None:
-            return "solved"
+            return ("solved", None)
 
         e = self.rset[eid]
         pval = e[pidx]
@@ -659,13 +741,13 @@ class EquationSystem:
             soe = oe.scale(eval, self)
             re = soe.sub(se, self)
             if re.isInfeasible():
-                return "unsolvable"
+                return ("unsolvable", re)
             self.rset.addEquation(re)
             size = oe.size
             self.rset.removeEquation(oeid)
             self.checkGC(size)
             self.combineCount += 1
-        return "normal"
+        return ("normal", None)
             
     def solve(self):
         self.sset = EquationSet(writer = self.writer)
@@ -681,7 +763,7 @@ class EquationSystem:
 
         while True:
             try:
-                status = self.solutionStep()
+                status, laste = self.solutionStep()
             except PseudoBooleanException as ex:
                 self.writer.write("  Solver failed: %s\n" % (str(ex)))
                 return "failed"
@@ -690,6 +772,8 @@ class EquationSystem:
                 break
             if self.verbose:
                 self.showState()
+        if status == "unsolvable" and self.delayedJustification:
+            self.performJustification(laste)
         if self.verbose:
             self.writer.write("  Solution status:%s\n" % status)
             self.postStatistics(status)
@@ -817,8 +901,6 @@ class Constraint:
         con = Constraint(self.N, cval)
         con.nz = nnz
         con.buildBdd(csys)
-        if noJustify:
-            return con
         rvList = [(c.root, c.validation) for c in operandList]
         done = False
         while not done and len(rvList) > 2:
