@@ -327,6 +327,18 @@ class Equation:
         nc = self.mbox.sub(self.cval, other.cval)
         return self.spawn(nnz, nc, esys, [self, other])
 
+    # Scale vector by constant
+    def scale(self, const, esys):
+        if const == 1:
+            return self
+        nnz = {}
+        for i in self.indices():
+            nx = self.mbox.mul(self[i], const)
+            self.mbox.markUsed(nx)
+            nnz[i] = nx
+        nc = self.mbox.mul(self.cval, const)
+        return self.spawn(nnz, nc, esys, [self])
+
     # Generate BDD representation
     def buildBdd(self, esys):
         ilist = self.indices()
@@ -650,20 +662,16 @@ class EquationSystem:
         pval = e[pidx]
         if self.verbose:
             self.writer.write("Pivoting with value %d (element %d).  Using equation #%d\n" % (pval, pidx, eid))
-        ne = e.normalize(pidx, self)
-        # Temporarily store normalized equation in rset in case trigger GC
-        # Size same as that for eid, so don't try GC yet.
-        nid = self.rset.addEquation(ne)
-        if self.verbose:
-            self.writer.write("Temporarily storing normalized equation as equation #%d.  Removing #%d\n" % (nid, eid))
         self.rset.removeEquation(eid)
         self.sset.addEquation(e)
         otherEids =  self.rset.lookup(pidx)
         for oeid in otherEids:
-            if oeid == nid:
-                continue
             oe = self.rset[oeid]
-            re = oe.scaleSub(ne, pidx, self)
+            eval = e[pidx]
+            oeval = oe[pidx]
+            se = e.scale(oeval, self)
+            soe = oe.scale(eval, self)
+            re = soe.sub(se, self)
             if re.isInfeasible():
                 return "unsolvable"
             self.rset.addEquation(re)
@@ -671,11 +679,6 @@ class EquationSystem:
             self.rset.removeEquation(oeid)
             self.checkGC(size)
             self.combineCount += 1
-
-        # Removed normalized equation
-        size = ne.size
-        self.rset.removeEquation(nid)
-        self.checkGC(size)
         return "normal"
             
     def solve(self):
@@ -903,6 +906,14 @@ class Constraint:
             self.nzInsert(nnz, i, nx)
         nc = self.cval + other.cval
         return self.spawn(nnz, nc, csys, [self, other])
+
+    # Scale a constraint by a constant
+    def scale(self, const, csys):
+        if const == 1:
+            return self
+        nnz = { i : const * self[i] for i in self.indices() }
+        nc = const * self.cval
+        return self.spawn(nnz, nc, csys, [self])
 
     # Generate at-least-one constraint
     def alo(self, vlist, csys):
@@ -1206,9 +1217,13 @@ class ConstraintSystem:
         
         for pid in posIndices:
             pcon = self.rset[pid]
+            pval = pcon[pidx]
             for nid in negIndices:
                 ncon = self.rset[nid]
-                scon = pcon.add(ncon, self)
+                nnval = -ncon[pidx]
+                spcon = pcon.scale(nnval, self)
+                sncon = ncon.scale(pval, self)
+                scon = spcon.add(sncon, self)
                 if scon.isInfeasible():
                     return "unsolvable"
                 if not scon.isTrivial():
