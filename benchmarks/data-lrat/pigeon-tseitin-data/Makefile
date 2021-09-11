@@ -5,6 +5,8 @@ SEED=123456
 
 GENERATOR = $(INTERP) ../../pigeon-sinz.py
 RANDOMIZER = ../../randomizer.py
+EXDIR = ../../../extractor
+EXTRACTOR = $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
@@ -48,14 +50,16 @@ pigeon-tseitin-$(N)-linear.data:
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
 
 pigeon-tseitin-$(N)-constraint.data:
-	$(GENERATOR) -c -n $(N) -r pigeon-tseitin-$(N)-constraint | tee pigeon-tseitin-$(N)-constraint.data
+	$(GENERATOR) -C -c -n $(N) -r pigeon-tseitin-$(N)-constraint | tee pigeon-tseitin-$(N)-constraint.data
+	$(EXTRACTOR) < pigeon-tseitin-$(N)-constraint.cnf > pigeon-tseitin-$(N)-constraint.schedule
 	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-constraint.cnf -s pigeon-tseitin-$(N)-constraint.schedule \
-		-p pigeon-tseitin-$(N)-constraint.order -o pigeon-tseitin-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-constraint.data
+		-o pigeon-tseitin-$(N)-constraint.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-constraint.data
 	$(CHECKER) pigeon-tseitin-$(N)-constraint.cnf pigeon-tseitin-$(N)-constraint.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-constraint.data
 	rm -f pigeon-tseitin-$(N)-constraint.$(EXTENSION)
 
 pigeon-tseitin-$(N)-constraint-randomorder.data:
-	$(GENERATOR) -c -n $(N) -r pigeon-tseitin-$(N)-constraint-randomorder | tee pigeon-tseitin-$(N)-constraint-randomorder.data
+	$(GENERATOR) -C -c -n $(N) -r pigeon-tseitin-$(N)-constraint-randomorder | tee pigeon-tseitin-$(N)-constraint-randomorder.data
+	$(EXTRACTOR) < pigeon-tseitin-$(N)-constraint-randomorder.cnf > pigeon-tseitin-$(N)-constraint-randomorder.schedule
 	$(RANDOMIZER) pigeon-tseitin-$(N)-constraint-randomorder.cnf $(SEED)
 	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-constraint-randomorder.cnf -s pigeon-tseitin-$(N)-constraint-randomorder.schedule \
 		-p pigeon-tseitin-$(N)-constraint-randomorder.order -o pigeon-tseitin-$(N)-constraint-randomorder.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-constraint-randomorder.data

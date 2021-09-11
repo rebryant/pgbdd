@@ -5,6 +5,8 @@ SEED=123456
 
 GENERATOR = $(INTERP) ../../chess.py
 RANDOMIZER = ../../randomizer.py
+EXDIR = ../../../extractor
+EXTRACTOR = $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
@@ -38,22 +40,25 @@ chess-torus-$(N)-column.data:
 	rm -f chess-torus-$(N)-column.$(EXTENSION)
 
 chess-torus-$(N)-equation.data:
-	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-equation -p e | tee chess-torus-$(N)-equation.data
+	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation -p e | tee chess-torus-$(N)-equation.data
+	$(EXTRACTOR) -i chess-torus-$(N)-equation.cnf -o chess-torus-$(N)-equation.schedule -v 2 | tee -a chess-torus-$(N)-equation.data
 	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation.cnf -s chess-torus-$(N)-equation.schedule -m 3 \
-		-p chess-torus-$(N)-equation.order -o chess-torus-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation.data
+		-o chess-torus-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation.data
 	$(CHECKER) chess-torus-$(N)-equation.cnf chess-torus-$(N)-equation.$(EXTENSION) | tee -a chess-torus-$(N)-equation.data
 	rm -f chess-torus-$(N)-equation.$(EXTENSION)
 
 chess-torus-$(N)-equation-integer.data:
-	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-equation-integer -p e | tee chess-torus-$(N)-equation-integer.data
+	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation-integer -p e | tee chess-torus-$(N)-equation-integer.data
+	$(EXTRACTOR) -i chess-torus-$(N)-equation-integer.cnf -o chess-torus-$(N)-equation-integer.schedule -v 2 | tee -a chess-torus-$(N)-equation-integer.data
 	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-integer.cnf -s chess-torus-$(N)-equation-integer.schedule \
-		-p chess-torus-$(N)-equation-integer.order -o chess-torus-$(N)-equation-integer.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer.data
+		-o chess-torus-$(N)-equation-integer.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer.data
 	$(CHECKER) chess-torus-$(N)-equation-integer.cnf chess-torus-$(N)-equation-integer.$(EXTENSION) | tee -a chess-torus-$(N)-equation-integer.data
 	rm -f chess-torus-$(N)-equation-integer.$(EXTENSION)
 
 chess-torus-$(N)-equation-integer-randomorder.data:
-	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-equation-integer-randomorder -p e | tee chess-torus-$(N)-equation-integer-randomorder.data
+	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation-integer-randomorder -p e | tee chess-torus-$(N)-equation-integer-randomorder.data
 	$(RANDOMIZER) chess-torus-$(N)-equation-integer-randomorder.cnf $(SEED)
+	$(EXTRACTOR) -i chess-torus-$(N)-equation-integer-randomorder.cnf -o chess-torus-$(N)-equation-integer-randomorder.schedule -v 2 | tee -a chess-torus-$(N)-equation-integer-randomorder.data
 	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-integer-randomorder.cnf -s chess-torus-$(N)-equation-integer-randomorder.schedule \
 		-p chess-torus-$(N)-equation-integer-randomorder.order \
 		-o chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer-randomorder.data
