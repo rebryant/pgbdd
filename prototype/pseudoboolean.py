@@ -12,6 +12,11 @@ import queue
 import bdd
 import resolver
 
+# Modulus options.  Values > 2 are actual moduli
+modulusNone = -1
+modulusAuto = 0
+
+
 # In case don't have logger
 class SimpleWriter:
 
@@ -59,8 +64,9 @@ class FourierMotzinException(PseudoBooleanException):
 # For even number, will be -k to k+1
 
 # Modulus of <= 0 means do true integer arithmetic.  Reciprocals only valid for -1 and +1
+# Allow non-prime moduli, even though not all reciprocals will be valid
 class ModMath:
-    modulus = 3 # Must be prime or 0
+    modulus = modulusAuto
     minValue = -1 # -[(modulus-1)/2] for odd, -[modulus/2-1] for even
     maxValue = 1
     reciprocals = {} # Dictionary mapping x to 1/x
@@ -87,22 +93,20 @@ class ModMath:
             self.minValue = -1
             self.maxValue = +1
         self.opcount = 0
+        
+        # Find those reciprocals that exist
         for x in range(self.minValue,self.maxValue+1):
             if x == 0:
                 continue
-            found = False
             for y in range(self.minValue,self.maxValue+1):
                 if self.mul(x, y) == 1:
                     self.reciprocals[x] = y
-                    found = True
                     break
-            if not found:
-                raise ReciprocalException(x)
 
 
     # Convert to canonical value
     def mod(self, x):
-        if self.modulus <= 0:
+        if self.modulus <= modulusAuto:
             return x
         mx = x % self.modulus
         if mx > self.maxValue:
@@ -206,12 +210,6 @@ class Equation:
     # Length defined to be the number of nonzeros
     def __len__(self):
         return len(self.nz)
-
-    def formatDense(self):
-        vec = [0 for i in range(self.N)]
-        for i in self.indices():
-            vec[i] = self[i]
-        return str(vec + [self.cval])
 
     def formatSparse(self):
         slist = []
@@ -326,7 +324,7 @@ class Equation:
         rilist = list(ilist)
         rilist.reverse()
 
-        if esys.mbox.modulus == 0:
+        if esys.mbox.modulus <= modulusAuto:
             # Unbounded range.  Need to consider all possible offsets
             lasti = rilist[0]
             needLeaves = {}
@@ -400,10 +398,7 @@ class Equation:
 
 
     def __str__(self):
-        if self.N <= 0:
-            return self.formatDense()
-        else:
-            return self.formatSparse()
+        return self.formatSparse()
 
 
 # Maintain set of sparse equations, including index from each index i to those equations having nonzero value there
@@ -497,7 +492,7 @@ class EquationSet:
 class EquationSystem:
     # Variable Count
     N = 10
-    modulus = 3
+    modulus = modulusAuto
     verbose = False
     randomize = False
     # Class to support math operations
@@ -535,7 +530,7 @@ class EquationSystem:
     # Total number of vector operations
     combineCount = 0
 
-    def __init__(self, N, modulus, verbose = True, manager = None, writer = None):
+    def __init__(self, N, modulus = modulusAuto, verbose = True, manager = None, writer = None):
         self.N = N
         self.modulus = modulus
         self.verbose = verbose
@@ -567,6 +562,8 @@ class EquationSystem:
             e.buildBdd(self)
         return eid
 
+    # Construct BDD representation of equation and generate its justification
+    # operandList is list of equations from which this one was derived
     def justifyEquation(self, e, operandList):
         e.buildBdd(self)
         rvList = [(eq.root,eq.validation) for eq in operandList]
@@ -616,55 +613,28 @@ class EquationSystem:
         if done:
             self.writer.write("UNSAT\n")
             self.manager.summarize()
-        return done
 
-    # Perform justifications after the fact.
-    # Use equation that was found to be infeasible to set new modulus
-    def performJustificationOld(self, laste):
-        p = self.mbox.modulus
-        self.writer.write("Performing justification of %d steps.  New modulus = %d.\n" % (len(self.justificationSteps), p))
-        for e, dlist in self.justificationSteps:
-            if len(dlist) == 0:
-                pass
-            else:
-                oplist = [oe for oe in dlist]
-                self.writer.write("Attempting to justify %s\n" % str(e))
-                for oe in oplist:
-                    self.writer.write("  Operand %s (BDD %s)\n" % (str(oe), str(oe.root)))
-                done = self.justifyEquation(e, oplist)
-                if done:
-                    self.writer.write("Justification completed?\n")
-
-
-    def isPrime(self, p):
-        if p <= 1:
-            return False
-        for x in range(2,p):
-            if p % x == 0:
-                return False
-        return True
 
     # Perform justifications after the fact.
     # Use equation that was found to be infeasible to set new modulus
     def performJustification(self, laste):
         emap = { }
-        p = self.mbox.modulus
-        if p == 0:
-            # Choose a new modulus
+        p = self.modulus
+        if p == modulusAuto:
+            # Choose a new modulus.  It need not be prime
             p = 2
-            while not self.isPrime(p) or laste.cval % p == 0:
+            while laste.cval % p == 0:
                 p += 1
             self.mbox.setModulus(p)
-        self.writer.write("Performing justification of %d steps.  New modulus = %d.\n" % (len(self.justificationSteps), p))
+        nmod = "none" if p == modulusNone else str(p)
+        self.writer.write("Performing justification of %d steps.  Modulus = %s.\n" % (len(self.justificationSteps), nmod))
         for e, dlist in self.justificationSteps:
             if len(dlist) == 0:
                 ne = e.restructure(self)
                 emap[e] = ne
             else:
                 oplist = [(emap[oe] if oe in emap else oe) for oe in dlist]
-                done = self.justifyEquation(e, oplist)
-                if done:
-                    self.writer.write("Justification completed?\n")
+                self.justifyEquation(e, oplist)
 
 
     # Given possible pivot index

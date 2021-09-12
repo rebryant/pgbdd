@@ -24,7 +24,7 @@ def usage(name):
     sys.stderr.write("  -M (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
     sys.stderr.write("  -s SCHEDULE Name of action schedule file\n")
-    sys.stderr.write("  -m MODULUS  Specify modulus for equation solver\n")
+    sys.stderr.write("  -m MODULUS  Specify modulus for equation solver (Either number or 'a' for auto-detect, 'i' for integer mode)\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
 # Verbosity levels
@@ -396,8 +396,7 @@ class Solver:
     countSolutions = True
 
     # Support for equations
-    # Modulus of 0 means unbounded
-    modulus = 0
+    modulus = pseudoboolean.modulusAuto
     equationSystem = None
     # Support for constraints
     constraintSystem = None
@@ -833,7 +832,7 @@ def run(name, args):
     scheduler = None
     verbLevel = 1
     logName = None
-    modulus = 0
+    modulus = pseudoboolean.modulusAuto
 
     optlist, args = getopt.getopt(args, "hbB:v:i:o:M:p:s:m:L:")
     for (opt, val) in optlist:
@@ -872,7 +871,12 @@ def run(name, args):
             if scheduler is None:
                 return
         elif opt == '-m':
-            modulus = int(val)
+            if val == 'a':
+                modulus = pseudoboolean.modulusAuto
+            elif val == 'i':
+                modulus = pseudoboolean.modulusNone
+            else:
+                modulus = int(val)
         elif opt == '-L':
             logName = val
         else:
