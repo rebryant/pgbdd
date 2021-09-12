@@ -10,7 +10,7 @@ EXTRACTOR = $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
-EXTENSION = lratb
+EXTENSION = lrat
 
 q: chess-torus-$(N)-column.data
 

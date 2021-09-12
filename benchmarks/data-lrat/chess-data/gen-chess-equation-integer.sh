@@ -1,19 +1,18 @@
 #!/bin/bash
-make ie N=004
-make ie N=008
-make ie N=012
-make ie N=016
-make ie N=020
-make ie N=024
-make ie N=028
-make ie N=032
-make ie N=040
-make ie N=048
-make ie N=056
-make ie N=064
-#make ie N=072
-make ie N=080
-make ie N=096
-make ie N=112
-make ie N=128
+make ei N=004
+make ei N=008
+make ei N=012
+make ei N=016
+make ei N=020
+make ei N=024
+make ei N=028
+make ei N=032
+make ei N=040
+make ei N=048
+make ei N=056
+make ei N=064
+make ei N=080
+make ei N=096
+make ei N=112
+make ei N=128
 
