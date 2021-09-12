@@ -605,7 +605,7 @@ class EquationSystem:
                 antecedents = [v1,v2]
                 check, implication = self.manager.applyAndJustifyImply(r1, r2, e.root)
                 if not check:
-                    raise ProofGenerationException("Implication failed when spawning equation %s: %s % %s -/-> %s\n" % (str(e), r1.label(), r2.label()e.root.label()))
+                    raise ProofGenerationException("Implication failed when spawning equation %s: %s % %s -/-> %s\n" % (str(e), r1.label(), r2.label(), e.root.label()))
             else:
                 r1, v1 = rvList[0]
                 antecedents = [v1]
