@@ -178,7 +178,6 @@ class ConstraintFinder:
     # encoding variables.  Find interleaving of clauses
     # and variables for quantification
     def linearizeSchedule(self, clauseList, qvarList):
-#        util.ewrite("Finding schedule for variables %s, clauses %s\n" % (str(qvarList),str(clauseList)), 0)
         # Undirected graph formed by binary clauses of encoding variables.
         # Generally will be acylic.  (Often a linear chain)
         # Can create ordering of variables by working from tips of graph inward.
@@ -221,8 +220,6 @@ class ConstraintFinder:
                     # Give priority to neighbor
                     unitVarList = [ovar] + unitVarList
 
-#        util.ewrite("Ordered variables as %s\n" % (str(orderedVarList)), 0)
-
         # Now order clauses according to latest variable in clause
         maxLevel = len(orderedVarList)
         varLevelDict = { orderedVarList[level] : level for level in range(maxLevel) }
@@ -233,17 +230,12 @@ class ConstraintFinder:
             vars = [abs(lit) for lit in clause]
             levels = [(varLevelDict[var] if var in varLevelDict else maxLevel) for var in vars]
             level = min(levels)
-#            if level == maxLevel:
-#                util.ewrite("  Clause #%d %s.  Level = %d  (No encoding vars)\n" % (cid, str(clause), level), 0)
-#            else:
-#                util.ewrite("  Clause #%d %s.  Level = %d  Var=%d\n" % (cid, str(clause), level, orderedVarList[level]), 0)
             clauseSchedule[level].append(cid)
         qschedule = []
         for level in range(maxLevel):
             qschedule += [clauseSchedule[level], [orderedVarList[level]]]
         if len(clauseSchedule[maxLevel]) > 0:
             qschedule += [clauseSchedule[maxLevel], []]
-#        util.ewrite("Created schedule %s\n" % (str(qschedule)), 0)
         return qschedule
 
     def findEncodedAmos(self):

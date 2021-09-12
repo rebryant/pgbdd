@@ -77,7 +77,6 @@ class Xor:
             result = "xnor"
         else:
             result = None
-#        print("Classified clauses %s.  pvals = %s.  Type = %s" % (str(clist), str(pset), str(result)))
         return result
         
     def generate(self, oname):
@@ -190,16 +189,6 @@ def run(name, args):
             if extract(iname, oname, maxclause):
                 scount += 1
         util.ewrite("Extracted XOR representation of %d/%d files\n" % (scount, len(flist)), 1)
-
-        
-def xorMaker(n, invert = False):
-    if n == 1:
-        return [[-1]] if invert else [[1]]
-    cpos = xorMaker(n-1, False)
-    cneg = xorMaker(n-1, True)
-    if invert:
-        cpos, cneg = cneg, cpos
-    return [c + [-n] for c in cneg] + [c + [n] for c in cpos]
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])
