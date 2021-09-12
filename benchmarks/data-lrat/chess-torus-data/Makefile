@@ -4,23 +4,21 @@ VLEVEL = 1
 SEED=123456
 
 GENERATOR = $(INTERP) ../../chess.py
-RANDOMIZER = ../../randomizer.py
+RANDOMIZER = $(INTERP) ../../randomizer.py
 EXDIR = ../../../extractor
-EXTRACTOR = $(EXDIR)/constraint_extractor.py
+EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
-GRABBER = ../../grab_clauses.py
+GRABBER = $(INTERP) ../../grab_clauses.py
 EXTENSION = lrat
 
 q: chess-torus-$(N)-column.data
 
 nq: chess-torus-$(N)-noquant.data
 
-e: chess-torus-$(N)-equation.data
+ea: chess-torus-$(N)-equation-auto.data
 
-ie: chess-torus-$(N)-equation-integer.data
-
-rie: chess-torus-$(N)-equation-integer-randomorder.data
+rea: chess-torus-$(N)-equation-auto-randomorder.data
 
 c: chess-torus-$(N)-constraint.data
 
@@ -39,31 +37,23 @@ chess-torus-$(N)-column.data:
 	$(CHECKER) chess-torus-$(N)-column.cnf chess-torus-$(N)-column.$(EXTENSION) | tee -a chess-torus-$(N)-column.data
 	rm -f chess-torus-$(N)-column.$(EXTENSION)
 
-chess-torus-$(N)-equation.data:
-	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation -p e | tee chess-torus-$(N)-equation.data
-	$(EXTRACTOR) -i chess-torus-$(N)-equation.cnf -o chess-torus-$(N)-equation.schedule -v 2 | tee -a chess-torus-$(N)-equation.data
-	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation.cnf -s chess-torus-$(N)-equation.schedule -m 3 \
-		-o chess-torus-$(N)-equation.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation.data
-	$(CHECKER) chess-torus-$(N)-equation.cnf chess-torus-$(N)-equation.$(EXTENSION) | tee -a chess-torus-$(N)-equation.data
-	rm -f chess-torus-$(N)-equation.$(EXTENSION)
+chess-torus-$(N)-equation-auto.data:
+	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation-auto -p e | tee chess-torus-$(N)-equation-auto.data
+	$(EXTRACTOR) -i chess-torus-$(N)-equation-auto.cnf -o chess-torus-$(N)-equation-auto.schedule -v 2 | tee -a chess-torus-$(N)-equation-auto.data
+	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-auto.cnf -s chess-torus-$(N)-equation-auto.schedule -m a \
+		-o chess-torus-$(N)-equation-auto.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-auto.data
+	$(CHECKER) chess-torus-$(N)-equation-auto.cnf chess-torus-$(N)-equation-auto.$(EXTENSION) | tee -a chess-torus-$(N)-equation-auto.data
+	rm -f chess-torus-$(N)-equation-auto.$(EXTENSION)
 
-chess-torus-$(N)-equation-integer.data:
-	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation-integer -p e | tee chess-torus-$(N)-equation-integer.data
-	$(EXTRACTOR) -i chess-torus-$(N)-equation-integer.cnf -o chess-torus-$(N)-equation-integer.schedule -v 2 | tee -a chess-torus-$(N)-equation-integer.data
-	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-integer.cnf -s chess-torus-$(N)-equation-integer.schedule \
-		-o chess-torus-$(N)-equation-integer.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer.data
-	$(CHECKER) chess-torus-$(N)-equation-integer.cnf chess-torus-$(N)-equation-integer.$(EXTENSION) | tee -a chess-torus-$(N)-equation-integer.data
-	rm -f chess-torus-$(N)-equation-integer.$(EXTENSION)
-
-chess-torus-$(N)-equation-integer-randomorder.data:
-	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation-integer-randomorder -p e | tee chess-torus-$(N)-equation-integer-randomorder.data
-	$(RANDOMIZER) chess-torus-$(N)-equation-integer-randomorder.cnf $(SEED)
-	$(EXTRACTOR) -i chess-torus-$(N)-equation-integer-randomorder.cnf -o chess-torus-$(N)-equation-integer-randomorder.schedule -v 2 | tee -a chess-torus-$(N)-equation-integer-randomorder.data
-	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-integer-randomorder.cnf -s chess-torus-$(N)-equation-integer-randomorder.schedule \
-		-p chess-torus-$(N)-equation-integer-randomorder.order \
-		-o chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-integer-randomorder.data
-	$(CHECKER) chess-torus-$(N)-equation-integer-randomorder.cnf chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION) | tee -a chess-torus-$(N)-equation-integer-randomorder.data
-	rm -f chess-torus-$(N)-equation-integer-randomorder.$(EXTENSION)
+chess-torus-$(N)-equation-auto-randomorder.data:
+	$(GENERATOR) -C -w b -n $(N) -r chess-torus-$(N)-equation-auto-randomorder -p e | tee chess-torus-$(N)-equation-auto-randomorder.data
+	$(RANDOMIZER) chess-torus-$(N)-equation-auto-randomorder.cnf $(SEED)
+	$(EXTRACTOR) -i chess-torus-$(N)-equation-auto-randomorder.cnf -o chess-torus-$(N)-equation-auto-randomorder.schedule -v 2 | tee -a chess-torus-$(N)-equation-auto-randomorder.data
+	$(SOLVER) -v $(VLEVEL) -i chess-torus-$(N)-equation-auto-randomorder.cnf -s chess-torus-$(N)-equation-auto-randomorder.schedule -m a \
+		-p chess-torus-$(N)-equation-auto-randomorder.order \
+		-o chess-torus-$(N)-equation-auto-randomorder.$(EXTENSION) 2>&1 | tee -a chess-torus-$(N)-equation-auto-randomorder.data
+	$(CHECKER) chess-torus-$(N)-equation-auto-randomorder.cnf chess-torus-$(N)-equation-auto-randomorder.$(EXTENSION) | tee -a chess-torus-$(N)-equation-auto-randomorder.data
+	rm -f chess-torus-$(N)-equation-auto-randomorder.$(EXTENSION)
 
 chess-torus-$(N)-constraint.data:
 	$(GENERATOR) -w b -n $(N) -r chess-torus-$(N)-constraint -p c | tee chess-torus-$(N)-constraint.data
@@ -112,12 +102,8 @@ chess-torus-$(N)-gbucket.data:
 
 data:
 	$(GRABBER) chess-torus-*-column.data > chess-torus-column.csv
-	$(GRABBER) chess-torus-*-equation.data > chess-torus-equation.csv
-	$(GRABBER) chess-torus-*-equation-integer.data > chess-torus-equation-integer.csv
-	$(GRABBER) chess-torus-*-equation-integer-randomorder.data > chess-torus-equation-integer-randomorder.csv
-	$(GRABBER) chess-torus-*-constraint.data > chess-torus-constraint.csv
-	$(GRABBER) chess-torus-*-constraint-dual.data > chess-torus-constraint-dual.csv
-#	$(GRABBER) chess-torus-*-bucket.data > chess-torus-bucket.csv
+	$(GRABBER) chess-torus-*-equation-auto.data > chess-torus-equation-auto.csv
+	$(GRABBER) chess-torus-*-equation-auto-randomorder.data > chess-torus-equation-auto-randomorder.csv
 #	$(GRABBER) chess-torus-*-gbucket.data > chess-torus-gbucket.csv
 #	$(GRABBER) chess-torus-*-noquant.data > chess-torus-noquant.csv
 #	$(GRABBER) chess-torus-*-noschedule.data > chess-torus-noschedule.csv

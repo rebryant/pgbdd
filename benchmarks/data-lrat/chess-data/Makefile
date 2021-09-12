@@ -4,12 +4,12 @@ VLEVEL = 1
 SEED=123456
 
 GENERATOR = $(INTERP) ../../chess.py
-RANDOMIZER = ../../randomizer.py
+RANDOMIZER = $(INTERP) ../../randomizer.py
 EXDIR = ../../../extractor
-EXTRACTOR = $(EXDIR)/constraint_extractor.py
+EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
-GRABBER = ../../grab_clauses.py
+GRABBER = $(INTERP) ../../grab_clauses.py
 EXTENSION = lrat
 
 q: chess-$(N)-column.data
@@ -26,7 +26,7 @@ ei: chess-$(N)-equation-integer.data
 
 re3: chess-$(N)-equation-mod3-randomorder.data
 
-re3: chess-$(N)-equation-auto-randomorder.data
+rea: chess-$(N)-equation-auto-randomorder.data
 
 rei: chess-$(N)-equation-integer-randomorder.data
 
@@ -166,15 +166,11 @@ chess-$(N)-gbucket.data:
 data:
 	$(GRABBER) chess-*-column.data > chess-column.csv
 	$(GRABBER) chess-*-column-randomorder.data > chess-column-randomorder.csv
-	$(GRABBER) chess-*-equation.data > chess-equation.csv
-	$(GRABBER) chess-*-equation-randomorder.data > chess-equation-randomorder.csv
+	$(GRABBER) chess-*-equation-mod3.data > chess-equation-mod3.csv
 	$(GRABBER) chess-*-equation-integer.data > chess-equation-integer.csv
-	$(GRABBER) chess-*-equation-integer-randomorder.data > chess-equation-integer-randomorder.csv
-	$(GRABBER) chess-*-constraint.data > chess-constraint.csv
-	$(GRABBER) chess-*-constraint-dual.data > chess-constraint-dual.csv
-	$(GRABBER) chess-*-constraint-dual-randomorder.data > chess-constraint-dual-randomorder.csv
+	$(GRABBER) chess-*-equation-auto.data > chess-equation-auto.csv
+	$(GRABBER) chess-*-equation-auto-randomorder.data > chess-equation-auto-randomorder.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
-	$(GRABBER) chess-*-gbucket.data > chess-gbucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv
 	$(GRABBER) chess-*-noschedule.data > chess-noschedule.csv
 
