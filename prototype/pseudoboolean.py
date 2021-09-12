@@ -16,15 +16,18 @@ import resolver
 modulusNone = -1
 modulusAuto = 0
 
+# Performance choices
+# Use randomization to break ties in pivot selection
+randomizePivots = True
+# Delay BDD evaluation
+delayJustification = True
+
 
 # In case don't have logger
 class SimpleWriter:
 
     def write(self, s):
         sys.stdout.write(s)
-
-# General library for solving pseudo-boolean constraints embedded in
-# modular arithmetic
 
 class PseudoBooleanException(Exception):
     form = ""
@@ -57,6 +60,12 @@ class FourierMotzinException(PseudoBooleanException):
     def __init__(self, values):
         self.form = "Out-of-range pivot!"
         self.msg = "oob values=%s" % str(values)
+
+class ProofGenerationException(PseudoBooleanException):
+    def __init__(self, values):
+        self.form = "Proof Generation Failure"
+        self.msg = "oob values=%s" % str(values)
+    
 
 # Supporting modular arithmetic
 # For odd modulus m, use bias k=(m-1)/2
@@ -494,7 +503,7 @@ class EquationSystem:
     N = 10
     modulus = modulusAuto
     verbose = False
-    randomize = False
+    randomize = randomizePivots
     # Class to support math operations
     mbox = None
     writer = None
@@ -506,7 +515,7 @@ class EquationSystem:
     rset = None
 
     # Operating with/without BDD justification
-    delayedJustification = True
+    delayedJustification = delayJustification
     # When not doing justifications, record equations and their dependencies for future justification
     # Each element is tuple (e, [dlist]).  For original equations, dlist is empty
     justificationSteps = []
@@ -541,7 +550,6 @@ class EquationSystem:
             self.levelMap = { var.id : var.level for var in manager.variables }
 
         self.writer = SimpleWriter() if writer is None else writer
-        self.randomize = False
         self.mbox = ModMath(modulus)
         self.sset = EquationSet(writer = self.writer)
         self.rset = EquationSet(writer = self.writer)
@@ -596,12 +604,14 @@ class EquationSystem:
                 r2,v2 = rvList[1]
                 antecedents = [v1,v2]
                 check, implication = self.manager.applyAndJustifyImply(r1, r2, e.root)
+                if not check:
+                    raise ProofGenerationException("Implication failed when spawning equation %s: %s % %s -/-> %s\n" % (str(e), r1.label(), r2.label()e.root.label()))
             else:
-                (r1, v1) = rvList[0]
+                r1, v1 = rvList[0]
                 antecedents = [v1]
                 check, implication = self.manager.justifyImply(r1, e.root)
-            if not check:
-                self.writer.write("WARNING: Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), r1.label(), e.root.label()))
+                if not check:
+                    raise ProofGenerationException("Implication failed when spawning equation %s: %s -/-> %s\n" % (str(e), r1.label(), e.root.label()))
             if implication != resolver.tautologyId:
                 antecedents += [implication]
             done = e.root == self.manager.leaf0
@@ -683,6 +693,7 @@ class EquationSystem:
             pd = len(self.rset[bestEid])
             self.pivotDegreeSum += pd
             self.pivotDegreeMax = max(self.pivotDegreeMax, pd)
+#        self.writer.write("Selecting pivot (%d,%d).  Score = %d\n" % (bestPidx, bestEid, bestScore))
         return (bestPidx, bestEid)
 
     # Perform one step of LU decomposition
@@ -894,28 +905,21 @@ class Constraint:
             if validation is None:
                 validation = csys.manager.prover.createClause([nr.id], antecedents, comment)
             rvList = [(nr,validation)] + rvList[2:]
-        if not done and len(rvList) == 2:
-            # Do final conjunction and implication in combination
-            r1,v1 = rvList[0]
-            r2,v2 = rvList[1]
-            antecedents = [v1,v2]
-            check, implication = csys.manager.applyAndJustifyImply(r1, r2, con.root)
-            if not check:
-                csys.writer.write("WARNING: Implication failed when spawning constraint %s: %s & %s -/-> %s\n" % (str(con), r1.label(), r2.label(), con.root.label()))
-            if implication != resolver.tautologyId:
-                antecedents += [implication]
-            done = con.root == csys.manager.leaf0
-            if done:
-                comment = "Validation of empty clause from infeasible constraint"
+        if not done:
+            if len(rvList) == 2:
+                # Do final conjunction and implication in combination
+                r1,v1 = rvList[0]
+                r2,v2 = rvList[1]
+                antecedents = [v1,v2]
+                check, implication = csys.manager.applyAndJustifyImply(r1, r2, con.root)
+                if not check:
+                    raise ProofGenerationException("Implication failed when spawning constraint %s: %s & %s -/-> %s\n" % (str(con), r1.label(), r2.label(), con.root.label()))
             else:
-                comment = "Validation of constraint with BDD root %s" % con.root.label()
-            con.validation = csys.manager.prover.createClause([con.root.id], antecedents, comment)
-        if not done and len(rvList) == 1:
-            r1,v1 = rvList[0]
-            antecedents = [v1]
-            check, implication = csys.manager.justifyImply(r1, con.root)
-            if not check:
-                csys.writer.write("WARNING: Implication failed when spawning constraint %s: %s -/-> %s\n" % (str(con), r1.label(), con.root.label()))
+                r1,v1 = rvList[0]
+                antecedents = [v1]
+                check, implication = csys.manager.justifyImply(r1, con.root)
+                if not check:
+                    raise ProofGenerationException("Implication failed when spawning constraint %s: %s -/-> %s\n" % (str(con), r1.label(), con.root.label()))
             if implication != resolver.tautologyId:
                 antecedents += [implication]
             done = con.root == csys.manager.leaf0
@@ -1152,7 +1156,7 @@ class ConstraintSystem:
     # Variable Count
     N = 10
     verbose = False
-    randomize = False
+    randomize = randomizePivots
     writer = None
 
     ## Solver state
@@ -1190,7 +1194,6 @@ class ConstraintSystem:
             self.varMap = { var.id : var for var in manager.variables }
             self.levelMap = { var.id : var.level for var in manager.variables }
         self.writer = SimpleWriter() if writer is None else writer
-        self.randomize = False
         self.sset = ConstraintSet(writer = self.writer)
         self.rset = ConstraintSet(writer = self.writer)
         self.varUsed = {}
