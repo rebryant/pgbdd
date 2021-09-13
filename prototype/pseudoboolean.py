@@ -747,6 +747,10 @@ class EquationSystem:
     # Given remaining set of equations, select pivot element and equation id
     def selectPivot(self):
         (score, pidx, eid) = self.pivotHelper.select()
+        if eid is not None:
+            pd = len(self.rset[eid])
+            self.pivotDegreeSum += pd
+            self.pivotDegreeMax = max(self.pivotDegreeMax, pd)
         return (pidx, eid)
 
     # Given remaining set of equations, select pivot element and equation id
