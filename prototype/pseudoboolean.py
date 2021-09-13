@@ -22,7 +22,6 @@ randomizePivots = True
 # Delay BDD evaluation
 delayJustification = True
 
-
 # In case don't have logger
 class SimpleWriter:
 
@@ -171,7 +170,9 @@ class Equation:
 
     # Variable Count
     N = 10  # Length when format as vector
-    # 
+    # Id set when add equation to evaluation set
+    # Might not match the id used in other sets
+    evalId = None
     # Mapping for variable Id to coefficient for nonzero coefficient
     nz = {}
     # Class to support math operations
@@ -232,10 +233,12 @@ class Equation:
     # operandList is set of equations used to generate this one
     # Use to generate proof that set of operand equations implies new equation
     def spawn(self, nnz, cval, esys, operandList):
-        e = Equation(self.N, self.modulus, cval, self.mbox)
+        e = Equation(self.N, self.modulus, cval, esys.mbox)
         e.nz = nnz
-        if esys.delayedJustification:
-            esys.justificationSteps.append((e, operandList))
+        if delayJustification:
+            evid = esys.eset.addEquation(e, assignId = True)
+            idlist = [oe.evalId for oe in operandList]
+            esys.justificationSteps.append((evid, idlist))
         else:
             esys.justifyEquation(e, operandList)
         return e
@@ -250,19 +253,6 @@ class Equation:
         e.nz = { i : mbox.mod(self[i]) for i in self.indices() }
         esys.justifyEquation(e, [self])
         return e
-
-    # Normalize vector so that element at pivot position == 1
-    # By dividing all entries by the existing value
-    # Returns new vector
-    def normalize(self, pidx, esys):
-        pval = self[pidx]
-        if pval == 0:
-            raise PivotException(pidx)
-        if pval == 1:
-            return self
-        nnz = { i : self.mbox.div(self[i], pval) for i in self.indices() }
-        nc = self.mbox.div(self.cval, pval)
-        return self.spawn(nnz, nc, esys, [self])
         
     # Helper function for inserting new element in dictionary
     def nzInsert(self, nz, i, v):
@@ -371,40 +361,15 @@ class Equation:
         self.root = nodes[ilist[0]][0]
         self.size = esys.manager.getSize(self.root)
         
-
-    # Perform scaling subtraction
-    # Must scale other vector by value at pivot position before subtracting
-    def scaleSub(self, other, pidx, esys):
-        nnz = { i : self[i] for i in self.indices() }
-        sval = 0
-        sval = self[pidx]
-        if sval != 0:
-            for i in other.indices():
-                x = self[i]
-                dx = self.mbox.mul(sval, other[i])
-                nx = self.mbox.sub(x, dx)
-                self.mbox.markUsed(nx)
-                self.nzInsert(nnz, i, nx)
-                nc = self.mbox.sub(self.cval, self.mbox.mul(sval, other.cval))
-        return self.spawn(nnz, nc, esys, [self, other])
-
-    # Lexicographic ordering of equations
-    def isGreater(self, other):
-        for i in range(self.N):
-            if self[i] > other[i]:
-                return True
-            if self[i] < other[i]:
-                return False
-        return False
+    # Remove reference to BDD when no longer needed
+    def retireBdd(self):
+        self.root = None
+        self.size = 0
     
-    def isTrivial(self):
-        return self.cval == 0 and len(self) == 0
-
     # Does this equation have no solution with modular arithmetic
     def isInfeasible(self):
         # All zero coefficients and non-zero constant
         return self.cval != 0 and len(self) == 0
-
 
     def __str__(self):
         return self.formatSparse()
@@ -451,8 +416,10 @@ class EquationSet:
         self.termCount += count
         self.termMax = max(self.termMax, count)
 
-    def addEquation(self, e):
+    def addEquation(self, e, assignId = False):
         eid = self.nextId
+        if assignId:
+            e.evalId = eid
         self.nextId += 1
         self.equDict[eid] = e
         for idx in e.nz:
@@ -462,6 +429,7 @@ class EquationSet:
 
     def removeEquation(self, eid):
         e = self[eid]
+        e.id = None
         for idx in e.nz:
             self.removeIndex(eid, idx)
         del self.equDict[eid]
@@ -503,7 +471,6 @@ class EquationSystem:
     N = 10
     modulus = modulusAuto
     verbose = False
-    randomize = randomizePivots
     # Class to support math operations
     mbox = None
     writer = None
@@ -514,10 +481,10 @@ class EquationSystem:
     # Remaining equations
     rset = None
 
-    # Operating with/without BDD justification
-    delayedJustification = delayJustification
     # When not doing justifications, record equations and their dependencies for future justification
-    # Each element is tuple (e, [dlist]).  For original equations, dlist is empty
+    # Set of equations involved in evaluation, including the leaf equations
+    eset = None
+    # Each element is tuple (eid, [opidlist]).  For original equations, opidlist is empty
     justificationSteps = []
     # Supporting BDD operation
     manager = None
@@ -553,6 +520,7 @@ class EquationSystem:
         self.mbox = ModMath(modulus)
         self.sset = EquationSet(writer = self.writer)
         self.rset = EquationSet(writer = self.writer)
+        self.eset = EquationSet(writer = self.writer)
         self.varUsed = {}
         self.stepCount = 0
         self.pivotDegreeSum = 0
@@ -560,12 +528,13 @@ class EquationSystem:
         self.combineCount = 0
 
     # Add new equation to main set
-    def addEquation(self, e):
+    def addInitialEquation(self, e):
         eid = self.rset.addEquation(e)
         for i in e.nz:
             self.varUsed[i] = True
-        if self.delayedJustification:
-            self.justificationSteps.append((e,[]))
+        if delayJustification:
+            evid = self.eset.addEquation(e, assignId = True)
+            self.justificationSteps.append((evid,[]))
         if self.manager is not None:
             e.buildBdd(self)
         return eid
@@ -628,7 +597,9 @@ class EquationSystem:
     # Perform justifications after the fact.
     # Use equation that was found to be infeasible to set new modulus
     def performJustification(self, laste):
+        # Mapping from leaf Ids to Ids of modular representations
         emap = { }
+        changedModulus = False
         p = self.modulus
         if p == modulusAuto:
             # Choose a new modulus.  It need not be prime
@@ -636,15 +607,42 @@ class EquationSystem:
             while laste.cval % p == 0:
                 p += 1
             self.mbox.setModulus(p)
+            changedModulus = True
         nmod = "none" if p == modulusNone else str(p)
         self.writer.write("Performing justification of %d steps.  Modulus = %s.\n" % (len(self.justificationSteps), nmod))
-        for e, dlist in self.justificationSteps:
-            if len(dlist) == 0:
-                ne = e.restructure(self)
-                emap[e] = ne
+        # Construct information needed for garbage collection
+        lastUse = {}
+        for evid, idlist in self.justificationSteps:
+            for oevid in idlist:
+                lastUse[oevid] = evid
+        # Do the justification
+        for evid, idlist in self.justificationSteps:
+            e = self.eset[evid]
+            if len(idlist) == 0:
+                # Modulus changed.  Need to construct new BDD
+                if changedModulus:
+                    ne = e.restructure(self)
+                    nevid = self.eset.addEquation(ne)
+                    emap[evid] = nevid
+                    self.eset.removeEquation(evid)
+                    size = e.size
+                    e.retireBdd()
+                    self.checkGC(size)
             else:
-                oplist = [(emap[oe] if oe in emap else oe) for oe in dlist]
+                evidlist = [(emap[oevid] if oevid in emap else oevid) for oevid in idlist]
+                oplist = [self.eset[oevid] for oevid in evidlist]
                 self.justifyEquation(e, oplist)
+                for oevid in idlist:
+                    if lastUse[oevid] == evid:
+                        # Equation no longer needed
+                        cid = emap[oevid] if oevid in emap else oevid
+                        ce = self.eset[cid]
+                        self.eset.removeEquation(cid)
+                        size = ce.size
+                        ce.retireBdd()
+                        self.checkGC(size)
+                        
+
 
 
     # Given possible pivot index
@@ -658,7 +656,7 @@ class EquationSystem:
         bestRd = 0
         # Make sure that any ties are broken arbitrarily
         # rather than as some artifact of the input file
-        if self.randomize:
+        if randomizePivots:
             random.shuffle(eidList)
 
         for eid in eidList:
@@ -681,7 +679,7 @@ class EquationSystem:
         idList = self.rset.currentIndices()
         # Make sure that any ties are broken arbitrarily
         # rather than as some artifact of the input file
-        if self.randomize:
+        if randomizePivots:
             random.shuffle(idList)
         for pidx in idList:
             (eid, score) = self.evaluatePivot(pidx)
@@ -724,10 +722,16 @@ class EquationSystem:
             if re.isInfeasible():
                 return ("unsolvable", re)
             self.rset.addEquation(re)
-            size = oe.size
             self.rset.removeEquation(oeid)
-            self.checkGC(size)
+            if not delayJustification:
+                size = oe.size
+                oe.retireBdd()
+                self.checkGC(size)
             self.combineCount += 1
+        if not delayJustification:
+            size = e.size
+            e.retireBdd()
+            self.checkGC(size)
         return ("normal", None)
             
     def solve(self):
@@ -753,7 +757,7 @@ class EquationSystem:
                 break
             if self.verbose:
                 self.showState()
-        if status == "unsolvable" and self.delayedJustification:
+        if status == "unsolvable" and delayJustification:
             self.performJustification(laste)
         if self.verbose:
             self.writer.write("  Solution status:%s\n" % status)
@@ -1035,16 +1039,6 @@ class Constraint:
             
         self.root = nodes[ilist[0]][0]
         self.size = csys.manager.getSize(self.root)
-
-
-    # Lexicographic ordering of constraints
-    def isGreater(self, other):
-        for i in range(self.N):
-            if self[i] > other[i]:
-                return True
-            if self[i] < other[i]:
-                return False
-        return self.cval > other.cval
     
     # Does this constraint have no solution
     def isInfeasible(self):
@@ -1156,7 +1150,6 @@ class ConstraintSystem:
     # Variable Count
     N = 10
     verbose = False
-    randomize = randomizePivots
     writer = None
 
     ## Solver state
@@ -1225,7 +1218,7 @@ class ConstraintSystem:
         idList = self.rset.currentIndices()
         # Make sure that any ties are broken arbitrarily
         # rather than as some artifact of the input file
-        if self.randomize:
+        if randomizePivots:
             random.shuffle(idList)
         for pidx in idList:
             score = self.evaluatePivot(pidx)
