@@ -10,6 +10,8 @@ EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = $(INTERP) ../../grab_clauses.py
+AVERAGE = $(INTERP) ../../average_csv.py
+
 EXTENSION = lrat
 
 q: chess-$(N)-column.data
@@ -170,6 +172,7 @@ data:
 	$(GRABBER) chess-*-equation-integer.data > chess-equation-integer.csv
 	$(GRABBER) chess-*-equation-auto.data > chess-equation-auto.csv
 	$(GRABBER) chess-*-equation-auto-randomorder.data > chess-equation-auto-randomorder.csv
+	$(AVERAGE) chess-equation-auto.csv chess-equation-auto-randomorder.csv > chess-equation-auto-average.csv
 	$(GRABBER) chess-*-bucket.data > chess-bucket.csv
 	$(GRABBER) chess-*-noquant.data > chess-noquant.csv
 	$(GRABBER) chess-*-noschedule.data > chess-noschedule.csv

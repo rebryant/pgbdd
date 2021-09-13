@@ -10,6 +10,8 @@ EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = $(INTERP) ../../grab_clauses.py
+AVERAGE = $(INTERP) ../../average_csv.py
+
 EXTENSION = lrat
 
 q: chess-torus-$(N)-column.data
@@ -104,6 +106,7 @@ data:
 	$(GRABBER) chess-torus-*-column.data > chess-torus-column.csv
 	$(GRABBER) chess-torus-*-equation-auto.data > chess-torus-equation-auto.csv
 	$(GRABBER) chess-torus-*-equation-auto-randomorder.data > chess-torus-equation-auto-randomorder.csv
+	$(AVERAGE) chess-torus-equation-auto.csv chess-torus-equation-auto-randomorder.csv > chess-torus-equation-auto-average.csv
 #	$(GRABBER) chess-torus-*-gbucket.data > chess-torus-gbucket.csv
 #	$(GRABBER) chess-torus-*-noquant.data > chess-torus-noquant.csv
 #	$(GRABBER) chess-torus-*-noschedule.data > chess-torus-noschedule.csv
