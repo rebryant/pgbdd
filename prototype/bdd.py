@@ -223,7 +223,7 @@ class Manager:
     # Estimate of number of dead nodes (possibly overestimates)
     deadNodeCount = 0
     # How many dead nodes as fraction of live nodes to trigger GC
-    gcFraction = 0.10
+    gcFraction = 0.20
     # Minimum number of nodes before trigger GC
     gcMin = 10000
     # Dictionary mapping variables to their IDs
