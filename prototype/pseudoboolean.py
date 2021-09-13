@@ -55,6 +55,11 @@ class PivotException(PseudoBooleanException):
         self.form = "Pivot=0!"
         self.msg = "index=%d" % index
 
+class QueueException(PseudoBooleanException):
+    def __init__(self, msg):
+        self.form = "Empty Priority Queue!"
+        self.msg = msg
+
 class FourierMotzinException(PseudoBooleanException):
     def __init__(self, values):
         self.form = "Out-of-range pivot!"
@@ -464,6 +469,63 @@ class EquationSet:
     def equationCount(self):
         return self.nextId - 1
 
+# Support pivot selection
+# Must update scores whenever possible change to any nonzero in same row as pivot.
+class PivotHelper:
+    # Track set of indices. For each have generation indicating most recent computation of
+    # its pivot score.  Earlier ones may still be in queue and should be ignored.
+    generationMap = {}
+    # Set of indices that have been affected since last pivot selection.
+    # Implemented as dictionary mapping indices to True
+    touchedSet = {}
+    # Priority queue.
+    # Holds tuple of form (score, idx, ... , generation)
+    pqueue = None
+    # evalFunction defines how to create score for index.  Should return tuple
+    # with score in first position.
+    evalFunction = None
+
+    def __init__(self, evalFunction):
+        self.evalFunction = evalFunction
+        self.generationMap = {}
+        self.touchedSet = {}
+        self.pqueue = queue.PriorityQueue()
+
+    def touch(self, ids):
+        for id in ids:
+            self.touchedSet[id] = True
+            if id not in self.generationMap:
+                self.generationMap[id] = 0
+    
+    def deleteIndex(self, id):
+#        print("Deleting index %d" % id)
+        if id in self.generationMap:
+            del self.generationMap[id]
+        if id in self.touchedSet:
+            del self.touchedSet[id]
+
+    def update(self):
+        for id in self.touchedSet.keys():
+            tup = self.evalFunction(id)
+            self.generationMap[id] += 1
+            qtup = tup + (self.generationMap[id],)
+#            print("Adding %s to queue" % str(qtup))
+            self.pqueue.put(qtup)
+        self.touchedSet = {}
+
+    def select(self):
+        self.update()
+        while not self.pqueue.empty():
+            qtup = self.pqueue.get()
+            id = qtup[1]
+            generation = qtup[-1]
+            if id is not None and id in self.generationMap and generation == self.generationMap[id]:
+                tup = qtup[:-1]
+#                print("Fetched & return %s from queue" % str(qtup))
+                return tup
+        raise QueueException("Queue emptied out without finding pivot")
+            
+
 # System of equations.
 # Support LU decomposition of Gaussian elimination to see if system has any solutions
 class EquationSystem:
@@ -492,6 +554,8 @@ class EquationSystem:
     varMap = None
     # Mapping from variable Id to level
     levelMap = None
+    # Supporting pivot selection
+    pivotHelper = None
 
     ## Accumulating data
     # Mapping from variable ID to True
@@ -499,6 +563,8 @@ class EquationSystem:
     # Number of equations
     # Total number of elimination steps
     stepCount = 0
+    # Number of times pivot evaluation computed
+    pivotEvaluationCount = 0
     # Sum of pivot degrees
     pivotDegreeSum = 0
     # Max of pivot degrees
@@ -515,14 +581,15 @@ class EquationSystem:
         if manager is not None:
             self.varMap = { var.id : var for var in manager.variables }
             self.levelMap = { var.id : var.level for var in manager.variables }
-
         self.writer = SimpleWriter() if writer is None else writer
         self.mbox = ModMath(modulus)
         self.sset = EquationSet(writer = self.writer)
         self.rset = EquationSet(writer = self.writer)
         self.eset = EquationSet(writer = self.writer)
+        self.pivotHelper = PivotHelper(self.evaluatePivot)
         self.varUsed = {}
         self.stepCount = 0
+        self.pivotEvaluationCount = 0
         self.pivotDegreeSum = 0
         self.pivotDegreeMax = 0
         self.combineCount = 0
@@ -532,6 +599,7 @@ class EquationSystem:
         eid = self.rset.addEquation(e)
         for i in e.nz:
             self.varUsed[i] = True
+        self.pivotHelper.touch(e.indices())
         if delayJustification:
             evid = self.eset.addEquation(e, assignId = True)
             self.justificationSteps.append((evid,[]))
@@ -650,7 +718,11 @@ class EquationSystem:
     # give score for its selection
     # If there are no nonzeros with this index, return None for the equation ID
     def evaluatePivot(self, pidx):
+        self.pivotEvaluationCount += 1
         eidList = self.rset.lookup(pidx)
+        if len(eidList) == 0:
+            # Not a valid pivot
+            return (0, None, None)
         bestEid = None
         # Lowest degree row
         bestRd = 0
@@ -668,21 +740,26 @@ class EquationSystem:
 
         # Score based on worst-case fill generated
         # Also favors unit and singleton equations
-        score = (bestRd-1) * (len(eidList)-1)
-        return (bestEid, score)
+        score = float((bestRd-1) * (len(eidList)-1))
+        if randomizePivots:
+            # Add noise to score to break ties in pivot selection
+            score += random.random()
+        # Return tuple that can be placed in priority queue
+        return (score, pidx, bestEid)
 
     # Given remaining set of equations, select pivot element and equation id
     def selectPivot(self):
+        (score, pidx, eid) = self.pivotHelper.select()
+        return (pidx, eid)
+
+    # Given remaining set of equations, select pivot element and equation id
+    def selectPivotOld(self):
         bestPidx = None
-        bestScore = 0
+        bestScore = 0.0
         bestEid = None
         idList = self.rset.currentIndices()
-        # Make sure that any ties are broken arbitrarily
-        # rather than as some artifact of the input file
-        if randomizePivots:
-            random.shuffle(idList)
         for pidx in idList:
-            (eid, score) = self.evaluatePivot(pidx)
+            (score, xidx, eid) = self.evaluatePivot(pidx)
             if eid is not None and (bestEid is None or score < bestScore):
                 bestPidx = pidx
                 bestScore = score
@@ -691,7 +768,7 @@ class EquationSystem:
             pd = len(self.rset[bestEid])
             self.pivotDegreeSum += pd
             self.pivotDegreeMax = max(self.pivotDegreeMax, pd)
-#        self.writer.write("Selecting pivot (%d,%d).  Score = %d\n" % (bestPidx, bestEid, bestScore))
+#        self.writer.write("Selecting pivot (%d,%d).  Score = %.4f\n" % (bestPidx, bestEid, bestScore))
         return (bestPidx, bestEid)
 
     # Perform one step of LU decomposition
@@ -706,6 +783,7 @@ class EquationSystem:
             return ("solved", None)
 
         e = self.rset[eid]
+        self.pivotHelper.touch(e.indices())
         pval = e[pidx]
         if self.verbose:
             self.writer.write("Pivoting with value %d (element %d).  Using equation #%d\n" % (pval, pidx, eid))
@@ -714,6 +792,7 @@ class EquationSystem:
         otherEids =  self.rset.lookup(pidx)
         for oeid in otherEids:
             oe = self.rset[oeid]
+            self.pivotHelper.touch(oe.indices())
             eval = e[pidx]
             oeval = oe[pidx]
             se = e.scale(oeval, self)
@@ -732,6 +811,7 @@ class EquationSystem:
             size = e.size
             e.retireBdd()
             self.checkGC(size)
+        self.pivotHelper.deleteIndex(pidx)
         return ("normal", None)
             
     def solve(self):
@@ -796,7 +876,8 @@ class EquationSystem:
         sscount = self.stepCount
         pavg = float(self.pivotDegreeSum)/sscount
         pmax = self.pivotDegreeMax
-        self.writer.write("  Solving: %d steps.  %.2f avg pivot degree (max=%d)\n" % (sscount, pavg, pmax))
+        pecount = self.pivotEvaluationCount
+        self.writer.write("  Solving: %d steps.  %d pivot evaluations.  %.2f avg pivot degree (max=%d)\n" % (sscount, pecount, pavg, pmax))
         ecount = self.rset.equationCount()
         ccount = self.combineCount
         tc = self.rset.termCount
