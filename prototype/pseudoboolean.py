@@ -498,7 +498,6 @@ class PivotHelper:
                 self.generationMap[id] = 0
     
     def deleteIndex(self, id):
-#        print("Deleting index %d" % id)
         if id in self.generationMap:
             del self.generationMap[id]
         if id in self.touchedSet:
@@ -509,7 +508,6 @@ class PivotHelper:
             tup = self.evalFunction(id)
             self.generationMap[id] += 1
             qtup = tup + (self.generationMap[id],)
-#            print("Adding %s to queue" % str(qtup))
             self.pqueue.put(qtup)
         self.touchedSet = {}
 
@@ -521,7 +519,6 @@ class PivotHelper:
             generation = qtup[-1]
             if id is not None and id in self.generationMap and generation == self.generationMap[id]:
                 tup = qtup[:-1]
-#                print("Fetched & return %s from queue" % str(qtup))
                 return tup
         raise QueueException("Queue emptied out without finding pivot")
             
