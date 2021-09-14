@@ -11,7 +11,7 @@ SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
 GRABBER = ../../grab_clauses.py
 VGRABBER = ../../grab_verification.py
-EXTENSION = lratb
+EXTENSION = lrat
 
 c: pigeon-tseitin-$(N)-column.data
 b: pigeon-tseitin-$(N)-bucket.data

@@ -12,7 +12,7 @@ EXTRACTOR = $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
 GRABBER = ../../grab_clauses.py
-EXTENSION = lratb
+EXTENSION = lrat
 
 hml: pigeon-direct-$(N)-hm-linear.data
 pml: pigeon-direct-$(N)-pm-linear.data
