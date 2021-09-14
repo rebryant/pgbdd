@@ -74,6 +74,7 @@ data:
 	$(GRABBER) pigeon-*-column.data > pigeon-tseitin-column.csv
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
 	$(GRABBER) pigeon-*-constraint.data > pigeon-tseitin-constraint.csv
+	$(GRABBER) pigeon-*-constraint-randomorder.data > pigeon-tseitin-constraint-randomorder.csv
 
 vdata:
 	$(VGRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket-verification.csv
