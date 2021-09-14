@@ -247,6 +247,12 @@ class ConstraintFinder:
         evarMap = { var : [] for var in polarityDict.keys() if polarityDict[var] == (True,True) }
         # Build map from each program variable to the clauses that contain it
         pvarMap = { var : [] for var in polarityDict.keys() if polarityDict[var] == (False,True) }
+        # Other variables
+        posvars = sorted([ var for var in polarityDict.keys() if polarityDict[var] == (True,False) ])
+        if len(posvars) > 0:
+            slist = [str(var) for var in posvars]
+            util.ewrite("WARNING: Variables %s only occur with positive polarity\n" % (", ".join(slist)), 3)
+
         for cid in self.clauseDict.keys():
             clause = self.clauseDict[cid]
             assigned = False
@@ -282,7 +288,7 @@ class ConstraintFinder:
                             continue
                         if var in evarMap:
                             traceList.append(var)
-                        else:
+                        elif var in pvarMap:
                             pmap[var] = True
                 del evarMap[ev]
 
