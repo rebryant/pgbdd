@@ -69,6 +69,7 @@ data:
 	$(GRABBER) pigeon-*-hm-linear.data > pigeon-direct-hm-linear.csv
 	$(GRABBER) pigeon-*-pm-linear.data > pigeon-direct-pm-linear.csv
 	$(GRABBER) pigeon-*-constraint.data > pigeon-direct-constraint.csv
+	$(GRABBER) pigeon-*-constraint-randomorder.data > pigeon-direct-constraint-randomorder.csv
 
 
 
