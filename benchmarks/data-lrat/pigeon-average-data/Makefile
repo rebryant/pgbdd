@@ -6,8 +6,9 @@ TDIR = ../pigeon-tseitin-data
 
 
 data:
-	$(AVERAGE) $(DDIR)/pigeon-direct-constraint.csv $(TDIR)/pigeon-tseitin-constraint.csv > piegon-average-constraint.csv
-	$(AVERAGE) $(DDIR)/pigeon-direct-constraint-randomorder.csv $(TDIR)/pigeon-tseitin-constraint-randomorder.csv > piegon-average-constraint-randomorder.csv
+	$(AVERAGE) $(DDIR)/pigeon-direct-constraint.csv $(TDIR)/pigeon-tseitin-constraint.csv > pigeon-average-constraint.csv
+	$(AVERAGE) $(DDIR)/pigeon-direct-constraint-randomorder.csv $(TDIR)/pigeon-tseitin-constraint-randomorder.csv > pigeon-average-constraint-randomorder.csv
+	$(AVERAGE) pigeon-average-constraint.csv pigeon-average-constraint-randomorder.csv > pigeon-average-constraint-average.csv
 
 clean:
 	rm -f *~
