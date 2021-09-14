@@ -19,6 +19,8 @@ pb: pigeon-tseitin-$(N)-bucket-pm.data
 l: pigeon-tseitin-$(N)-linear.data
 con: pigeon-tseitin-$(N)-constraint.data
 rcon: pigeon-tseitin-$(N)-constraint-randomorder.data
+e: pigeon-tseitin-$(N)-equation.data
+re: pigeon-tseitin-$(N)-equation-randomorder.data
 
 pigeon-tseitin-$(N)-column.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-column.data
@@ -40,7 +42,6 @@ pigeon-tseitin-$(N)-bucket-pm.data:
 		-p pigeon-tseitin-$(N)-bucket-pm.order -o pigeon-tseitin-$(N)-bucket-pm.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-bucket-pm.data
 	$(CHECKER) pigeon-tseitin-$(N)-bucket-pm.cnf pigeon-tseitin-$(N)-bucket-pm.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-bucket-pm.data
 	rm -f pigeon-tseitin-$(N)-bucket-pm.$(EXTENSION)
-
 
 pigeon-tseitin-$(N)-linear.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-linear.data
@@ -66,7 +67,22 @@ pigeon-tseitin-$(N)-constraint-randomorder.data:
 	$(CHECKER) pigeon-tseitin-$(N)-constraint-randomorder.cnf pigeon-tseitin-$(N)-constraint-randomorder.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-constraint-randomorder.data
 	rm -f pigeon-tseitin-$(N)-constraint-randomorder.$(EXTENSION)
 
+pigeon-tseitin-$(N)-equation.data:
+	$(GENERATOR) -E -C -c -n $(N) -r pigeon-tseitin-$(N)-equation | tee pigeon-tseitin-$(N)-equation.data
+	$(EXTRACTOR) < pigeon-tseitin-$(N)-equation.cnf > pigeon-tseitin-$(N)-equation.schedule
+	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-equation.cnf -s pigeon-tseitin-$(N)-equation.schedule \
+		-o pigeon-tseitin-$(N)-equation.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-equation.data
+	$(CHECKER) pigeon-tseitin-$(N)-equation.cnf pigeon-tseitin-$(N)-equation.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-equation.data
+	rm -f pigeon-tseitin-$(N)-equation.$(EXTENSION)
 
+pigeon-tseitin-$(N)-equation-randomorder.data:
+	$(GENERATOR) -E -C -c -n $(N) -r pigeon-tseitin-$(N)-equation-randomorder | tee pigeon-tseitin-$(N)-equation-randomorder.data
+	$(EXTRACTOR) < pigeon-tseitin-$(N)-equation-randomorder.cnf > pigeon-tseitin-$(N)-equation-randomorder.schedule
+	$(RANDOMIZER) pigeon-tseitin-$(N)-equation-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-equation-randomorder.cnf -s pigeon-tseitin-$(N)-equation-randomorder.schedule \
+		-p pigeon-tseitin-$(N)-equation-randomorder.order -o pigeon-tseitin-$(N)-equation-randomorder.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-equation-randomorder.data
+	$(CHECKER) pigeon-tseitin-$(N)-equation-randomorder.cnf pigeon-tseitin-$(N)-equation-randomorder.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-equation-randomorder.data
+	rm -f pigeon-tseitin-$(N)-equation-randomorder.$(EXTENSION)
 
 data:
 	$(GRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket.csv
@@ -75,6 +91,7 @@ data:
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
 	$(GRABBER) pigeon-*-constraint.data > pigeon-tseitin-constraint.csv
 	$(GRABBER) pigeon-*-constraint-randomorder.data > pigeon-tseitin-constraint-randomorder.csv
+	$(GRABBER) pigeon-*-equation-randomorder.data > pigeon-tseitin-equation-randomorder.csv
 
 vdata:
 	$(VGRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket-verification.csv
