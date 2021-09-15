@@ -875,7 +875,7 @@ class EquationSystem:
         # status: "solved", "unsolvable", "normal"
         self.writer.write("  Solution status: %s\n" % (status))
         sscount = self.stepCount
-        pavg = float(self.pivotDegreeSum)/sscount
+        pavg = float(self.pivotDegreeSum)/sscount if sscount > 0 else 0.0
         pmax = self.pivotDegreeMax
         pecount = self.pivotEvaluationCount
         self.writer.write("  Solving: %d steps.  %d pivot evaluations.  %.2f avg pivot degree (max=%d)\n" % (sscount, pecount, pavg, pmax))
@@ -883,7 +883,7 @@ class EquationSystem:
         ccount = self.combineCount
         tc = self.rset.termCount
         tmax = self.rset.termMax
-        tavg = float(tc)/ecount
+        tavg = float(tc)/ecount if ecount > 0 else 0.0
         self.writer.write("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations\n" % (ecount, tc, tavg, tmax, ccount))
         self.writer.write("    %d modular operations.  Used values = %s\n" % (self.mbox.opcount, self.mbox.reportUsed()))
 
