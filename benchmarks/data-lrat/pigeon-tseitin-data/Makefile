@@ -4,13 +4,15 @@ VLEVEL = 1
 SEED=123456
 
 GENERATOR = $(INTERP) ../../pigeon-sinz.py
-RANDOMIZER = ../../randomizer.py
+RANDOMIZER = $(INTERP) ../../randomizer.py
 EXDIR = ../../../extractor
-EXTRACTOR = $(EXDIR)/constraint_extractor.py
+EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../pcaas/lrat-check
-GRABBER = ../../grab_clauses.py
-VGRABBER = ../../grab_verification.py
+GRABBER = $(INTERP) ../../grab_clauses.py
+VGRABBER = $(INTERP) ../../grab_verification.py
+AVERAGE = $(INTERP) ../../average_csv.py
+
 EXTENSION = lrat
 
 c: pigeon-tseitin-$(N)-column.data
@@ -91,7 +93,9 @@ data:
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
 	$(GRABBER) pigeon-*-constraint.data > pigeon-tseitin-constraint.csv
 	$(GRABBER) pigeon-*-constraint-randomorder.data > pigeon-tseitin-constraint-randomorder.csv
+	$(GRABBER) pigeon-*-equation.data > pigeon-tseitin-equation.csv
 	$(GRABBER) pigeon-*-equation-randomorder.data > pigeon-tseitin-equation-randomorder.csv
+	$(AVERAGE) pigeon-tseitin-equation.csv pigeon-tseitin-equation-randomorder.csv > pigeon-tseitin-equation-average.csv
 
 vdata:
 	$(VGRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket-verification.csv
