@@ -401,7 +401,7 @@ class Move:
         self.manager.doComment("Unique Changed, level %d" % self.level)
         for i1 in unitRange(self.N-1):
             for i2 in range(i1+1, self.N):
-                #     uniqueChanged[t] --> (!edgeRemoved[i,t] OR !edgeRemoved[i',t])  1 <= i < i'<= k
+                #     uniqueChanged[t] --> (!edgeRemoved[i,t] OR !edgeRemoved[i',t])  1 <= i < i'< N
                 vlist = [self.uniqueChangedVar, self.edgeRemovedVars[i1], self.edgeRemovedVars[i2]]
                 self.manager.doClause(vlist, [0, 0, 0])
         #     uniqueChanged[t] --> OR_i edgeRemoved[i,t]
@@ -409,7 +409,7 @@ class Move:
         plist = [0] + [1] * (self.N-1)
         self.manager.doClause(vlist, plist)
         for i1 in unitRange(self.N-1):
-            #     !edgeRemoved[1,t] & ... & !edgeRemoved[i-1, t] & edgeRemoved[i,t] & !edgeRemoved[i+1,t] & ... & !edgeRemoved[k,t] --> uniqueChanged[t]  1<=i<=k
+            #     !edgeRemoved[1,t] & ... & !edgeRemoved[i-1, t] & edgeRemoved[i,t] & !edgeRemoved[i+1,t] & ... & !edgeRemoved[N-1,t] --> uniqueChanged[t]  1<=i< N
             plist = [1] + [0 if i1 == i else 1 for i in unitRange(self.N-1)]
             self.manager.doClause(vlist, plist)            
 
@@ -420,7 +420,7 @@ class Move:
         #  onlyAvailable[t] <--> AND_i edgeAvailable[i,t]
         self.manager.doComment("Only Available, level %d" % self.level)
         for i in unitRange(self.N-1):
-            #     onlyAvailable[t] --> edgeAvailable[i,t]  1<=i<=k, 1<=j<=N_i
+            #     onlyAvailable[t] --> edgeAvailable[i,t]  1<=i< N, 1<=j<=N_i
             vlist = [self.onlyAvailableVar, self.edgeAvailableVars[i]]
             self.manager.doClause(vlist, [0,1])
         #     AND_i edgeAvailable[i,t] --> onlyAvailable[t]

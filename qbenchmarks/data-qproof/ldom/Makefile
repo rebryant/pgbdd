@@ -22,6 +22,7 @@ AGRAB=../grab_plusapplies.py
 VGRAB=../grab_solve_v_check.py
 
 VLEVEL=1
+QVERB = -v
 N=5
 CAT=
 
@@ -41,7 +42,7 @@ ina: ildom$(CAT)-$(N)-na.data
 ida: ildom$(CAT)-$(N)-da.data
 
 ldom$(CAT)-$(N)-sa.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-sa
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
 		-i ldom$(CAT)-$(N)-sa.qcnf \
 		-o ldom$(CAT)-$(N)-sa.qproof \
@@ -51,7 +52,7 @@ ldom$(CAT)-$(N)-sa.data:
 	rm -f ldom$(CAT)-$(N)-sa.qproof
 
 ldom$(CAT)-$(N)-ra.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-ra
 	$(SOLVE) -v $(VLEVEL) -m r -b \
 		-i ldom$(CAT)-$(N)-ra.qcnf \
 		-o ldom$(CAT)-$(N)-ra.qproof \
@@ -61,14 +62,14 @@ ldom$(CAT)-$(N)-ra.data:
 	rm -f ldom$(CAT)-$(N)-ra.qproof
 
 ldom$(CAT)-$(N)-na.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-na
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-na
 	$(SOLVE) -v $(VLEVEL) -m n -b \
 		-i ldom$(CAT)-$(N)-na.qcnf \
 		-p ldom$(CAT)-$(N)-na.order \
 		-L ldom$(CAT)-$(N)-na.data
 
 ldom$(CAT)-$(N)-da.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-da
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-da
 	$(SOLVE) -v $(VLEVEL) -m d -b \
 		-i ldom$(CAT)-$(N)-da.qcnf \
 		-o ldom$(CAT)-$(N)-da.qproof \
@@ -79,21 +80,21 @@ ldom$(CAT)-$(N)-da.data:
 
 
 ldom$(CAT)-$(N)-nae.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-nae
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-nae
 	$(SOLVE) -v $(VLEVEL) -m n -l e -b \
 		-i ldom$(CAT)-$(N)-nae.qcnf \
 		-p ldom$(CAT)-$(N)-nae.order \
 		-L ldom$(CAT)-$(N)-nae.data
 
 ldom$(CAT)-$(N)-nau.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-nau
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-nau
 	$(SOLVE) -v $(VLEVEL) -m n -l u -b \
 		-i ldom$(CAT)-$(N)-nau.qcnf \
 		-p ldom$(CAT)-$(N)-nau.order \
 		-L ldom$(CAT)-$(N)-nau.data
 
 ldom$(CAT)-$(N)-naeu.data:
-	$(GEN) -t a -n $(N) -r ldom$(CAT)-$(N)-naeu
+	$(GEN) $(QVERB) -t a -n $(N) -r ldom$(CAT)-$(N)-naeu
 	$(SOLVE) -v $(VLEVEL) -m n -l eu -b \
 		-i ldom$(CAT)-$(N)-naeu.qcnf \
 		-p ldom$(CAT)-$(N)-naeu.order \
@@ -101,7 +102,7 @@ ldom$(CAT)-$(N)-naeu.data:
 
 
 ildom$(CAT)-$(N)-sa.data:
-	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-sa
+	$(GEN) $(QVERB) -i -t a -n $(N) -r ildom$(CAT)-$(N)-sa
 	$(SOLVE) -v $(VLEVEL) -m s -b \
 		-i ildom$(CAT)-$(N)-sa.qcnf \
 		-o ildom$(CAT)-$(N)-sa.qproof \
@@ -111,7 +112,7 @@ ildom$(CAT)-$(N)-sa.data:
 	rm -f ildom$(CAT)-$(N)-sa.qproof
 
 ildom$(CAT)-$(N)-ra.data:
-	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-ra
+	$(GEN) $(QVERB) -i -t a -n $(N) -r ildom$(CAT)-$(N)-ra
 	$(SOLVE) -v $(VLEVEL) -m r -b \
 		-i ildom$(CAT)-$(N)-ra.qcnf \
 		-o ildom$(CAT)-$(N)-ra.qproof \
@@ -121,14 +122,14 @@ ildom$(CAT)-$(N)-ra.data:
 	rm -f ildom$(CAT)-$(N)-ra.qproof
 
 ildom$(CAT)-$(N)-na.data:
-	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-na
+	$(GEN) $(QVERB) -i -t a -n $(N) -r ildom$(CAT)-$(N)-na
 	$(SOLVE) -v $(VLEVEL) -m n -b \
 		-i ildom$(CAT)-$(N)-na.qcnf \
 		-p ildom$(CAT)-$(N)-na.order \
 		-L ildom$(CAT)-$(N)-na.data
 
 ildom$(CAT)-$(N)-da.data:
-	$(GEN) -i -t a -n $(N) -r ildom$(CAT)-$(N)-da
+	$(GEN) $(QVERB) -i -t a -n $(N) -r ildom$(CAT)-$(N)-da
 	$(SOLVE) -v $(VLEVEL) -m d -b \
 		-i ildom$(CAT)-$(N)-da.qcnf \
 		-o ildom$(CAT)-$(N)-da.qproof \
