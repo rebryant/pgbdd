@@ -1,5 +1,18 @@
 #!/bin/bash
-
+make cd N=00004
+make cd N=00008
+make cd N=00010
+make cd N=00020
+make cd N=00040
+make cd N=00080
+make cd N=00100
+make cd N=00200
+make cd N=00400
+make cd N=00800
+make cd N=01000
+make cd N=02000
+make cd N=03000
+make cd N=04000
 make cd N=05000
 make cd N=06000
 make cd N=07000

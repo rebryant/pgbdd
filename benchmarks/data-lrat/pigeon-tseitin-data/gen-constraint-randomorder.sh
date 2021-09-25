@@ -1,0 +1,27 @@
+#!/bin/bash
+make rcon N=004
+make rcon N=008
+make rcon N=012
+make rcon N=016
+make rcon N=020
+make rcon N=024
+make rcon N=028
+make rcon N=032
+make rcon N=034
+#make rcon N=036
+#make rcon N=040
+#make rcon N=044
+#make rcon N=048
+#make rcon N=056
+#make rcon N=064
+#make rcon N=068
+#make rcon N=072
+#make rcon N=076
+#make rcon N=080
+#make rcon N=096
+#make rcon N=112
+#make rcon N=128
+#make rcon N=144
+#make rcon N=150
+#make rcon N=152
+#make rcon N=160

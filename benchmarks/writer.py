@@ -14,10 +14,14 @@ class Writer:
     suffix = None
     verbose = False
     expectedVariableCount = None
+    isNull = False
 
-    def __init__(self, count, froot, suffix = None, verbose = False):
+    def __init__(self, count, froot, suffix = None, verbose = False, isNull = False):
         self.expectedVariableCount = count
         self.verbose = verbose
+        self.isNull = isNull
+        if isNull:
+            return
         if suffix is not None:
             self.suffix = suffix 
             fname = froot if self.suffix is None else froot + "." + self.suffix
@@ -33,6 +37,8 @@ class Writer:
         return line
 
     def show(self, line):
+        if self.isNull:
+            return
         line = self.trim(line)
         if self.verbose:
             print(line)
@@ -40,6 +46,8 @@ class Writer:
             self.outfile.write(line + '\n')
 
     def finish(self):
+        if self.isNull:
+            return
         if self.outfile is None:
             return
         self.outfile.close()
@@ -69,6 +77,8 @@ class CnfWriter(Writer):
         return self.clauseCount
 
     def finish(self):
+        if self.isNull:
+            return
         if self.outfile is None:
             return
         self.show("p cnf %d %d" % (self.expectedVariableCount, self.clauseCount))
@@ -82,9 +92,10 @@ class ScheduleWriter(Writer):
     # Track potential errors
     stackDepth = 0
     decrementAnd = False
+    expectedFinal = 1
 
-    def __init__(self, count, froot, verbose = False):
-        Writer.__init__(self, count, froot, suffix = "schedule", verbose = verbose)
+    def __init__(self, count, froot, verbose = False, isNull = False):
+        Writer.__init__(self, count, froot, suffix = "schedule", verbose = verbose, isNull = isNull)
         self.stackDepth = 0
         self.decrementAnd = False
     
@@ -100,9 +111,10 @@ class ScheduleWriter(Writer):
         if self.decrementAnd:
             count -= 1
         self.decrementAnd = False
+        if count == 0:
+            return
         if count+1 > self.stackDepth:
             print("Warning: Cannot perform %d And's.  Only %d elements on stack" % (count, self.stackDepth))
-#            raise WriterException("Cannot perform %d And's.  Only %d elements on stack" % (count, self.stackDepth))
         self.show("a %d" % count)
         self.stackDepth -= count
 
@@ -119,10 +131,28 @@ class ScheduleWriter(Writer):
         self.show("e")
 
     def doQuantify(self, vlist):
+        if self.isNull:
+            return
         if self.stackDepth == 0:
             print ("Warning: Cannot quantify.  Stack empty")
 #            raise WriterException("Cannot quantify.  Stack empty")
         self.show("q %s" % " ".join([str(c) for c in vlist]))
+
+    # Issue equation or constraint.
+    def doPseudoBoolean(self, vlist, clist, const, isEquation=True):
+        if self.isNull:
+            return
+        # Anticipate that shifting everything from CNF evaluation to pseudoboolean reasoning
+        self.expectedFinal = 0
+        if self.stackDepth == 0:
+            print ("Warning: Cannot quantify.  Stack empty")
+        if len(vlist) != len(clist):
+            raise WriterException("Invalid equation or constraint.  %d variables, %d coefficients" % (len(vlist), len(clist)))
+        cmd = "=" if isEquation else ">="
+        slist = [cmd, str(const)]
+        slist += [("%d.%d" % (c,v)) for (c,v) in zip(clist, vlist)]
+        self.show(" ".join(slist))
+        self.stackDepth -= 1
 
     def doComment(self, cstring):
         self.show("# " + cstring)
@@ -131,7 +161,9 @@ class ScheduleWriter(Writer):
         self.show("i " + cstring)
 
     def finish(self):
-        if self.stackDepth != 1:
+        if self.isNull:
+            return
+        if self.stackDepth != self.expectedFinal:
             print("Warning: Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
 #            raise WriterException("Invalid schedule.  Finish with %d elements on stack" % self.stackDepth)
         Writer.finish(self)
@@ -139,10 +171,10 @@ class ScheduleWriter(Writer):
 class OrderWriter(Writer):
     variableList = []
 
-    def __init__(self, count, froot, verbose = False, suffix = None):
+    def __init__(self, count, froot, verbose = False, suffix = None, isNull = False):
         if suffix is None:
             suffix = "order"
-        Writer.__init__(self, count, froot, suffix = suffix, verbose = verbose)
+        Writer.__init__(self, count, froot, suffix = suffix, verbose = verbose, isNull = isNull)
         self.variableList = []
 
     def doOrder(self, vlist):
@@ -150,6 +182,8 @@ class OrderWriter(Writer):
         self.variableList += vlist
 
     def finish(self):
+        if self.isNull:
+            return
         if self.expectedVariableCount != len(self.variableList):
 #            raise WriterException("Incorrect number of variables in ordering %d != %d" % (
 #                len(self.variableList), self.expectedVariableCount))

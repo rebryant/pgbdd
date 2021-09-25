@@ -149,13 +149,14 @@ class VariableNode(Node):
         hid = self.high.id
         lid = self.low.id
         # id should be first literal in clause for some proof checkers
+        label = "node %s = ITE(%s,%s,%s)"  % (self.label(), str(self.variable), self.high.label(), self.low.label())
         if prover.verbLevel >= 3:
-            mhu = "ITE assertion for node %s: HU" % self.label()
-            mlu = "ITE assertion for node %s: LU" % self.label()            
-            mhd = "ITE assertion for node %s: HD" % self.label()
-            mld = "ITE assertion for node %s: LD" % self.label()
+            mhu = "ITE assertion for %s: HU" % label
+            mlu = "ITE assertion for %s: LU" % label
+            mhd = "ITE assertion for %s: HD" % label
+            mld = "ITE assertion for %s: LD" % label
         else:
-            mhu = "ITE assertions for node %s"  % self.label()
+            mhu = "ITE assertions for %s"  % label
             mlu = None
             mhd = None
             mld = None
@@ -219,10 +220,12 @@ class Manager:
     # GC support
     # Callback function from driver that will collect accessible roots for GC
     rootGenerator = None
-    # How many quantifications had been performed by last GC?
-    lastGC = 0
-    # How many variables should be quantified to trigger GC?
-    gcThreshold = 10
+    # Estimate of number of dead nodes (possibly overestimates)
+    deadNodeCount = 0
+    # How many dead nodes as fraction of live nodes to trigger GC
+    gcFraction = 0.20
+    # Minimum number of nodes before trigger GC
+    gcMin = 10000
     # Dictionary mapping variables to their IDs
     quantifiedVariableSet = None
     # Statistics
@@ -251,7 +254,7 @@ class Manager:
         self.andResolver = resolver.AndResolver(prover)
         self.implyResolver = resolver.ImplyResolver(prover)
         self.quantifiedVariableSet = set([])
-        self.lastGC = 0
+        self.deadNodeCount = 0
         self.cacheJustifyAdded = 0
         self.cacheNoJustifyAdded = 0
         self.applyCount = 0
@@ -427,6 +430,8 @@ class Manager:
             if limit is not None and len(stringList) >= limit:
                 break
         return stringList
+
+     
 
     # Return node + id of clause justifying that nodeA & NodeB ==> result
     # Justification is None if it would be tautology
@@ -667,7 +672,82 @@ class Manager:
     def checkImply(self, nodeA, nodeB):
         check, justification = justifyImply(nodeA, nodeB)
         return check
-        
+
+
+    # Compute conjunction of nodeA & nodeB, and check
+    # that result implies nodeC.
+    # Return check + proof step
+    def applyAndJustifyImply(self, nodeA, nodeB, nodeC):
+        self.applyCount += 1
+        # Terminal cases.
+        if nodeA == self.leaf0 or nodeB == self.leaf0:
+            # 0 implies everything
+            return (True, resolver.tautologyId)
+        if nodeA == self.leaf1:
+            return self.justifyImply(nodeB, nodeC)
+        if nodeB == self.leaf1:
+            return self.justifyImply(nodeA, nodeC)
+        if nodeA == nodeB:
+            return self.justifyImply(nodeA, nodeC)
+        if nodeC == self.leaf1:
+            return (True, resolver.tautologyId)
+
+        if nodeA.id > nodeB.id:
+            # Commute arguments
+            nodeA, nodeB = nodeB, nodeA
+        key = ("andimply", nodeA.id, nodeB.id, nodeC.id)
+        if key in self.operationCache:
+            return self.operationCache[key][:2]
+
+        # Mapping from rule names to clause numbers
+        ruleIndex = {}
+        # Mapping from variable names to variable numbers
+        splitVar = min(nodeA.variable, nodeB.variable)
+        if nodeC != self.leaf0:
+            splitVar = min(splitVar, nodeC.variable)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+        highC = nodeC if nodeC == self.leaf0 else nodeC.branchHigh(splitVar)
+        lowC =  nodeC if nodeC == self.leaf0 else nodeC.branchLow(splitVar)
+
+        if highA != lowA:
+            ruleIndex["UHD"] = nodeA.inferTrueDown
+            ruleIndex["ULD"] = nodeA.inferFalseDown
+        if highB != lowB:
+            ruleIndex["VHD"] = nodeB.inferTrueDown
+            ruleIndex["VLD"] = nodeB.inferFalseDown
+        if highC != lowC:
+            ruleIndex["WHU"] = nodeC.inferTrueUp
+            ruleIndex["WLU"] = nodeC.inferFalseUp
+
+        (check, implyHigh) = self.applyAndJustifyImply(highA, highB, highC)
+        ruleIndex["ANDH"] = implyHigh
+
+        if check:
+            (check, implyLow) = self.applyAndJustifyImply(lowA, lowB, lowC)
+            ruleIndex["ANDL"] = implyLow
+
+        if check:
+            targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, nodeC.id])
+            if targetClause == resolver.tautologyId:
+                justification, clauseList = resolver.tautologyId, []
+            else:
+                comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
+                justification, clauseList = self.andResolver.run(targetClause, ruleIndex, comment)
+        else:
+            justification, clauseList = resolver.tautologyId, []
+
+
+        self.operationCache[key] = (check, justification, clauseList)
+        if justification != resolver.tautologyId:
+            self.cacheJustifyAdded += 1
+        else:
+            self.cacheNoJustifyAdded += 1
+        return (check, justification)
+
+      
     # Given list of nodes, perform reduction operator (and, or, xor)
     def reduceList(self, nodeList, operator, emptyValue):
         fun = emptyValue
@@ -705,12 +785,15 @@ class Manager:
         return newNode
             
     # Should a GC be triggered?
-    def checkGC(self):
-        newQuants = len(self.quantifiedVariableSet) - self.lastGC
-        if newQuants > self.gcThreshold:
+    def checkGC(self, newDeadCount):
+        self.deadNodeCount += newDeadCount
+        liveNodeCount = len(self.uniqueTable)
+        df = float(self.deadNodeCount) / liveNodeCount
+        if liveNodeCount >= self.gcMin and df >= self.gcFraction:
+            # Turn off trigger for garbage collection
+            self.deadNodeCount = 0
             return self.collectGarbage()
         return []
-
 
     # Create set nodes that should not be collected
     # Maintain frontier of marked nonleaf nodes
@@ -762,17 +845,19 @@ class Manager:
     # Start garbage collection.
     # Provided with partial list of accessible roots
     def collectGarbage(self):
+        oldCount = len(self.uniqueTable)
         frontier = []
         if self.rootGenerator is not None:
             frontier += self.rootGenerator()
-        frontier = [r for r in frontier if not r.isLeaf()]
+        frontier = [r for r in frontier if (r is not None and not r.isLeaf())]
         # Marking phase
         markedSet = self.doMarking(frontier)
         clauseList = self.cleanCache(markedSet)
         clauseList += self.cleanNodes(markedSet)
-        # Turn off trigger for garbage collection
-        self.lastGC = len(self.quantifiedVariableSet)
         self.gcCount += 1
+        newCount = len(self.uniqueTable)
+        if self.verbLevel >= 3:
+            self.writer.write("GC #%d %d --> %d nodes\n" % (self.gcCount, oldCount, newCount))
         return clauseList
 
     # Summarize activity

@@ -1,23 +1,9 @@
-#!/usr/bin/python
+# Support for solving system of linear equations over Z_p for prime p
 
 import sys
 import getopt
 import random
-
-# Generate and solve embedding of mutilated chessboard problem
-def usage(name):
-    print("Usage: %s [-h] [-v] [-m MOD] [-n ROW] [-c COL] [-s SQUARES] [-w nhvb] [-r SEEDS]" % name) 
-    print("  -h         Print this message")
-    print("  -v         Run in verbose mode")
-    print("  -m MOD     Specify modulus")
-    print("  -n ROW     Specify number of rows in board")
-    print("  -c COL     Specify number of columns in board (default is square)")
-    print("  -s SQUARES Omit squares.")
-    print("             String of form VH:VH:..:VH, where V in {u, m, d, e, o} and H in {l, m, r, e, o}")
-    print("             u=up, m=middle, d=down, e=random even, o = random odd, l=left, r=right.  Default is 'ul:dr'")
-    print("  -w WRAP    Optionally wrap grid horizontally (h), vertically (v) both (b), or none (n)")
-    print("  -r SEEDS   Set random seed.  Either single number S, or S1:S2 for board generation and solving")
-
+import queue
 
 # General library for solving pseudo-boolean constraints embedded in
 # modular arithmetic
@@ -44,7 +30,7 @@ class ZeroException(MathException):
         self.msg = "numerator=%d" % num
 
 
-class PivotExecption(MathException):
+class PivotException(MathException):
     def __init__(self, index):
         self.form = "Pivot=0!"
         self.msg = "index=%d" % index
@@ -131,8 +117,9 @@ class ModMath:
         return "{" + fstring + "}"
 
 # Equation of form SUM (a_i * x_i)  =  C
-# over modular arithmetic
+# Arithmetic performed over Z_p for prime p
 # Only represent nonzero coefficients
+
 class Equation:
 
     # Variable Count
@@ -145,7 +132,7 @@ class Equation:
     cval = 0
 
     def __init__(self, N, modulus, cval, mbox = None):
-        self.N = N
+        self.N = N     # Max Variable ID +1
         self.modulus = modulus
         if mbox is None:
             self.mbox = ModMath(modulus)
@@ -170,20 +157,23 @@ class Equation:
         else:
             self.nz[i] = v
 
+    def indices(self):
+        return sorted(self.nz.keys())
+
     # Length defined to be the number of nonzeros
     def __len__(self):
         return len(self.nz)
 
     def format_dense(self):
         vec = [0 for i in range(self.N)]
-        for i in self.nz.keys():
-            vec[i] = self.nz[i]
+        for i in self.indices():
+            vec[i] = self[i]
         return str(vec + [self.cval])
 
     def format_sparse(self):
         slist = []
-        for i in sorted(self.nz.keys()):
-            v = self.nz[i]
+        for i in self.indices():
+            v = self[i]
             slist.append("%d:%d" % (i, v))
         slist.append("=%d" % self.cval)
         return '[' + " ".join(slist) + ']'
@@ -201,8 +191,7 @@ class Equation:
         pval = self[pidx]
         if pval == 0:
             raise PivotException(pidx)
-        nnz = { i : self.mbox.div(self.nz[i], pval) for i in self.nz.keys() }
-        # Must use modular arithmetic
+        nnz = { i : self.mbox.div(self[i], pval) for i in self.indices() }
         nc = self.mbox.div(self.cval, pval)
         return self.spawn(nnz, nc)
         
@@ -215,9 +204,9 @@ class Equation:
 
     # Add other vector to self
     def add(self, other):
-        nnz = { i : self.nz[i] for i in self.nz.keys() }
-        for i in other.nz.keys():
-            nx = self.mbox.add(self[i], other.nz[i])
+        nnz = { i : self[i] for i in self.indices() }
+        for i in other.indices():
+            nx = self.mbox.add(self[i], other[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
         nc = self.mbox.add(self.cval, other.cval)
@@ -225,9 +214,9 @@ class Equation:
 
     # Subtract other vector from self
     def sub(self, other):
-        nnz = { i : self.nz[i] for i in self.nz.keys() }
-        for i in other.nz.keys():
-            nx = self.mbox.sub(self[i], other.nz[i])
+        nnz = { i : self[i] for i in self.indices() }
+        for i in other.indices():
+            nx = self.mbox.sub(self[i], other[i])
             self.mbox.mark_used(nx)
             self.nz_insert(nnz, i, nx)
         nc = self.mbox.sub(self.cval, other.cval)
@@ -237,17 +226,17 @@ class Equation:
     # Perform scaling subtraction
     # Must scale other vector by value at pivot position before subtracting
     def scale_sub(self, other, pidx):
-        nnz = { i : self.nz[i] for i in self.nz.keys() }
+        nnz = { i : self[i] for i in self.indices() }
         sval = 0
         sval = self[pidx]
         if sval != 0:
-            for i in other.nz.keys():
+            for i in other.indices():
                 x = self[i]
-                dx = self.mbox.mul(sval, other.nz[i])
+                dx = self.mbox.mul(sval, other[i])
                 nx = self.mbox.sub(x, dx)
                 self.mbox.mark_used(nx)
                 self.nz_insert(nnz, i, nx)
-        nc = self.mbox.sub(self.cval, self.mbox.add(sval, other.cval))
+                nc = self.mbox.sub(self.cval, self.mbox.mul(sval, other.cval))
         return self.spawn(nnz, nc)
 
     # Lexicographic ordering of equations
@@ -263,6 +252,17 @@ class Equation:
     def is_infeasible(self):
         # All zero coefficients and non-zero constant
         return self.cval != 0 and len(self) == 0
+
+    # Build dictionary mapping index to maximum number of BDD nodes at that position
+    def bdd_widths(self):
+        m = self.modulus
+        return { i : m for i in self.indices() }
+
+    # Compute max size of BDD representation
+    def bdd_size(self):
+        widths = self.bdd_widths()
+        return sum(widths.values())
+
 
     def __str__(self):
         if self.N <= 40:
@@ -283,6 +283,10 @@ class EquationSet:
     term_count = 0
     # Largest equation added
     term_max = 0
+    # Total number of BDD nodes generated
+    bdd_node_count = 0
+    # Largest BDD
+    bdd_node_max = 0
 
     def __init__(self, elist = []):
         self.next_id = 1
@@ -290,6 +294,8 @@ class EquationSet:
         self.nz_map = {}
         self.term_count = 0
         self.term_max = 0
+        self.bdd_node_count = 0
+        self.bdd_node_max = 0
         for e in elist:
             self.add_equation(e)
 
@@ -306,15 +312,22 @@ class EquationSet:
         else:
             self.nz_map[idx] = nlist
 
-    def add_equation(self, e):
-        id = self.next_id
-        self.next_id += 1
-        self.equ_dict[id] = e
-        for idx in e.nz:
-            self.add_index(id, idx)
+    def analyze_equation(self, e):
         count = len(e)
         self.term_count += count
         self.term_max = max(self.term_max, count)
+        bsize = e.bdd_size()
+        self.bdd_node_count += bsize
+        self.bdd_node_max = max(bsize, self.bdd_node_max)
+
+    def add_equation(self, e):
+        eid = self.next_id
+        self.next_id += 1
+        self.equ_dict[eid] = e
+        for idx in e.nz:
+            self.add_index(eid, idx)
+        self.analyze_equation(e)
+        return eid
 
     def remove_equation(self, eid):
         e = self[eid]
@@ -346,6 +359,10 @@ class EquationSet:
         nes.next_id = self.next_id
         nes.equ_dict = { id : self.equ_dict[id] for id in self.equ_dict.keys() }
         nes.nz_map = { idx : list(self.nz_map[idx]) for idx in self.nz_map.keys() }
+        nes.term_count = self.term_count
+        nes.term_max = self.term_max
+        nes.bdd_node_count = self.bdd_node_count
+        nes.bdd_node_max = self.bdd_node_max
         return nes
 
     def show(self):
@@ -356,6 +373,10 @@ class EquationSet:
     # How many total equations have been generated
     def equation_count(self):
         return self.next_id - 1
+
+    def bdd_avg(self):
+        return float(self.bdd_node_count) / self.equation_count()
+
 
 # System of equations.
 # Support LU decomposition of Gaussian elimination to see if system has any solutions
@@ -369,6 +390,10 @@ class EquationSystem:
     mbox = None
     # Set of original equations
     eset = {}
+
+    # Optionally: Reduce some of the equations via summations before solving
+    # List of lists, each giving equations IDs to sum
+    presums = []
 
     ## Solver state
     # Eliminated equations
@@ -387,6 +412,8 @@ class EquationSystem:
     pivot_degree_max = 0
     # Total number of vector operations
     combine_count = 0
+    # Estimated number of BDD ops for verifier
+    bdd_ops = 0
 
     def __init__(self, N, modulus, verbose = True):
         self.N = N
@@ -402,28 +429,77 @@ class EquationSystem:
         self.pivot_degree_sum = 0
         self.pivot_degree_max = 0
         self.combine_count = 0
+        self.bdd_ops = 0
         
 
     # Add new equation to main set
     def add_equation(self, e):
-        self.eset.add_equation(e)
+        eid = self.eset.add_equation(e)
         for i in e.nz:
             self.var_used[i] = True
+        return eid
+
+    # Add presum list
+    def add_presum(self, elist):
+        self.presums.append(elist)
+
+    # Reduce set of equationss (given by their eid's) by summing
+    def sum_reduce(self, elist):
+        if len(elist) == 0:
+            return
+        # This is a hack to enable randomized removal of equal weighted items from priority queue
+        # and to make sure that priority queue has totally ordered keys
+        # Have enough entries in the list to cover initial equations and partial sums
+        olist = list(range(2*len(elist)))
+        if self.randomize:
+            random.shuffle(olist)
+        # Put elements into priority queue according to nnz's
+        pq = queue.PriorityQueue()
+        for idx in range(len(elist)):
+            oid = olist[idx]
+            eid = elist[idx]
+            e = self.rset[eid]
+            self.rset.remove_equation(eid)                
+            pq.put((len(e), oid, e))
+        # Now start combining them
+        idx = len(elist)
+        while pq.qsize() > 1:
+            (w1, o1, e1) = pq.get()
+            (w2, o2, e2) = pq.get()
+            ne = e1.add(e2)
+            self.bdd_ops += self.bdd_estimator([e1, e2, ne])
+            oid = olist[idx]
+            if pq.qsize() > 0:
+                # Gather statistics on this equation, even though won't be added to rset
+                self.rset.analyze_equation(ne)
+            pq.put((len(ne), oid, ne))
+            idx += 1
+        # Reduced queue to single element
+        (w, o, e) = pq.get()
+        self.rset.add_equation(e)
+
+    # Reduce set of equations by summing
+    def presum(self):
+        icount = len(self.rset)
+        for elist in self.presums:
+            self.sum_reduce(elist)
+        ncount = len(self.rset)
+        if ncount < icount:
+            print("Presumming reduced equations from %d to %d" % (icount, ncount))
 
     # Given possible pivot index
-    # Return (degree, eid) giving number of entries in column
-    # and equation id
+    # find best equation to use as pivot equation and
+    # give score for its selection
+    # If there are no nonzeros with this index, return None for the equation ID
     def evaluate_pivot(self, pidx):
         eid_list = self.rset.lookup(pidx)
         best_eid = None
+        # Lowest degree row
         best_rd = 0
+        # Make sure that any ties are broken arbitrarily
+        # rather than as some artifact of the input file
         if self.randomize:
             random.shuffle(eid_list)
-
-        if len(eid_list) == 1:
-            # Singleton.  Can eliminate.
-            eid = eid_list[0]
-            return (1, eid)
 
         for eid in eid_list:
             e = self.rset[eid]
@@ -431,32 +507,48 @@ class EquationSystem:
             if best_eid is None or rd < best_rd:
                 best_eid = eid
                 best_rd = rd
-        degree = 0 if best_eid is None else len(eid_list)
-        return (degree, best_eid)
+
+        # Score based on worst-case fill generated
+        # Also favors unit and singleton equations
+        score = (best_rd-1) * (len(eid_list)-1)
+        return (best_eid, score)
 
     # Given remaining set of equations, select pivot element and equation id
     def select_pivot(self):
-        best_idx = None
-        best_d = 0
+        best_pidx = None
+        best_score = 0
         best_eid = None
         id_list = self.rset.current_indices()
+        # Make sure that any ties are broken arbitrarily
+        # rather than as some artifact of the input file
         if self.randomize:
             random.shuffle(id_list)
-        for idx in id_list:
-            (d, eid) = self.evaluate_pivot(idx)
-            if eid is not None and (best_eid is None or d < best_d):
-                best_idx = idx
-                best_d = d
+        for pidx in id_list:
+            (eid, score) = self.evaluate_pivot(pidx)
+            if eid is not None and (best_eid is None or score < best_score):
+                best_pidx = pidx
+                best_score = score
                 best_eid = eid
-        if best_idx is not None:
-            self.pivot_degree_sum += best_d
-            self.pivot_degree_max = max(self.pivot_degree_max, best_d)
-        return (best_idx, best_eid)
+        if best_eid is not None:
+            pd = len(self.rset[best_eid])
+            self.pivot_degree_sum += pd
+            self.pivot_degree_max = max(self.pivot_degree_max, pd)
+        return (best_pidx, best_eid)
 
+
+    # Estimate the number of BDD operations required for a validation step with BDDs
+    def bdd_estimator(self, elist):
+        # Build up dictionary giving product of BDD widths at each level
+        wdict = elist[0].bdd_widths()
+        for e in elist[1:]:
+            ewdict = e.bdd_widths()
+            for i in e.indices():
+                wdict[i] = wdict[i] * ewdict[i] if i in wdict else ewdict[i]
+        return sum(wdict.values())
 
     # Perform one step of LU decomposition
     # Possible return values:
-    # "solved", "zP_unsolvable", "normal"
+    # "solved", "unsolvable", "normal"
     def solution_step(self):
         if len(self.rset) == 0:
             return "solved"
@@ -472,6 +564,7 @@ class EquationSystem:
         if self.verbose:
             print("Pivoting with value %d (element %d).  Using equation #%d" % (pval, pidx, eid))
         ne = e.normalize(pidx)
+        self.bdd_ops += self.bdd_estimator([ne])
 
         other_eids =  self.rset.lookup(pidx)
         for oeid in other_eids:
@@ -479,10 +572,11 @@ class EquationSystem:
             self.rset.remove_equation(oeid)
             re = oe.scale_sub(ne, pidx)
             if re.is_infeasible():
-                m = self.mbox.modulus
-                return "z%d_unsolvable" % m
+                return "unsolvable"
             self.rset.add_equation(re)
             self.combine_count += 1
+            # Estimate number of BDD operations for verification
+            self.bdd_ops += self.bdd_estimator([ne, oe, re])
         return "normal"
             
     def solve(self):
@@ -495,12 +589,15 @@ class EquationSystem:
         for eid in self.rset.current_eids():
             e = self.rset[eid]
             if e.is_infeasible():
-                m = self.mbox.modulus
-                return "z%d_unsolvable" % m
+                return "unsolvable"
         status = "normal"
+
+        # Perform any presumming
+        self.presum()
+
         while True:
             status = self.solution_step()
-            # "solved", "zP_unsolvable", "normal"
+            # "solved", "unsolvable", "normal"
             if status != "normal":
                 break
             if self.verbose:
@@ -524,14 +621,15 @@ class EquationSystem:
             
     def pre_statistics(self):
         ecount = self.eset.equation_count()
-        vcount = len(self.var_used)
+        vcount = self.N
+        acount = len(self.var_used)
         tc = self.eset.term_count
         tmax = self.eset.term_max
         tavg = float(tc)/ecount
-        print("  Problem: %d equations, %d variables.  %d total nonzeros (%.2f avg, %d max)" % (ecount, tc, vcount, tavg, tmax))
+        print("  Problem: %d equations, %d variables, %d nonzero coefficients.  %d total nonzeros (%.2f avg, %d max)" % (ecount, vcount, acount, tc, tavg, tmax))
 
     def post_statistics(self, status, maybe_solvable):
-        # status: "solved", "zP_unsolvable", "normal"
+        # status: "solved", "unsolvable", "normal"
         expected = "solvable" if maybe_solvable else "unsolvable"
         print("  Solution status: %s (expected = %s)" % (status, expected))
         sscount = self.step_count
@@ -544,247 +642,10 @@ class EquationSystem:
         tmax = self.rset.term_max
         tavg = float(tc)/ecount
         print("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations" % (ecount, tc, tavg, tmax, ccount))
-        sscount = self.step_count
-        pavg = float(self.pivot_degree_sum)/sscount
+        bcount = self.bdd_ops
+        ncount = self.rset.bdd_node_count
+        navg = self.rset.bdd_avg()
+        nmax = self.rset.bdd_node_max
+        print("    %d estimated BDD operations.  %d total BDD nodes (%.2f avg, %d max)" % (bcount, ncount, navg, nmax))
         print("    %d modular operations.  Used values = %s" % (self.mbox.opcount, self.mbox.report_used()))
-
-        
-# Encoding of mutilated chessboard problem as linear equations
-class Board:
-    rows = 4
-    cols = 4
-    # List of squares to omit.  Each specified by (r,c)
-    rsquares = []
-    udvars = {}
-    lrvars = {}
-    esys = None
-
-    # ssquares is string describing squares to remove.  Documented in usage()
-    # Optionally allow grid to wrap horizontally or vertically, giving cylinder or torus
-    def __init__(self, rows, cols, ssquares, wrap_horizontal, wrap_vertical):
-        self.rows = rows
-        self.cols = cols
-        self.rsquares = self.get_squares(ssquares)
-        self.wrap_horizontal = wrap_horizontal
-        self.wrap_vertical = wrap_vertical
-        self.udvars = {}
-        self.lrars = {}
-
-        # Assign variable IDs
-        var = 0
-        rlim = self.rows if wrap_vertical else self.rows-1
-        for r in range(rlim):
-            for c in range(self.cols):
-                self.udvars[(r,c)] = var
-                var += 1
-        clim = self.cols if wrap_horizontal else self.cols-1
-        for r in range(self.rows):
-            for c in range(clim):
-                self.lrvars[(r,c)] = var
-                var += 1
-
-    # Parse string specifying which strings to omit
-    def get_squares(self, ssquares):
-        flist = []
-        rlist = []
-        fields = ssquares.split(":")
-        # Trick to allow specification "mm:mm" to mean two different squares
-        parity = 0
-        while len(fields) > 0:
-            field = fields[0]
-            random_selection = 'e' in field or 'o' in field
-            if field == "":
-                continue
-            field = field.lower()
-            r = 0
-            c = 0
-            ok = True
-            if len(field) != 2:
-                ok = False
-            else:
-                lmreo = field[1]
-                if lmreo == 'l':
-                    c = 0
-                elif lmreo == 'm':
-                    c = self.cols//2 + parity
-                elif lmreo == 'r':
-                    c = self.cols-1
-                elif lmreo == 'e':
-                    c = 2 * random.randint(0, self.cols//2 -1)
-                elif lmreo == 'o':
-                    c = 1 + 2 * random.randint(0, self.cols//2 -1)
-                else:
-                    ok = False
-
-                umdeo = field[0]
-                if umdeo == 'u':
-                    r = 0
-                elif umdeo == 'm':
-                    r = self.rows//2 + parity
-                elif umdeo == 'd':
-                    r = self.rows-1
-                elif umdeo == 'e':
-                    r = 2 * random.randint(0, self.rows//2 -1)
-                elif umdeo == 'o':
-                    r = 1 + 2 * random.randint(0, self.rows//2 -1)
-                else:
-                    ok = False
-            if ok:
-                if random_selection:
-                    if (r,c) not in flist+rlist:
-                        rlist.append((r,c))
-                        fields = fields[1:]
-                else:
-                    flist.append((r,c))
-                    fields = fields[1:]
-            else:
-                raise Exception("Can't parse square specifier '%s'" % field)
-            # Flip rule for choosing middle
-            parity = 1-parity
-
-        return flist+rlist
-
-
-    def omit(self, r, c):
-        for (xr,xc) in self.rsquares:
-            if r == xr and c == xc:
-                return True
-        return False
-
-    def maybe_solvable(self):
-        white_count = 0
-        black_count = 0
-        for r in range(self.rows):
-            for c in range(self.cols):
-                if not self.omit(r,c):
-                    if (r % 2) == (c % 2):
-                        white_count += 1
-                    else:
-                        black_count += 1
-        return white_count == black_count
-
-    # Return list of variables surrounding given square
-    def vars(self, r, c):
-        vlist = []
-        if self.wrap_vertical:
-            rup = r-1 if r > 0 else self.rows-1
-            vlist.append(self.udvars[(rup, c)])
-            rdown   = r if r < self.rows else 0
-            vlist.append(self.udvars[(rdown, c)])
-        else:
-            if r > 0:
-                vlist.append(self.udvars[(r-1,c)])
-            if r < self.rows-1:
-                vlist.append(self.udvars[(r,c)])
-        if self.wrap_horizontal:
-            cleft = c-1 if c > 0 else self.cols-1
-            vlist.append(self.lrvars[(r, cleft)])
-            cright  = c if c < self.cols else 0
-            vlist.append(self.lrvars[(r, cright)])
-        else:
-            if c > 0:
-                vlist.append(self.lrvars[(r,c-1)])
-            if c < self.cols-1:
-                vlist.append(self.lrvars[(r,c)])
-        return vlist
-                         
-    def equations(self, modulus, verbose):
-        rmax = self.rows if self.wrap_vertical else self.rows-1
-        cmax = self.cols if self.wrap_horizontal else self.cols-1
-        N = self.rows * cmax + rmax * self.cols
-        esys = EquationSystem(N, modulus, verbose)
-        for r in range(self.rows):
-            for c in range(self.cols):
-                vars = self.vars(r,c)
-                if self.omit(r,c):
-                    for v in vars:
-                        e = Equation(N, modulus, 0, esys.mbox)
-                        e[v] = 1
-                        esys.add_equation(e)
-                else:
-                    e = Equation(N, modulus, 1, esys.mbox)
-                    for v in vars:
-                        e[v] = 1
-                    esys.add_equation(e)
-        return esys
-
-        
-
-def mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2):
-    b = Board(rows, cols, ssquares, wrap_horizontal, wrap_vertical)
-    ssquares = str(b.rsquares)
-    print("Board: %d X %d.  Modulus = %d.  Omitting squares %s" % (rows, cols, modulus, ssquares))
-    print("     Wrapping: Horizontal %s.  Vertical %s" % (wrap_horizontal, wrap_vertical))
-    esys = b.equations(modulus, verbose)
-    if seed2 is not None:
-        esys.randomize = True
-        random.seed(seed2)
-    if not verbose:
-        esys.pre_statistics()
-    status = esys.solve()
-    if not verbose:
-        esys.post_statistics(status, b.maybe_solvable())
-
-def run(name, args):
-    verbose = False
-    modulus = 3
-    rows = 8
-    cols = None
-    ssquares = "ul:dr"
-    wrap_horizontal = False
-    wrap_vertical = False
-    randomize = False
-    seed2 = None
-    optlist, args = getopt.getopt(args, "hvm:n:c:s:w:r:")
-    for (opt, val) in optlist:
-        if opt == '-h':
-            usage(name)
-            return
-        elif opt == '-v':
-            verbose = True
-        elif opt == '-m':
-            modulus = int(val)
-        elif opt == '-n':
-            rows = int(val)
-        elif opt == '-c':
-            cols = int(val)
-        elif opt == '-s':
-            ssquares = val
-        elif opt == '-v':
-            verbose = True
-        elif opt == '-w':
-            ok = False
-            if val in "hb":
-                wrap_horizontal = True
-                ok = True
-            if val in "vb":
-                ok = True
-                wrap_vertical = True
-            if val == "n":
-                ok = True
-            if not ok:
-                print("Invalid wrapping parameter '%s'.  Must be h, v, b, or n" % val)
-                return
-        elif opt == '-r':
-            randomize = True
-            fields = val.split(':')
-            seeds = [int(field) for field in fields]
-            seed1 = seeds[0]
-            random.seed(seed1)
-            seed2 = seeds[1] if len(seeds) > 1 else seed1
-
-    if cols is None:
-        cols = rows
-
-    mc_solve(verbose, modulus, rows, cols, ssquares, wrap_horizontal, wrap_vertical, seed2)
-
-if __name__ == "__main__":
-    run(sys.argv[0], sys.argv[1:])
-
-
-                         
-        
-
-    
-
 

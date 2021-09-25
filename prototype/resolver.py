@@ -127,6 +127,29 @@ def testClauseEquality(clause1, clause2):
             if l1 != l2:
                 return False
 
+def testClauseSubset(clause1, clause2):
+    if clause1 is None or clause2 is None:
+        return False
+    if not regularClause(clause1):
+        return clause1 == clause2
+    if not regularClause(clause2):
+        return False
+    idx1 = 0
+    idx2 = 0
+    while idx1 < len(clause1):
+        if idx2 >= len(clause2):
+            return False
+        head1 = clause1[idx1]
+        head2 = clause2[idx2]
+        if abs(head1) > abs(head2):
+            return False
+        elif head1 == head2:
+            idx1 += 1
+            idx2 += 1
+        elif abs(head1) < abs(head2):
+            idx2 += 1
+    return True
+            
 
 # Given ordered list of clauses (indicated by clause IDs), attempt resolution on each successive one.
 # clauseDict is mapping from clause ID to literal list
@@ -235,10 +258,16 @@ class VResolver:
         return "[" + ", ".join(rlist) + "]"
 
     def run(self, targetClause, ruleIndex, comment):
+        self.cleanIndex(ruleIndex)
         if self.enumerate:
             return self.runSet(targetClause, ruleIndex, comment)
         else:
             return self.runSingle(targetClause, ruleIndex, comment)
+
+    def cleanIndex(self, ruleIndex):
+        for k in list(ruleIndex.keys()):
+            if ruleIndex[k] == tautologyId:
+                del ruleIndex[k]
 
     def runSingle(self, targetClause, ruleIndex, comment):
         self.runCount += 1
@@ -251,7 +280,7 @@ class VResolver:
         if r is None:
             msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
             raise ResolveException(msg)
-        if not testClauseEquality(r, targetClause):
+        if not testClauseSubset(r, targetClause):
             msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
             raise ResolveException(msg)
 
@@ -267,7 +296,7 @@ class VResolver:
                 (r2, a2) = pair2
                 r = resolveClauses(r1, r2)
                 self.tryCount += 1
-                if r is not None and testClauseEquality(r, targetClause):
+                if r is not None and testClauseSubset(r, targetClause):
                     return self.generateProof(r, r1, a1, r2, a2, comment)
         if self.prover.verbLevel >= 3:
             if comment is not None:
@@ -292,8 +321,7 @@ class VResolver:
         chain = []
         for n in ruleNames:
             if n in ruleIndex:
-                if ruleIndex[n] != tautologyId:
-                    chain.append(ruleIndex[n])
+                chain.append(ruleIndex[n])
         if len(chain) == 0:
             msg = "No applicable rules in chain (rule index = %s)." % (self.showRules(ruleIndex))
             raise ResolveException(msg)

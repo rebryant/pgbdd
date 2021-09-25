@@ -8,21 +8,23 @@ import datetime
 import bdd
 import resolver
 import stream
+import pseudoboolean
 
 # Increase maximum recursion depth
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-m t|b|p] [-p PERMUTE] [-s SCHEDULE] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -b          Process terms via bucket elimination ordered by variable levels\n")
     sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)\n")
-    sys.stderr.write("  -m (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
+    sys.stderr.write("  -M (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
     sys.stderr.write("  -s SCHEDULE Name of action schedule file\n")
+    sys.stderr.write("  -m MODULUS  Specify modulus for equation solver (Either number or 'a' for auto-detect, 'i' for integer mode)\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
 
 # Verbosity levels
@@ -393,6 +395,13 @@ class Solver:
     # Turn on to have information about node include number of solutions
     countSolutions = True
 
+    # Support for equations
+    modulus = pseudoboolean.modulusAuto
+    equationSystem = None
+    # Support for constraints
+    constraintSystem = None
+
+
     def __init__(self, fname = None, prover = None, permuter = None, verbLevel = 1):
         self.verbLevel = verbLevel
         if prover is None:
@@ -448,6 +457,16 @@ class Solver:
         ids = sorted(self.activeIds.keys())
         return ids[0], ids[1]
 
+    # Remove term.  Can trigger GC, so be sure that all
+    # active BDDs have been captured as terms
+    def removeTerm(self, id):
+        term = self.activeIds[id]
+        term.root = None
+        del self.activeIds[id]
+        clauseList = self.manager.checkGC(term.size)
+        if len(clauseList) > 0:
+            self.prover.deleteClauses(clauseList)
+
     def combineTerms(self, id1, id2):
         termA = self.activeIds[id1]
         termB = self.activeIds[id2]
@@ -456,11 +475,11 @@ class Solver:
         comment = "T%d (Node %s) & T%d (Node %s)--> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
                                                                       self.termCount, newTerm.root.label())
         self.prover.comment(comment)
-        del self.activeIds[id1]
-        del self.activeIds[id2]
         if self.prover.fileOutput() and self.verbLevel >= 3:
-            self.writer.write(comment)
+            self.writer.write("Combine: %s\n" % (comment))
         self.activeIds[self.termCount] = newTerm
+        self.removeTerm(id1)
+        self.removeTerm(id2)
         if newTerm.root == self.manager.leaf0:
             if self.prover.fileOutput() and self.verbLevel >= 1:
                 self.writer.write("UNSAT\n")
@@ -478,12 +497,8 @@ class Solver:
         vstring = " ".join(sorted([str(v) for v in varList]))
         comment = "T%d (Node %s) EQuant(%s) --> T%d (Node %s)" % (id, term.root.label(), vstring, self.termCount, newTerm.root.label())
         self.prover.comment(comment)
-        del self.activeIds[id]
         self.activeIds[self.termCount] = newTerm
-        # This could be a good time for garbage collection
-        clauseList = self.manager.checkGC()
-        if len(clauseList) > 0:
-            self.prover.deleteClauses(clauseList)
+        self.removeTerm(id)
         return self.termCount
 
     def runNoSchedule(self):
@@ -499,7 +514,8 @@ class Solver:
             for s in self.manager.satisfyStrings(self.activeIds[nid].root, limit = 20):
                 self.writer.write("  " + s)
         
-    def runSchedule(self, scheduler):
+    def runSchedule(self, scheduler, modulus):
+        self.modulus = modulus
         idStack = []
         lineCount = 0
         for line in scheduler:
@@ -509,6 +525,8 @@ class Solver:
             if len(fields) == 0:
                 continue
             cmd = fields[0]
+            if self.verbLevel >= 3:
+                self.writer.write("Processing schedule command #%d: %s\n" % (lineCount, line))
             if cmd == '#':
                 continue
             if cmd == 'i':  # Information request
@@ -526,10 +544,11 @@ class Solver:
                     else:
                         self.writer.write("Node %d.  Size = %d.%s\n" % (root.id, size, cstring))
                 continue
-            try:
-                values = [int(v) for v in fields[1:]]
-            except:
-                raise SolverException("Line #%d.  Invalid field '%s'" % (lineCount, line))
+            if cmd[0] != '=' and cmd != '>=':
+                try:
+                    values = [int(v) for v in fields[1:]]
+                except:
+                    raise SolverException("Line #%d.  Invalid field '%s'" % (lineCount, line))
             if cmd == 'c':  # Put listed clauses onto stack
                 idStack += values
             elif cmd == 'a':  # Pop n+1 clauses from stack.  Form their conjunction.  Push result back on stack
@@ -554,8 +573,100 @@ class Solver:
                 idStack = idStack[:-1]
                 nid = self.quantifyTerm(id, values)
                 idStack.append(nid)
+            elif cmd[0] == '=':
+                # Equation
+                modulus = self.modulus
+                if len(cmd) > 1:
+                    try:
+                        modulus = int(cmd[1:])
+                    except:
+                        raise SolverException("Line #%d.  Couldn't read equation modulus from command '%s'" % (lineCount, cmd))
+                if self.equationSystem is None:
+                    nvar = len(self.litMap) // 2
+                    self.equationSystem = pseudoboolean.EquationSystem(nvar, modulus, verbose = self.verbLevel >= 3, manager = self.manager, writer = self.writer)
+                    self.modulus = modulus
+                elif self.equationSystem.modulus != modulus:
+                    raise SolverException("Line #%d.  Don't support multiple moduli.  Existing %d.  New %d" % (lineCount, self.equationSystem.modulus, modulus))
+                const = int(fields[1])
+                nvar = self.equationSystem.N
+                mbox = self.equationSystem.mbox
+                e = pseudoboolean.Equation(nvar, modulus, const, mbox)
+                for field in fields[2:]:
+                    parts = field.split('.')
+                    coeff = int(parts[0])
+                    var = int(parts[1])
+                    e[var] = coeff
+                eid = self.equationSystem.addInitialEquation(e)
+                if len(idStack) < 1:
+                    raise SolverException("Line #%d.  Stack is empty" % (lineCount))
+                id = idStack[-1]
+                idStack = idStack[:-1]
+                termBdd = self.activeIds[id].root
+                termValidation = self.activeIds[id].validation
+                equBdd = e.root
+                if termBdd == equBdd:
+                    e.validation = termValidation
+                    continue
+                antecedents = [termValidation]
+                check, implication = self.manager.justifyImply(termBdd, equBdd)
+                if not check:
+                    raise bdd.BddException("Implication of equation #%d from term failed %s -/-> %s" % (eid, termBdd.label(), equBdd.label()))
+#                    self.writer.write("WARNING: Implication of equation #%d from term failed %s -/-> %s\n" % (eid, termBdd.label(), equBdd.label()))
+                if implication != resolver.tautologyId:
+                    antecedents += [implication]
+                e.validation = self.manager.prover.createClause([equBdd.id], antecedents, "Validation of equation #%d BDD %s" % (eid, equBdd.label()))
+                self.removeTerm(id)
+            elif cmd == '>=':  
+                if self.constraintSystem is None:
+                    nvar = len(self.litMap) // 2
+                    self.constraintSystem = pseudoboolean.ConstraintSystem(nvar, verbose = self.verbLevel >= 3, manager = self.manager, writer = self.writer)
+                const = int(fields[1])
+                nvar = self.constraintSystem.N
+                con = pseudoboolean.Constraint(nvar, const)
+                for field in fields[2:]:
+                    parts = field.split('.')
+                    coeff = int(parts[0])
+                    var = int(parts[1])
+                    con[var] = coeff
+                cid = self.constraintSystem.addConstraint(con)
+                if len(idStack) < 1:
+                    raise SolverException("Line #%d.  Stack is empty" % (lineCount))
+                id = idStack[-1]
+                idStack = idStack[:-1]
+                termBdd = self.activeIds[id].root
+                antecedents = [self.activeIds[id].validation]
+                conBdd = con.root
+                check, implication = self.manager.justifyImply(termBdd, conBdd)
+                if not check:
+                    raise bdd.BddException("Implication of constraint #%d from term failed %s -/-> %s" % (cid, termBdd.label(), conBdd.label()))
+#                    self.writer.write("WARNING: Implication of constraint #%d from term failed %s -/-> %s\n" % (cid, termBdd.label(), conBdd.label()))
+                if implication != resolver.tautologyId:
+                    antecedents += [implication]
+                con.validation = self.manager.prover.createClause([conBdd.id], antecedents, "Validation of constraint #%d BDD %s" % (cid, conBdd.label()))
+                self.removeTerm(id)
             else:
                 raise SolverException("Line %d.  Unknown scheduler action '%s'" % (lineCount, cmd))
+
+        # Reach end of scheduler
+        if self.equationSystem is not None:
+            status = self.equationSystem.solve()
+            if status == 'failed':
+                self.writer.write("FAILED.  Equation system could not be solved\n")
+            elif status == 'unsolvable':
+                self.writer.write("Equation system proved formula UNSAT\n")
+                self.equationSystem.postStatistics(status)
+            else:
+                self.writer.write("UNRESOLVED.  Equation system thinks indicates formula may be SAT\n")
+        elif self.constraintSystem is not None:
+            status = self.constraintSystem.solve()
+            if status == 'failed':
+                self.writer.write("FAILED.  Constraint system could not be solved\n")
+            elif status == 'unsolvable':
+                self.writer.write("Constraint system proved formula UNSAT\n")
+                self.constraintSystem.postStatistics(status)
+            else:
+                self.writer.write("UNRESOLVED.  Constraint system indicates formula may be SAT:\n")
+                self.constraintSystem.show()
         
     def placeInBucket(self, buckets, id):
         term = self.activeIds[id]
@@ -648,6 +759,11 @@ class Solver:
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
         rootList = [t.root for t in self.activeIds.values()]
+        if self.equationSystem is not None:
+            rootList += self.equationSystem.rset.rootList()
+            rootList += self.equationSystem.eset.rootList()
+        if self.constraintSystem is not None:
+            rootList += self.constraintSystem.rset.rootList()
         return rootList
 
 def readPermutation(fname, writer = None):
@@ -700,9 +816,9 @@ def readScheduler(fname, writer = None):
         lineCount += 1
         fields = line.split()
         if len(fields) == 0:
-            continue
+            line = ""
         if fields[0][0] == '#':
-            continue
+            line = ""
         actionList.append(line)
     return actionList
 
@@ -717,8 +833,9 @@ def run(name, args):
     scheduler = None
     verbLevel = 1
     logName = None
+    modulus = pseudoboolean.modulusAuto
 
-    optlist, args = getopt.getopt(args, "hbB:v:i:o:m:p:s:L:")
+    optlist, args = getopt.getopt(args, "hbB:v:i:o:M:p:s:m:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -739,7 +856,7 @@ def run(name, args):
             if extension == 'lrat' or extension == 'lratb':
                 doLrat = True
                 doBinary = extension[-1] == 'b'
-        elif opt == '-m':
+        elif opt == '-M':
             proofName = None
             if val == 'b':
                 doLrat = True
@@ -754,6 +871,13 @@ def run(name, args):
             scheduler = readScheduler(val)
             if scheduler is None:
                 return
+        elif opt == '-m':
+            if val == 'a':
+                modulus = pseudoboolean.modulusAuto
+            elif val == 'i':
+                modulus = pseudoboolean.modulusNone
+            else:
+                modulus = int(val)
         elif opt == '-L':
             logName = val
         else:
@@ -783,7 +907,7 @@ def run(name, args):
     elif bpermuter is not None:
         solver.runBucketSchedulePerm(bpermuter)
     elif scheduler is not None:
-        solver.runSchedule(scheduler)
+        solver.runSchedule(scheduler, modulus)
     else:
         solver.runNoSchedule()
 
