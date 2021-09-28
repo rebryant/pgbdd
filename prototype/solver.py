@@ -377,9 +377,10 @@ class Prover:
         if self.verbLevel >= 1:
             self.writer.write("Total Clauses: %d\n" % self.clauseCount)
             self.writer.write("Input clauses: %d\n" % self.inputClauseCount)
-            acount = self.clauseCount - self.inputClauseCount - self.proofCount
-            self.writer.write("Added clauses without antecedents: %d\n" % acount)
-            self.writer.write("Added clauses requiring proofs: %d\n" % (self.proofCount))
+            if self.verbLevel >= 2:
+                acount = self.clauseCount - self.inputClauseCount - self.proofCount
+                self.writer.write("Added clauses without antecedents: %d\n" % acount)
+                self.writer.write("Added clauses requiring proofs: %d\n" % (self.proofCount))
 
     def __del__(self):
         if self.opened:
@@ -668,11 +669,6 @@ class Solver:
 
         # Reach end of scheduler
         if self.equationSystem is not None:
-            ### Temporary measurement
-#            self.writer.write("Statistics before running solver:")
-#            self.equationSystem.postStatistics("Starting")
-#            self.manager.summarize()
-            ### Done 
             status = self.equationSystem.solve()
             if status == 'failed':
                 self.writer.write("FAILED.  Equation system could not be solved\n")

@@ -858,11 +858,11 @@ class EquationSystem:
                 break
             if self.verbose:
                 self.showState()
-        if status == "unsolvable" and delayJustification:
-            self.performJustification(laste)
         if self.verbose:
             self.writer.write("  Solution status:%s\n" % status)
             self.postStatistics(status)
+        if status == "unsolvable" and delayJustification:
+            self.performJustification(laste)
         return status
 
     def checkGC(self, newDeadCount):
@@ -897,15 +897,14 @@ class EquationSystem:
         sscount = self.stepCount
         pavg = float(self.pivotDegreeSum)/sscount if sscount > 0 else 0.0
         pmax = self.pivotDegreeMax
-        pecount = self.pivotEvaluationCount
-        self.writer.write("  Solving: %d steps.  %d pivot evaluations.  %.2f avg pivot degree (max=%d)\n" % (sscount, pecount, pavg, pmax))
+        self.writer.write("  Solving: %d steps.  %.2f avg pivot degree (max=%d)\n" % (sscount, pavg, pmax))
         ecount = self.rset.equationCount()
         ccount = self.combineCount
         tc = self.rset.termCount
         tmax = self.rset.termMax
         tavg = float(tc)/ecount if ecount > 0 else 0.0
         self.writer.write("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations\n" % (ecount, tc, tavg, tmax, ccount))
-        self.writer.write("    %d modular operations.  Used values = %s\n" % (self.mbox.opcount, self.mbox.reportUsed()))
+#        self.writer.write("    %d modular operations.  Used values = %s\n" % (self.mbox.opcount, self.mbox.reportUsed()))
 
 
 # Support for manipulating constraints of the form
