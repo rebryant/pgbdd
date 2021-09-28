@@ -5,7 +5,7 @@ SEED=123456
 
 GDIR=../../pigeon-code
 
-GENERATOR = $(GDIR)/pigeonhole
+GENERATOR = $(GDIR)/pigeon-augmented
 RANDOMIZER = ../../randomizer.py
 EXDIR = ../../../extractor
 EXTRACTOR = $(EXDIR)/constraint_extractor.py
@@ -23,25 +23,25 @@ rpc: pigeon-direct-$(N)-constraint-randomorder.data
 
 pigeon-direct-$(N)-hm-bucket.data:
 	$(GENERATOR) -$(N) > pigeon-direct-$(N)-hm.cnf
-	$(SOLVER) -b -v $(VLEVEL) -i pigeon-direct-$(N)-hm.cnf -O pigeon-direct-$(N)-hm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-hm-bucket.data
+	$(SOLVER) -b -v $(VLEVEL) -i pigeon-direct-$(N)-hm.cnf -o pigeon-direct-$(N)-hm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-hm-bucket.data
 	$(CHECKER) pigeon-direct-$(N)-hm.cnf pigeon-direct-$(N)-hm.$(EXTENSION) | tee -a pigeon-direct-$(N)-hm-bucket.data
 	rm -f pigeon-direct-$(N)-hm.$(EXTENSION)
 
 pigeon-direct-$(N)-pm-bucket.data:
 	$(GENERATOR) $(N) > pigeon-direct-$(N)-pm.cnf
-	$(SOLVER) -b -v $(VLEVEL) -i pigeon-direct-$(N)-pm.cnf -O pigeon-direct-$(N)-pm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-pm-bucket.data
+	$(SOLVER) -b -v $(VLEVEL) -i pigeon-direct-$(N)-pm.cnf -o pigeon-direct-$(N)-pm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-pm-bucket.data
 	$(CHECKER) pigeon-direct-$(N)-pm.cnf pigeon-direct-$(N)-pm.$(EXTENSION) | tee -a pigeon-direct-$(N)-pm-bucket.data
 	rm -f pigeon-direct-$(N)-pm.$(EXTENSION)
 
 pigeon-direct-$(N)-hm-linear.data:
 	$(GENERATOR) -$(N) > pigeon-direct-$(N)-hm.cnf
-	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-hm.cnf -O pigeon-direct-$(N)-hm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-hm-linear.data
+	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-hm.cnf -o pigeon-direct-$(N)-hm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-hm-linear.data
 	$(CHECKER) pigeon-direct-$(N)-hm.cnf pigeon-direct-$(N)-hm.$(EXTENSION) | tee -a pigeon-direct-$(N)-hm-linear.data
 	rm -f pigeon-direct-$(N)-hm.$(EXTENSION)
 
 pigeon-direct-$(N)-pm-linear.data:
 	$(GENERATOR) $(N) > pigeon-direct-$(N)-pm.cnf
-	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-pm.cnf -O pigeon-direct-$(N)-pm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-pm-linear.data
+	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-pm.cnf -o pigeon-direct-$(N)-pm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-pm-linear.data
 	$(CHECKER) pigeon-direct-$(N)-pm.cnf pigeon-direct-$(N)-pm.$(EXTENSION) | tee -a pigeon-direct-$(N)-pm-linear.data
 	rm -f pigeon-direct-$(N)-pm.$(EXTENSION)
 
