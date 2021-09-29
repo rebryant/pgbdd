@@ -12,7 +12,7 @@ p: pigeon-direct-$(N)-cook.data
 pigeon-direct-$(N)-cook.data:
 	$(GENERATOR) -n $(N) -r pigeon-direct-$(N)-cook | tee pigeon-direct-$(N)-cook.data
 	$(CHECKER) pigeon-direct-$(N)-cook.cnf pigeon-direct-$(N)-cook.lrat | tee -a pigeon-direct-$(N)-cook.data
-
+	rm -f pigeon-direct-$(N)-cook.lrat
 data:
 	$(GRABBER) pigeon-direct-*-cook.data > pigeon-direct-cook.csv
 
