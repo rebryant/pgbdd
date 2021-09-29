@@ -1,18 +1,18 @@
 INTERP = python3
 N = 4
-VLEVEL = 1
+VLEVEL = 2
 SEED=123456
 
 GDIR=../../pigeon-code
 
 AGENERATOR = $(GDIR)/pigeon-augmented
 GENERATOR = $(GDIR)/pigeonhole
-RANDOMIZER = ../../randomizer.py
+RANDOMIZER = $(INTERP) ../../randomizer.py
 EXDIR = ../../../extractor
-EXTRACTOR = $(EXDIR)/constraint_extractor.py
+EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
 SOLVER = $(INTERP) ../../../prototype/solver.py
 CHECKER = ../../../lrat/lrat-check
-GRABBER = ../../grab_clauses.py
+GRABBER = $(INTERP) ../../grab_clauses.py
 EXTENSION = lrat
 
 hml: pigeon-direct-$(N)-hm-linear.data
@@ -44,7 +44,7 @@ pigeon-direct-$(N)-pm-linear.data:
 	$(AGENERATOR) $(N) > pigeon-direct-$(N)-pm.cnf
 	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-pm.cnf -o pigeon-direct-$(N)-pm.$(EXTENSION) 2>&1 | tee pigeon-direct-$(N)-pm-linear.data
 	$(CHECKER) pigeon-direct-$(N)-pm.cnf pigeon-direct-$(N)-pm.$(EXTENSION) | tee -a pigeon-direct-$(N)-pm-linear.data
-	rm -f pigeon-direct-$(N)-pm.$(EXTENSION)
+#	rm -f pigeon-direct-$(N)-pm.$(EXTENSION)
 
 pigeon-direct-$(N)-constraint.data:
 	$(GENERATOR) $(N) > pigeon-direct-$(N)-constraint.cnf
