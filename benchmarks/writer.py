@@ -106,6 +106,25 @@ class CnfWriter(Writer):
             self.show(line)
         self.outfile.close()
         self.outfile = None
+
+# Creating LRAT proof
+class LratWriter(Writer):
+
+    # Must initialize this to the number of clauses in the original CNF file
+    clauseCount = 0
+
+    def __init__(self, clauseCount, froot, verbose = False):
+        Writer.__init__(self, None, froot, suffix = "lrat", verbose = verbose)
+        self.clauseCount = clauseCount
+
+    def doComment(self, line):
+        self.show("c " + line)
+
+    def doStep(self, lits, ids):
+        self.clauseCount += 1
+        ilist = [self.clauseCount] + lits + [0] + ids + [0]
+        self.show(" ".join([str(i) for i in ilist]))
+        return self.clauseCount
      
     
 class ScheduleWriter(Writer):
