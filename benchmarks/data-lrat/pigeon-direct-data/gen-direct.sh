@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 make hml N=004
 make pml N=004
 make hmb N=004

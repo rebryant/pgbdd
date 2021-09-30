@@ -1,6 +1,25 @@
 #!/usr/bin/python
 # Simple, proof-generating SAT solver based on BDDs
 
+#####################################################################################
+# Copyright (c) 2021 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+# associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+# OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+########################################################################################
+
 import sys
 import getopt
 import datetime
@@ -358,9 +377,10 @@ class Prover:
         if self.verbLevel >= 1:
             self.writer.write("Total Clauses: %d\n" % self.clauseCount)
             self.writer.write("Input clauses: %d\n" % self.inputClauseCount)
-            acount = self.clauseCount - self.inputClauseCount - self.proofCount
-            self.writer.write("Added clauses without antecedents: %d\n" % acount)
-            self.writer.write("Added clauses requiring proofs: %d\n" % (self.proofCount))
+            if self.verbLevel >= 2:
+                acount = self.clauseCount - self.inputClauseCount - self.proofCount
+                self.writer.write("Added clauses without antecedents: %d\n" % acount)
+                self.writer.write("Added clauses requiring proofs: %d\n" % (self.proofCount))
 
     def __del__(self):
         if self.opened:
@@ -656,7 +676,7 @@ class Solver:
                 self.writer.write("Equation system proved formula UNSAT\n")
                 self.equationSystem.postStatistics(status)
             else:
-                self.writer.write("UNRESOLVED.  Equation system thinks indicates formula may be SAT\n")
+                self.writer.write("UNRESOLVED.  Equation solver indicates the formula may be SAT\n")
         elif self.constraintSystem is not None:
             status = self.constraintSystem.solve()
             if status == 'failed':
@@ -665,7 +685,7 @@ class Solver:
                 self.writer.write("Constraint system proved formula UNSAT\n")
                 self.constraintSystem.postStatistics(status)
             else:
-                self.writer.write("UNRESOLVED.  Constraint system indicates formula may be SAT:\n")
+                self.writer.write("UNRESOLVED.  Constraint solver indicates the formula may be SAT:\n")
                 self.constraintSystem.show()
         
     def placeInBucket(self, buckets, id):

@@ -1,3 +1,23 @@
+#####################################################################################
+# Copyright (c) 2021 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+# associated documentation files (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge, publish, distribute,
+# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+# OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+########################################################################################
+
+
 # Support for representing pseudo Boolean formulas, either
 # as set of linear equations (possibly with modular arithmetic)
 # or set of linear constraints.
@@ -838,11 +858,11 @@ class EquationSystem:
                 break
             if self.verbose:
                 self.showState()
-        if status == "unsolvable" and delayJustification:
-            self.performJustification(laste)
         if self.verbose:
             self.writer.write("  Solution status:%s\n" % status)
             self.postStatistics(status)
+        if status == "unsolvable" and delayJustification:
+            self.performJustification(laste)
         return status
 
     def checkGC(self, newDeadCount):
@@ -875,17 +895,16 @@ class EquationSystem:
         # status: "solved", "unsolvable", "normal"
         self.writer.write("  Solution status: %s\n" % (status))
         sscount = self.stepCount
-        pavg = float(self.pivotDegreeSum)/sscount
+        pavg = float(self.pivotDegreeSum)/sscount if sscount > 0 else 0.0
         pmax = self.pivotDegreeMax
-        pecount = self.pivotEvaluationCount
-        self.writer.write("  Solving: %d steps.  %d pivot evaluations.  %.2f avg pivot degree (max=%d)\n" % (sscount, pecount, pavg, pmax))
+        self.writer.write("  Solving: %d steps.  %.2f avg pivot degree (max=%d)\n" % (sscount, pavg, pmax))
         ecount = self.rset.equationCount()
         ccount = self.combineCount
         tc = self.rset.termCount
         tmax = self.rset.termMax
-        tavg = float(tc)/ecount
+        tavg = float(tc)/ecount if ecount > 0 else 0.0
         self.writer.write("    %d total equations.  %d total nonzeros (%.2f avg, %d max).  %d vector operations\n" % (ecount, tc, tavg, tmax, ccount))
-        self.writer.write("    %d modular operations.  Used values = %s\n" % (self.mbox.opcount, self.mbox.reportUsed()))
+#        self.writer.write("    %d modular operations.  Used values = %s\n" % (self.mbox.opcount, self.mbox.reportUsed()))
 
 
 # Support for manipulating constraints of the form
