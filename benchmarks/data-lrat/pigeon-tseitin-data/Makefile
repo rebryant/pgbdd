@@ -16,6 +16,7 @@ AVERAGE = $(INTERP) ../../average_csv.py
 EXTENSION = lrat
 
 c: pigeon-tseitin-$(N)-column.data
+rc: pigeon-tseitin-$(N)-column-randomorder.data
 b: pigeon-tseitin-$(N)-bucket.data
 pb: pigeon-tseitin-$(N)-bucket-pm.data
 l: pigeon-tseitin-$(N)-linear.data
@@ -30,6 +31,15 @@ pigeon-tseitin-$(N)-column.data:
 		-p pigeon-tseitin-$(N).order -o pigeon-tseitin-$(N).$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-column.data
 	$(CHECKER) pigeon-tseitin-$(N).cnf pigeon-tseitin-$(N).$(EXTENSION) | tee -a pigeon-tseitin-$(N)-column.data
 	rm -f pigeon-tseitin-$(N).$(EXTENSION)
+
+pigeon-tseitin-$(N)-column-randomorder.data:
+	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N)-column-randomorder | tee pigeon-tseitin-$(N)-column-randomorder.data
+	$(RANDOMIZER) pigeon-tseitin-$(N)-column-randomorder.cnf $(SEED)
+	$(SOLVER) -v $(VLEVEL) -i pigeon-tseitin-$(N)-column-randomorder.cnf -s pigeon-tseitin-$(N)-column-randomorder.schedule \
+		-p pigeon-tseitin-$(N)-column-randomorder.order -o pigeon-tseitin-$(N)-column-randomorder.$(EXTENSION) 2>&1 | tee -a pigeon-tseitin-$(N)-column-randomorder.data
+	$(CHECKER) pigeon-tseitin-$(N)-column-randomorder.cnf pigeon-tseitin-$(N)-column-randomorder.$(EXTENSION) | tee -a pigeon-tseitin-$(N)-column-randomorder.data
+	rm -f pigeon-tseitin-$(N)-column-randomorder.$(EXTENSION)
+
 
 pigeon-tseitin-$(N)-bucket.data:
 	$(GENERATOR) -n $(N) -r pigeon-tseitin-$(N) | tee pigeon-tseitin-$(N)-bucket.data
@@ -90,6 +100,7 @@ data:
 	$(GRABBER) pigeon-*-bucket.data > pigeon-tseitin-bucket.csv
 	$(GRABBER) pigeon-*-bucket-pm.data > pigeon-tseitin-bucket-pm.csv
 	$(GRABBER) pigeon-*-column.data > pigeon-tseitin-column.csv
+	$(GRABBER) pigeon-*-column-randomorder.data > pigeon-tseitin-column-randomorder.csv
 	$(GRABBER) pigeon-*-linear.data > pigeon-tseitin-linear.csv
 	$(GRABBER) pigeon-*-constraint.data > pigeon-tseitin-constraint.csv
 	$(GRABBER) pigeon-*-constraint-randomorder.data > pigeon-tseitin-constraint-randomorder.csv
