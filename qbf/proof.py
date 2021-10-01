@@ -90,7 +90,6 @@ class Prover:
         self.evarQlevels = {}
         self.restrictDegeneracies = set([])
 
-
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
 
@@ -272,7 +271,7 @@ class Prover:
             lfields = [str(lit) for lit in self.clauseDict[id]]
             self.file.write('d ' + ' '.join(lfields) + ' 0\n')
             self.expungeClause(id)
-            return 
+            return
         if antecedent is None:
             antecedent = self.antecedentDict[id]
         afields = [str(a) for a in antecedent]
