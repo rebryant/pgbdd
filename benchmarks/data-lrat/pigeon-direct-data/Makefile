@@ -7,6 +7,7 @@ GDIR=../../pigeon-code
 
 AGENERATOR = $(GDIR)/pigeon-augmented
 GENERATOR = $(GDIR)/pigeonhole
+EGENERATOR = $(GDIR)/pigeon-equations
 RANDOMIZER = $(INTERP) ../../randomizer.py
 EXDIR = ../../../extractor
 EXTRACTOR = $(INTERP) $(EXDIR)/constraint_extractor.py
@@ -21,6 +22,7 @@ hmb: pigeon-direct-$(N)-hm-bucket.data
 pmb: pigeon-direct-$(N)-pm-bucket.data
 pc: pigeon-direct-$(N)-constraint.data
 rpc: pigeon-direct-$(N)-constraint-randomorder.data
+re: pigeon-direct-$(N)-equation-randomorder.data
 
 pigeon-direct-$(N)-hm-bucket.data:
 	$(AGENERATOR) -$(N) > pigeon-direct-$(N)-hm.cnf
@@ -63,6 +65,16 @@ pigeon-direct-$(N)-constraint-randomorder.data:
 	$(CHECKER) pigeon-direct-$(N)-constraint-randomorder.cnf pigeon-direct-$(N)-constraint-randomorder.$(EXTENSION) | tee -a pigeon-direct-$(N)-constraint-randomorder.data
 	rm -f pigeon-direct-$(N)-constraint-randomorder.$(EXTENSION)
 
+pigeon-direct-$(N)-equation-randomorder.data:
+	$(EGENERATOR) $(N) > pigeon-direct-$(N)-equation-randomorder.cnf
+	$(RANDOMIZER) pigeon-direct-$(N)-equation-randomorder.cnf $(SEED)
+	$(EXTRACTOR) < pigeon-direct-$(N)-equation-randomorder.cnf > pigeon-direct-$(N)-equation-randomorder.schedule
+	$(SOLVER) -v $(VLEVEL) -i pigeon-direct-$(N)-equation-randomorder.cnf -o pigeon-direct-$(N)-equation-randomorder.$(EXTENSION) \
+		-p pigeon-direct-$(N)-equation-randomorder.order \
+		-s pigeon-direct-$(N)-equation-randomorder.schedule 2>&1 | tee pigeon-direct-$(N)-equation-randomorder.data
+	$(CHECKER) pigeon-direct-$(N)-equation-randomorder.cnf pigeon-direct-$(N)-equation-randomorder.$(EXTENSION) | tee -a pigeon-direct-$(N)-equation-randomorder.data
+	rm -f pigeon-direct-$(N)-equation-randomorder.$(EXTENSION)
+
 
 data:
 	$(GRABBER) pigeon-*-hm-bucket.data > pigeon-direct-hm-bucket.csv
@@ -71,6 +83,7 @@ data:
 	$(GRABBER) pigeon-*-pm-linear.data > pigeon-direct-pm-linear.csv
 	$(GRABBER) pigeon-*-constraint.data > pigeon-direct-constraint.csv
 	$(GRABBER) pigeon-*-constraint-randomorder.data > pigeon-direct-constraint-randomorder.csv
+	$(GRABBER) pigeon-*-equation-randomorder.data > pigeon-direct-equation-randomorder.csv
 
 
 
