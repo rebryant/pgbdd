@@ -7,18 +7,18 @@ import getopt
 import sys
 import glob
 
-import util
+import xutil
 
 
 def usage(name):
-    util.ewrite("Usage: %s [-v VLEVEL] [-h] [-c] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
-    util.ewrite("  -h       Print this message\n", 0)
-    util.ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
-    util.ewrite("  -c       Careful checking of CNF\n", 0)
-    util.ewrite("  -i IFILE Single input file\n", 0)
-    util.ewrite("  -i OFILE Single output file\n", 0)
-    util.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
-    util.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
+    xutil.ewrite("Usage: %s [-v VLEVEL] [-h] [-c] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
+    xutil.ewrite("  -h       Print this message\n", 0)
+    xutil.ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
+    xutil.ewrite("  -c       Careful checking of CNF\n", 0)
+    xutil.ewrite("  -i IFILE Single input file\n", 0)
+    xutil.ewrite("  -i OFILE Single output file\n", 0)
+    xutil.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
+    xutil.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
 
 
 class Xor:
@@ -42,7 +42,7 @@ class Xor:
                 self.varMap[vars] = [idx]
             
     def getClause(self, idx):
-        if util.careful and (idx < 1 or idx > len(self.clauses)):
+        if xutil.careful and (idx < 1 or idx > len(self.clauses)):
             raise self.msgPrefix + "Invalid clause index %d.  Allowed range 1 .. %d" % (idx, len(self.clauses))
         return self.clauses[idx-1]
 
@@ -92,15 +92,15 @@ class Xor:
             if t is None:
                 unkCount += len(clist)
                 slist = [str(id) for id in idlist]
-                util.ewrite("%sCould not classify clauses [%s]\n" % (self.msgPrefix, ", ".join(slist)), 3)
-                if not util.careful:
+                xutil.ewrite("%sCould not classify clauses [%s]\n" % (self.msgPrefix, ", ".join(slist)), 3)
+                if not xutil.careful:
                     break
-                if util.verbLevel >= 4:
+                if xutil.verbLevel >= 4:
                     for id in idlist:
                         clause = self.getClause(id)
-                        util.ewrite("    Clause #%d:%s\n" % (id, str(clause)), 4)
+                        xutil.ewrite("    Clause #%d:%s\n" % (id, str(clause)), 4)
         if unkCount > 0:
-            util.ewrite("%s%d total clauses.  Failed to classify %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 2)
+            xutil.ewrite("%s%d total clauses.  Failed to classify %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 2)
             return False
         if oname is None:
             outfile = sys.stdout
@@ -108,7 +108,7 @@ class Xor:
             try:
                 outfile = open(oname, 'w')
             except:
-                util.ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 1)
+                xutil.ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 1)
                 return False
         for (idlist, t) in zip(idlists, tlist):
             slist = [str(id) for id in idlist]
@@ -121,18 +121,18 @@ class Xor:
             outfile.write("=2 %d %s\n" % (const, " ".join(stlist)))
         if oname is not None:
             outfile.close()
-        util.ewrite("%s%d equations extracted\n" % (self.msgPrefix, len(idlists)), 1)
+        xutil.ewrite("%s%d equations extracted\n" % (self.msgPrefix, len(idlists)), 1)
         return True
             
         
 def extract(iname, oname, maxclause):
     try:
-        reader = util.CnfReader(iname, maxclause = maxclause, rejectClause = None)
+        reader = xutil.CnfReader(iname, maxclause = maxclause, rejectClause = None)
         if len(reader.clauses) == 0:
-            util.ewrite("File %s contains more than %d clauses\n" % (iname, maxclause), 2)
+            xutil.ewrite("File %s contains more than %d clauses\n" % (iname, maxclause), 2)
             return False
     except Exception as ex:
-        util.ewrite("Couldn't read CNF file: %s" % str(ex), 1)
+        xutil.ewrite("Couldn't read CNF file: %s" % str(ex), 1)
         return
     xor = Xor(reader.clauses, iname)
     return xor.generate(oname)
@@ -158,17 +158,17 @@ def run(name, args):
         if opt == '-h':
             ok = False
         elif opt == '-v':
-            util.verbLevel = int(val)
+            xutil.verbLevel = int(val)
         elif opt == '-c':
-            util.careful = True
+            xutil.careful = True
         elif opt == '-i':
             iname = val
         elif opt == '-o':
             oname = val
-            util.errfile = sys.stdout
+            xutil.errfile = sys.stdout
         elif opt == '-p':
             path = val
-            util.errfile = sys.stdout
+            xutil.errfile = sys.stdout
         elif opt == '-m':
             maxclause = int(val)
     if not ok:
@@ -179,7 +179,7 @@ def run(name, args):
         sys.exit(ecode)
     else:
         if iname is not None or oname is not None:
-            util.ewrite("Cannot specify path + input or output name", 0)
+            xutil.ewrite("Cannot specify path + input or output name", 0)
             usage(name)
             sys.exit(0)
         scount = 0
@@ -188,7 +188,7 @@ def run(name, args):
             oname = replaceExtension(iname, 'schedule')
             if extract(iname, oname, maxclause):
                 scount += 1
-        util.ewrite("Extracted XOR representation of %d/%d files\n" % (scount, len(flist)), 1)
+        xutil.ewrite("Extracted XOR representation of %d/%d files\n" % (scount, len(flist)), 1)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

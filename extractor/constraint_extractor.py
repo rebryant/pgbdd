@@ -8,17 +8,17 @@ import sys
 import glob
 import queue
 
-import util
+import xutil
 
 def usage(name):
-    util.ewrite("Usage: %s [-h] [-c] [-v VLEVEL] [-i IN.cnf] [-o OUT.schedule] [-p PATH] [-m MAXCLAUSE]\n" % name, 0)
-    util.ewrite("  -h       Print this message\n", 0)
-    util.ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
-    util.ewrite("  -c       Careful checking of CNF\n", 0)
-    util.ewrite("  -i IFILE Single input file\n", 0)
-    util.ewrite("  -i OFILE Single output file\n", 0)
-    util.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
-    util.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
+    xutil.ewrite("Usage: %s [-h] [-c] [-v VLEVEL] [-i IN.cnf] [-o OUT.schedule] [-p PATH] [-m MAXCLAUSE]\n" % name, 0)
+    xutil.ewrite("  -h       Print this message\n", 0)
+    xutil.ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
+    xutil.ewrite("  -c       Careful checking of CNF\n", 0)
+    xutil.ewrite("  -i IFILE Single input file\n", 0)
+    xutil.ewrite("  -i OFILE Single output file\n", 0)
+    xutil.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
+    xutil.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
 
 
 # Constraint or equation
@@ -251,7 +251,7 @@ class ConstraintFinder:
         posvars = sorted([ var for var in polarityDict.keys() if polarityDict[var] == (True,False) ])
         if len(posvars) > 0:
             slist = [str(var) for var in posvars]
-            util.ewrite("WARNING: Variables %s only occur with positive polarity\n" % (", ".join(slist)), 3)
+            xutil.ewrite("WARNING: Variables %s only occur with positive polarity\n" % (", ".join(slist)), 3)
 
         for cid in self.clauseDict.keys():
             clause = self.clauseDict[cid]
@@ -414,12 +414,12 @@ class ConstraintFinder:
         self.find()
         ccount = len(self.clauseDict)
         if ccount > 0:
-            if util.verbLevel >= 3:
+            if xutil.verbLevel >= 3:
                 clist = sorted(self.clauseDict.keys())
                 slist = [str(c) for c in clist]
-                util.ewrite("%sCould not classify %d clauses: [%s]\n" % (self.msgPrefix, ccount, " ".join(slist)), 3)
+                xutil.ewrite("%sCould not classify %d clauses: [%s]\n" % (self.msgPrefix, ccount, " ".join(slist)), 3)
             else:
-                util.ewrite("%sCould not classify %d clauses\n" % (self.msgPrefix, ccount), 2)
+                xutil.ewrite("%sCould not classify %d clauses\n" % (self.msgPrefix, ccount), 2)
             return False
         if oname is None:
             outfile = sys.stdout
@@ -427,12 +427,12 @@ class ConstraintFinder:
             try:
                 outfile = open(oname, 'w')
             except:
-                util.ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 0)
+                xutil.ewrite("%sCouldn't open output file '%s'\n" % (self.msgPrefix, oname), 0)
                 return False
         for con in self.constraintList:
             con.generate(outfile)
         ccount = len(self.constraintList)
-        util.ewrite("%s%d formulas (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 1)
+        xutil.ewrite("%s%d constraints extracted (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 1)
         if oname is not None:
             outfile.close()
         return True
@@ -450,12 +450,12 @@ def directRejectClause(lits, cid):
 
 def extract(iname, oname, maxclause):
     try:
-        reader = util.CnfReader(iname, maxclause = maxclause, rejectClause = None)
+        reader = xutil.CnfReader(iname, maxclause = maxclause, rejectClause = None)
         if reader.reason is not None:
-            util.ewrite("File %s: Could not be classified (%s)\n" % (iname, reader.reason), 2)
+            xutil.ewrite("File %s: Could not be classified (%s)\n" % (iname, reader.reason), 2)
             return False
     except Exception as ex:
-        util.ewrite("Couldn't read CNF file: %s" % str(ex), 0)
+        xutil.ewrite("Couldn't read CNF file: %s" % str(ex), 0)
         return
     cg = ConstraintFinder(reader.clauses, iname)
     return cg.generate(oname)
@@ -481,17 +481,17 @@ def run(name, args):
         if opt == '-h':
             ok = False
         elif opt == '-v':
-            util.verbLevel = int(val)
+            xutil.verbLevel = int(val)
         elif opt == '-c':
-            util.careful = True
+            xutil.careful = True
         elif opt == '-i':
             iname = val
         elif opt == '-o':
             oname = val
-            util.errfile = sys.stdout
+            xutil.errfile = sys.stdout
         elif opt == '-p':
             path = val
-            util.errfile = sys.stdout
+            xutil.errfile = sys.stdout
         elif opt == '-m':
             maxclause = int(val)
     if not ok:
@@ -502,7 +502,7 @@ def run(name, args):
         sys.exit(ecode)
     else:
         if iname is not None or oname is not None:
-            util.ewrite("Cannot specify path + input or output name", 0)
+            xutil.ewrite("Cannot specify path + input or output name", 0)
             usage(name)
             sys.exit(0)
         scount = 0
@@ -511,7 +511,7 @@ def run(name, args):
             oname = replaceExtension(iname, 'schedule')
             if extract(iname, oname, maxclause):
                 scount += 1
-        util.ewrite("Extracted Constraint representation of %d/%d files\n" % (scount, len(flist)), 1)
+        xutil.ewrite("Extracted Constraint representation of %d/%d files\n" % (scount, len(flist)), 1)
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

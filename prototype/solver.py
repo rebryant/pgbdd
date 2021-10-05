@@ -23,6 +23,7 @@
 import sys
 import getopt
 import datetime
+import random
 
 import bdd
 import resolver
@@ -33,11 +34,12 @@ import pseudoboolean
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-r SEED] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -b          Process terms via bucket elimination ordered by variable levels\n")
     sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
+    sys.stderr.write("  -r SEED     Set random seed (for breaking ties during pivot selection)\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
     sys.stderr.write("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)\n")
     sys.stderr.write("  -M (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
@@ -855,7 +857,7 @@ def run(name, args):
     logName = None
     modulus = pseudoboolean.modulusAuto
 
-    optlist, args = getopt.getopt(args, "hbB:v:i:o:M:p:s:m:L:")
+    optlist, args = getopt.getopt(args, "hbB:v:r:i:o:M:p:s:m:L:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -868,6 +870,8 @@ def run(name, args):
                 return
         elif opt == '-v':
             verbLevel = int(val)
+        elif opt == '-r':
+            random.seed(int(val))
         elif opt == '-i':
             cnfName = val
         elif opt == '-o':
