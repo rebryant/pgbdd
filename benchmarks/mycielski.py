@@ -29,15 +29,15 @@ class Graph:
         title = "Graph:" if self.name is None else "Graph %s:" % self.name
         cwriter.doComment("%s %d nodes. %d edges. %d colors" % (title, self.vertexCount, len(self.edgeList), k))
         cwriter.doComment("At least one constraint for variables associated with each variable")
-        for vidx in range(self.vertexCount):
-            start = vidx*k + 1
+        for v in range(1,self.vertexCount+1):
+            start = (v-1)*k + 1
             lits = [i + start for i in range(k)]
             cwriter.doClause(lits)
         cwriter.doComment("At most one constraint for corresponding pair of color variables for each edge")
         for e in self.edgeList:
             (s,t) = e
-            starts = s*k + 1
-            startt = t*k + 1
+            starts = (s-1)*k + 1
+            startt = (t-1)*k + 1
             for i in range(k):
                 cwriter.doClause([-(starts+i), -(startt+i)])
         cwriter.finish()

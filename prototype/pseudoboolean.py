@@ -1343,9 +1343,9 @@ class ConstraintSystem:
         posIndices = [cid for cid in cidList if self.rset[cid][pidx] > 0]
         negIndices = [cid for cid in cidList if self.rset[cid][pidx] < 0]
         values = [self.rset[cid][pidx] for cid in cidList]
-        oobValues = [v for v in values if abs(v) > 1]
-        if len(oobValues) > 0:
-            raise FourierMotzinException(oobValues)
+#        oobValues = [v for v in values if abs(v) > 1]
+#        if len(oobValues) > 0:
+#            raise FourierMotzinException(oobValues)
 
         if self.verbose:
             self.writer.write("Pivoting at element %d.  %d positive, %d negative constraints\n" % (pidx, len(posIndices), len(negIndices)))

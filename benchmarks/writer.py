@@ -91,6 +91,10 @@ class CnfWriter(Writer):
         self.outputList.append("c " + line)
 
     def doClause(self, literals):
+        for lit in literals:
+            var = abs(lit)
+            if var <= 0 or var > self.expectedVariableCount:
+                raise WriterException("Variable %d out of range 1--%d" % (var, self.expectedVariableCount))
         ilist = literals + [0]
         self.outputList.append(" ".join([str(i) for i in ilist]))
         self.clauseCount += 1
