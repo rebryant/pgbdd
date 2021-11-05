@@ -247,8 +247,6 @@ class Profiler:
             count = self.signatureDict[sig]
             self.prover.writer.write("%s %s %d\n" % (self.prefix, sig, count))        
         
-    
-
 class VResolver:
     prover = None
     rule1Names = []
@@ -261,7 +259,6 @@ class VResolver:
     # Should we just enumerate last few possibilities, 
     # or try to fully determine how to perform handle each chain?
     # 2020-09-14: Must enumerate to ensure testing for shorter proofs
-    enumerate = True
     
     def __init__(self, prover, rule1Names, rule2Names):
         self.prover = prover
@@ -279,32 +276,12 @@ class VResolver:
 
     def run(self, targetClause, ruleIndex, comment):
         self.cleanIndex(ruleIndex)
-        if self.enumerate:
-            return self.runSet(targetClause, ruleIndex, comment)
-        else:
-            return self.runSingle(targetClause, ruleIndex, comment)
+        return self.runSet(targetClause, ruleIndex, comment)
 
     def cleanIndex(self, ruleIndex):
         for k in list(ruleIndex.keys()):
             if ruleIndex[k] == tautologyId:
                 del ruleIndex[k]
-
-    def runSingle(self, targetClause, ruleIndex, comment):
-        self.runCount += 1
-        pair1 = self.buildChain(self.rule1Names, ruleIndex)
-        pair2 = self.buildChain(self.rule2Names, ruleIndex)
-        (r1, a1) = pair1
-        (r2, a2) = pair2
-        r = resolveClauses(r1, r2)
-        self.tryCount += 1
-        if r is None:
-            msg = "Could not justify clause %s.  Could not resolve r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r1), showClause(r2))
-            raise ResolveException(msg)
-        if not testClauseSubset(r, targetClause):
-            msg = "Could not justify clause %s.  Got resolvent %s from r1 = %s and r2 = %s)" % (showClause(targetClause), showClause(r), showClause(r1), showClause(r2))
-            raise ResolveException(msg)
-
-        return self.generateProof(r, r1, a1, r2, a2, comment)
 
     def runSet(self, targetClause, ruleIndex, comment):
         self.runCount += 1
@@ -334,27 +311,6 @@ class VResolver:
     # This version will be overloaded by operation-specific ones
     def filterClauses(self, idList, ruleIndex):
         return idList[0]
-
-    # Build chain of clauses for resolution proof
-    def buildChain(self, ruleNames, ruleIndex):
-        clauseDict = self.prover.clauseDict
-        chain = []
-        for n in ruleNames:
-            if n in ruleIndex:
-                chain.append(ruleIndex[n])
-        if len(chain) == 0:
-            msg = "No applicable rules in chain (rule index = %s)." % (self.showRules(ruleIndex))
-            raise ResolveException(msg)
-        if len(chain) == 1:
-            id = chain[0]
-            pair = (clauseDict[id], [id])
-        else:
-            pair = chainResolve(chain, clauseDict)
-            if pair is None:
-                id = self.filterClauses(chain, ruleIndex)
-                pair = (clauseDict[id], [id])
-        self.profiler.profile(chain, pair, ruleIndex)
-        return pair
 
     # Build chain of clauses for resolution proof
     def buildChainSet(self, ruleNames, ruleIndex):
@@ -414,7 +370,6 @@ class VResolver:
             tryAvg = float(self.tryCount) / float(self.runCount)
             self.prover.writer.write("  Avg antecedents / proof = %.2f.  Avg clauses / proof = %.2f.  Avg tries / proof = %.2f\n" % (antecedentAvg, clauseAvg, tryAvg))
             self.profiler.summarize()
-
 
 class AndResolver(VResolver):
 
