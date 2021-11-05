@@ -460,7 +460,7 @@ def run(name, args):
         print("Must have root name")
         usage(name)
         return
-    b = Board(n, rootName, verbose, seed, includeCorners, wrapHorizontal, wrapVertical, pseudoType, clauseOnly)
+    b = Board(n, rootName, verbose, includeCorners, seed, wrapHorizontal, wrapVertical, pseudoType, clauseOnly)
     b.build()
     b.finish()
 
