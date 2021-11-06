@@ -42,8 +42,6 @@ ns: chess-$(N)-noschedule.data
 
 b: chess-$(N)-bucket.data
 
-gb: chess-$(N)-gbucket.data
-
 chess-$(N)-column.data:
 	$(GENERATOR) -n $(N) -r chess-$(N)-column | tee chess-$(N)-column.data
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-column.cnf -s chess-$(N)-column.schedule \
@@ -99,7 +97,7 @@ chess-$(N)-equation-auto-randomorder.data:
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation-auto-randomorder.cnf -s chess-$(N)-equation-auto-randomorder.schedule -m a \
 		-p chess-$(N)-equation-auto-randomorder.order -o chess-$(N)-equation-auto-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-auto-randomorder.data
 	$(CHECKER) chess-$(N)-equation-auto-randomorder.cnf chess-$(N)-equation-auto-randomorder.$(EXTENSION) | tee -a chess-$(N)-equation-auto-randomorder.data
-	rm -f chess-$(N)-equation-mod3-randomorder.$(EXTENSION)
+	rm -f chess-$(N)-equation-auto-randomorder.$(EXTENSION)
 
 chess-$(N)-equation-integer-randomorder.data:
 	$(GENERATOR) -C -n $(N) -r chess-$(N)-equation-integer-randomorder -p e | tee chess-$(N)-equation-integer-randomorder.data
@@ -156,14 +154,6 @@ chess-$(N)-bucket.data:
 		-p chess-$(N)-bucket.order -o chess-$(N)-bucket.$(EXTENSION) 2>&1 | tee -a chess-$(N)-bucket.data
 	$(CHECKER) chess-$(N)-bucket.cnf chess-$(N)-bucket.$(EXTENSION) | tee -a chess-$(N)-bucket.data
 	rm -f chess-$(N)-bucket.$(EXTENSION)
-
-chess-$(N)-gbucket.data:
-	$(GENERATOR) -n $(N) -r chess-$(N)-gbucket | tee chess-$(N)-gbucket.data
-	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-gbucket.cnf -B chess-$(N)-gbucket.buckets \
-		-p chess-$(N)-gbucket.order -o chess-$(N)-gbucket.$(EXTENSION) 2>&1 | tee -a chess-$(N)-gbucket.data
-	$(CHECKER) chess-$(N)-gbucket.cnf chess-$(N)-gbucket.$(EXTENSION) | tee -a chess-$(N)-gbucket.data
-	rm -f chess-$(N)-gbucket.$(EXTENSION)
-
 
 data:
 	$(GRABBER) chess-*-column.data > chess-column.csv
