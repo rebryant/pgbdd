@@ -187,33 +187,28 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        cl = resolver.cleanClause([id, -vid, -hid])
-        return [] if cl == -resolver.tautologyId else cl
+        return resolver.cleanClause([id, -vid, -hid])
 
     def clauseLU(self):
         id = self.id
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        cl = resolver.cleanClause([id, vid, -lid])
-        return [] if cl == -resolver.tautologyId else cl
+        return resolver.cleanClause([id, vid, -lid])
 
     def clauseHD(self):
         id = self.id
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        cl = resolver.cleanClause([-id, -vid, hid])
-        return [] if cl == -resolver.tautologyId else cl
+        return resolver.cleanClause([-id, -vid, hid])
 
     def clauseLD(self):
         id = self.id
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        cl = resolver.cleanClause([-id, vid, lid])
-        return [] if cl == -resolver.tautologyId else cl
-
+        return resolver.cleanClause([-id, vid, lid])
 
     def idHU(self):
         return resolver.tautologyId if self.tautologies[self.HU] else self.definingClauseBase + self.HU

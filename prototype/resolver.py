@@ -43,9 +43,7 @@ def cleanClause(literalList):
             return tautologyId
         else:
             slist = slist[1:]
-    if len(slist) == 0:
-        return -tautologyId
-    elif len(slist) == 1:
+    if len(slist) <= 1:
         return slist
     else:
         nlist = [slist[0]]
