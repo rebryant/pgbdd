@@ -231,7 +231,8 @@ class Manager:
     # Mapping from (variable, high, low) to node
     uniqueTable = {}
     # Operation cache
-    # Key = (opName, operand1 ...) to (node, justification, clauseList)
+    # Key = (opName, operand1 ...) to (node, justification)
+    # Hack: justification is negative when preceding clause was generated as intermediate step
     operationCache = {}
     verbLevel = 1
     andResolver = None
@@ -450,6 +451,12 @@ class Manager:
                 break
         return stringList
 
+    # Retrieve item from cache.  Return None if not found
+    def operationRetrieve(self, key):
+        if key in self.operationCache:
+            entry = self.operationCache[key]
+            return (entry[0], abs(entry[1]))
+        return None
      
 
     # Return node + id of clause justifying that nodeA & NodeB ==> result
@@ -470,8 +477,9 @@ class Manager:
         if nodeA.id > nodeB.id:
             nodeA, nodeB = nodeB, nodeA
         key = ("and", nodeA.id, nodeB.id)
-        if key in self.operationCache:
-            return self.operationCache[key][:2]
+        lookup = self.operationRetrieve(key)
+        if lookup is not None:
+            return lookup
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
@@ -504,50 +512,13 @@ class Manager:
 
         targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, newNode.id])
         if targetClause == resolver.tautologyId:
-            justification, clauseList = resolver.tautologyId, []
+            justification = resolver.tautologyId
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification, clauseList = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
-        self.operationCache[key] = (newNode, justification,clauseList)
+            justification = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
+        self.operationCache[key] = (newNode, justification)
         self.cacheJustifyAdded += 1
-        return (newNode, justification)
-
-    # Version that runs without generating justification
-    def applyAnd(self, nodeA, nodeB):
-        self.applyCount += 1
-        # Constant cases.
-        if nodeA == self.leaf0 or nodeB == self.leaf0:
-            return self.leaf0
-        if nodeA == self.leaf1:
-            return nodeB
-        if nodeB == self.leaf1:
-            return nodeA
-        if nodeA == nodeB:
-            return nodeA
-
-        if nodeA.id > nodeB.id:
-            nodeA, nodeB = nodeB, nodeA
-        key = ("andnj", nodeA.id, nodeB.id)
-        if key in self.operationCache:
-            return self.operationCache[key]
-
-        # Mapping from variable names to variable numbers
-        splitVar = min(nodeA.variable, nodeB.variable)
-        highA = nodeA.branchHigh(splitVar)
-        lowA =  nodeA.branchLow(splitVar)
-        highB = nodeB.branchHigh(splitVar) 
-        lowB =  nodeB.branchLow(splitVar)
-
-        newHigh = self.applyAnd(highA, highB)
-        newLow  = self.applyAnd(lowA, lowB)
-
-        if newHigh == newLow:
-            newNode = newHigh
-        else:
-            newNode = self.findOrMake(splitVar, newHigh, newLow)
-
-        self.operationCache[key] = newNode
-        return newNode
+        return (newNode, abs(justification))
 
     def applyNot(self, node):
         # Constant case
@@ -564,74 +535,9 @@ class Manager:
         newHigh = self.applyNot(high)
         newLow = self.applyNot(low)
         newNode = self.findOrMake(var, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId,[])
-        self.cacheNoJustifyAdded += 1
-        return newNode
+        self.operationCache[key] = (newNode, resolver.tautologyId)
+        return (newNode, resolver.TautologyId)
 
-    def applyOr(self, nodeA, nodeB):
-        # Constant cases
-        if nodeA == self.leaf1:
-            return self.leaf1
-        if nodeB == self.leaf1:
-            return self.leaf1
-        if nodeA == self.leaf0:
-            return nodeB
-        if nodeB == self.leaf0:
-            return nodeA
-        if nodeA == nodeB:
-            return nodeA
-        if nodeA.id > nodeB.id:
-            nodeA, nodeB = nodeB, nodeA
-
-        key = ("or", nodeA.id, nodeB.id)
-        if key in self.operationCache:
-            return self.operationCache[key][0]
-
-        splitVar = min(nodeA.variable, nodeB.variable)  
-        highA = nodeA.branchHigh(splitVar)
-        lowA =  nodeA.branchLow(splitVar)
-        highB = nodeB.branchHigh(splitVar) 
-        lowB =  nodeB.branchLow(splitVar)
-
-        newHigh = self.applyOr(highA, highB)
-        newLow = self.applyOr(lowA, lowB)
-        newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId,[])
-        self.cacheNoJustifyAdded += 1
-        return newNode
-
-    def applyXor(self, nodeA, nodeB):
-        # Constant cases
-        if nodeA == self.leaf1:
-            return self.applyNot(nodeB)
-        if nodeB == self.leaf1:
-            return self.applyNot(nodeA)
-        if nodeA == self.leaf0:
-            return nodeB
-        if nodeB == self.leaf0:
-            return nodeA
-        if nodeA == nodeB:
-            return self.leaf0
-        if nodeA.id > nodeB.id:
-            nodeA, nodeB = nodeB, nodeA
-
-        key = ("xor", nodeA.id, nodeB.id)
-        if key in self.operationCache:
-            return self.operationCache[key][0]
-
-        splitVar = min(nodeA.variable, nodeB.variable)  
-        highA = nodeA.branchHigh(splitVar)
-        lowA =  nodeA.branchLow(splitVar)
-        highB = nodeB.branchHigh(splitVar) 
-        lowB =  nodeB.branchLow(splitVar)
-
-        newHigh = self.applyXor(highA, highB)
-        newLow = self.applyXor(lowA, lowB)
-        newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId,[])
-        self.cacheNoJustifyAdded += 1
-        return newNode
-    
     def justifyImply(self, nodeA, nodeB):
         self.applyCount += 1
 
@@ -649,8 +555,9 @@ class Manager:
             return (False, resolver.tautologyId)
 
         key = ("imply", nodeA.id, nodeB.id)
-        if key in self.operationCache:
-            return self.operationCache[key][:2]
+        lookup = self.operationRetrieve(key)
+        if lookup is not None:
+            return lookup
 
         ruleIndex = { }
         splitVar = min(nodeA.variable, nodeB.variable)  
@@ -677,16 +584,16 @@ class Manager:
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
             comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-            justification, clauseList = self.implyResolver.run(targetClause, splitVar.id, ruleIndex, comment)
+            justification = self.implyResolver.run(targetClause, splitVar.id, ruleIndex, comment)
         else:
-            justification, clauseList = resolver.tautologyId, []
+            justification = resolver.tautologyId
 
-        self.operationCache[key] = (check, justification, clauseList)
+        self.operationCache[key] = (check, justification)
         if justification != resolver.tautologyId:
             self.cacheJustifyAdded += 1
         else:
             self.cacheNoJustifyAdded += 1
-        return (check, justification)
+        return (check, abs(justification))
 
     def checkImply(self, nodeA, nodeB):
         check, justification = justifyImply(nodeA, nodeB)
@@ -715,8 +622,9 @@ class Manager:
             # Commute arguments
             nodeA, nodeB = nodeB, nodeA
         key = ("andimply", nodeA.id, nodeB.id, nodeC.id)
-        if key in self.operationCache:
-            return self.operationCache[key][:2]
+        lookup = self.operationRetrieve(key)
+        if lookup is not None:
+            return lookup
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
@@ -751,22 +659,91 @@ class Manager:
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, nodeC.id])
             if targetClause == resolver.tautologyId:
-                justification, clauseList = resolver.tautologyId, []
+                justification = resolver.tautologyId
             else:
                 comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
-                justification, clauseList = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
+                justification = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
         else:
-            justification, clauseList = resolver.tautologyId, []
+            justification = resolver.tautologyId, []
 
-
-        self.operationCache[key] = (check, justification, clauseList)
+        self.operationCache[key] = (check, justification)
         if justification != resolver.tautologyId:
             self.cacheJustifyAdded += 1
         else:
             self.cacheNoJustifyAdded += 1
-        return (check, justification)
+        return (check, abs(justification))
 
       
+    # Version that runs without generating justification
+    def applyAnd(self, nodeA, nodeB):
+        self.applyCount += 1
+        # Constant cases.
+        if nodeA == self.leaf0 or nodeB == self.leaf0:
+            return self.leaf0
+        if nodeA == self.leaf1:
+            return nodeB
+        if nodeB == self.leaf1:
+            return nodeA
+        if nodeA == nodeB:
+            return nodeA
+
+        if nodeA.id > nodeB.id:
+            nodeA, nodeB = nodeB, nodeA
+        key = ("andnj", nodeA.id, nodeB.id)
+        if key in self.operationCache:
+            return self.operationCache[key][0]
+
+        # Mapping from variable names to variable numbers
+        splitVar = min(nodeA.variable, nodeB.variable)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+
+        newHigh = self.applyAnd(highA, highB)
+        newLow  = self.applyAnd(lowA, lowB)
+
+        if newHigh == newLow:
+            newNode = newHigh
+        else:
+            newNode = self.findOrMake(splitVar, newHigh, newLow)
+
+        self.operationCache[key] = (newNode,resolver.tautologyId)
+        return newNode
+
+
+    def applyOr(self, nodeA, nodeB):
+        # Constant cases
+        if nodeA == self.leaf1:
+            return self.leaf1
+        if nodeB == self.leaf1:
+            return self.leaf1
+        if nodeA == self.leaf0:
+            return nodeB
+        if nodeB == self.leaf0:
+            return nodeA
+        if nodeA == nodeB:
+            return nodeA
+        if nodeA.id > nodeB.id:
+            nodeA, nodeB = nodeB, nodeA
+        key = ("or", nodeA.id, nodeB.id)
+        if key in self.operationCache:
+            return self.operationCache[key][0]
+
+        splitVar = min(nodeA.variable, nodeB.variable)  
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+
+        newHigh = self.applyOr(highA, highB)
+        newLow = self.applyOr(lowA, lowB)
+        newNode = newHigh if newHigh == newLow else self.findOrMake(splitVar, newHigh, newLow)
+        self.operationCache[key] = (newNode,resolver.tautologyId)
+        self.cacheNoJustifyAdded += 1
+        return newNode
+
+
     # Given list of nodes, perform reduction operator (and, or, xor)
     def reduceList(self, nodeList, operator, emptyValue):
         fun = emptyValue
@@ -799,7 +776,7 @@ class Manager:
         else:
             quant = node.variable == clause.variable
             newNode = self.applyOr(newHigh, newLow) if quant else self.findOrMake(node.variable, newHigh, newLow)
-        self.operationCache[key] = (newNode, resolver.tautologyId,[])
+        self.operationCache[key] = (newNode, resolver.tautologyId)
         self.cacheNoJustifyAdded += 1
         return newNode
             
@@ -840,8 +817,10 @@ class Manager:
             for id in k[1:]:
                 kill = kill or id not in markedIds
             if kill:
-                clist = self.operationCache[k][2]
-                clauseList += clist
+                cid = self.operationCache[k][1]
+                if abs(cid) != resolver.tautologyId:
+                    clist = [cid] if cid > 0 else [-cid-1, -cid]
+                    clauseList += clist
                 self.cacheRemoved += 1
                 del self.operationCache[k]
         return clauseList

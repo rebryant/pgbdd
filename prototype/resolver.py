@@ -119,7 +119,7 @@ class VResolver:
             alist = self.RupCheck(targ, idList)
             if alist is not None:
                 id = self.generateProofStep(targ, alist, comment)
-                return id, [id]
+                return id
 
         if self.rule2Key not in ruleIndex:
             # Try for single line proof
@@ -134,7 +134,7 @@ class VResolver:
             alist = self.RupCheck(targ, idList)
             if alist is not None:
                 id = self.generateProofStep(targ, alist, comment)
-                return id, [id]
+                return id
             
         if True:
             # Must split into two-line proof
@@ -160,7 +160,7 @@ class VResolver:
                 raise ResolveException("Couldn't prove final target: %s using candidates %s" % (str(targ), str(clist)))
             else:
                 id = self.generateProofStep(targ, alist, None)
-                return id, [id1, id]
+                return -id
     
     def generateProofStep(self, target, antecedents, comment):
         self.prover.proofCount += 1
