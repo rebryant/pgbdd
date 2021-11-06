@@ -507,7 +507,7 @@ class Manager:
             justification, clauseList = resolver.tautologyId, []
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification, clauseList = self.andResolver.run(targetClause, ruleIndex, comment)
+            justification, clauseList = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification,clauseList)
         self.cacheJustifyAdded += 1
         return (newNode, justification)
@@ -677,7 +677,7 @@ class Manager:
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
             comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-            justification, clauseList = self.implyResolver.run(targetClause, ruleIndex, comment)
+            justification, clauseList = self.implyResolver.run(targetClause, splitVar.id, ruleIndex, comment)
         else:
             justification, clauseList = resolver.tautologyId, []
 
@@ -754,7 +754,7 @@ class Manager:
                 justification, clauseList = resolver.tautologyId, []
             else:
                 comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
-                justification, clauseList = self.andResolver.run(targetClause, ruleIndex, comment)
+                justification, clauseList = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
         else:
             justification, clauseList = resolver.tautologyId, []
 
