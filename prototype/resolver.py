@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 #####################################################################################
 # Copyright (c) 2021 Marijn Heule, Randal E. Bryant, Carnegie Mellon University
 # 
@@ -20,14 +18,11 @@
 ########################################################################################
 
 
-import datetime
-import sys
-
 # Resolution engine tailored to generating proofs 
 # having a "V" structure, consisting of two linear chains merging together
 
 # Special value to represent true/tautology
-# It's negation represents false/invalid
+# Its negation represents false/invalid
 tautologyId = 1000 * 1000 * 1000
 
 # Clean up clause.
@@ -59,9 +54,6 @@ def cleanClause(literalList):
                 return tautologyId
             nlist.append(slist[i])
         return nlist
-
-def regularClause(clause):
-    return clause is not None and clause != tautologyId and clause != -tautologyId
 
 def showClause(clause):
     if clause is None:
@@ -211,10 +203,7 @@ class VResolver:
             alist = self.RupCheck(targ, idList)
             if alist is None:
                 clist = [str(key) for key in idList]
-                id = self.generateProofStep(targ, [], 
-                                            comment + 
-                                            ".\nc Couldn't prove positive target: %s using candidates %s" % (str(targ), str(clist)))
-                return id, [id]
+                raise ResolveException("Couldn't prove positive target: %s using candidates %s" % (str(targ), str(clist)))
             else:
                 id1 = self.generateProofStep(targ, alist, comment)
             targ = targetClause
@@ -225,9 +214,7 @@ class VResolver:
             alist = self.RupCheck(targ, idList)
             if alist is None:
                 clist = [key + ":" + str(ruleIndex[key]) for key in idList]
-                id = self.generateProofStep(targ, [],
-                                            "Couldn't prove final target: %s using candidates %s" % (str(targ), str(clist)))
-                return id, [id1, id]
+                raise ResolveException("Couldn't prove final target: %s using candidates %s" % (str(targ), str(clist)))
             else:
                 id = self.generateProofStep(targ, alist, None)
                 return id, [id1, id]
