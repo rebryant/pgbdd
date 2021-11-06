@@ -330,10 +330,10 @@ class Prover:
             self.file.write("c " + comment + '\n')
 
     def createClause(self, result, antecedent, comment = None, isInput = False):
-        self.comment(comment)
         result = resolver.cleanClause(result)
         if result == resolver.tautologyId:
             return result
+        self.comment(comment)
         if result == -resolver.tautologyId:
             result = []
         self.clauseCount += 1
