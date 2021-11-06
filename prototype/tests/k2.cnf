@@ -1,0 +1,13 @@
+c Test case where u0 = v1 = 0
+c Variables: 1:a, 2:b, 3:u, 4:v
+c u = a & b
+p cnf 4 8 
+-1 -2 3 0
+1 -3 0
+2 -3 0
+3 0
+c v = ~a & b
+1 -2 4 0
+-1 -4 0
+2 -4 0
+4 0
