@@ -331,8 +331,9 @@ class Prover:
         if self.verbLevel > 1 and comment is not None and not self.doBinary:
             self.file.write("c " + comment + '\n')
 
-    def createClause(self, result, antecedent, comment = None, isInput = False):
-        result = resolver.cleanClause(result)
+    def createClause(self, result, antecedent, comment = None, isInput = False, alreadyClean = False):
+        if not alreadyClean:
+            result = resolver.cleanClause(result)
         self.lastClauseId += 1
         cid = self.lastClauseId
         if result == resolver.tautologyId:

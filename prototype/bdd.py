@@ -153,27 +153,27 @@ class VariableNode(Node):
             mld = None
             
         antecedents = []
-        huid = prover.createClause(self.clauseHU(), [], mhu)
+        huid = prover.createClause(self.clauseHU(), [], mhu, alreadyClean = True)
         if huid != resolver.tautologyId:
             self.tautologies[self.HU] = False
             antecedents.append(-huid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = huid - self.HU
         
-        luid = prover.createClause(self.clauseLU(), [], mlu)
+        luid = prover.createClause(self.clauseLU(), [], mlu, alreadyClean = True)
         if luid != resolver.tautologyId:
             self.tautologies[self.LU] = False
             antecedents.append(-luid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = luid - self.LU
 
-        hdid = prover.createClause(self.clauseHD(), antecedents, mhd)
+        hdid = prover.createClause(self.clauseHD(), antecedents, mhd, alreadyClean = True)
         if hdid != resolver.tautologyId:
             self.tautologies[self.HD] = False
             if self.definingClauseBase == 0:
                 self.definingClauseBase = hdid - self.HD
 
-        ldid = prover.createClause(self.clauseLD(), antecedents, mld)
+        ldid = prover.createClause(self.clauseLD(), antecedents, mld, alreadyClean = True)
         if ldid != resolver.tautologyId:
             self.tautologies[self.LD] = False
             if self.definingClauseBase == 0:
