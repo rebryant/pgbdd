@@ -274,7 +274,7 @@ class VResolver:
         rlist = ["%s:%d" % (k, ruleIndex[k]) for k in ruleIndex.keys() if ruleIndex[k] != tautologyId]
         return "[" + ", ".join(rlist) + "]"
 
-    def run(self, targetClause, ruleIndex, comment):
+    def run(self, targetClause, splitVariable, ruleIndex, comment):
         self.cleanIndex(ruleIndex)
         return self.runSet(targetClause, ruleIndex, comment)
 
@@ -370,38 +370,6 @@ class VResolver:
             tryAvg = float(self.tryCount) / float(self.runCount)
             self.prover.writer.write("  Avg antecedents / proof = %.2f.  Avg clauses / proof = %.2f.  Avg tries / proof = %.2f\n" % (antecedentAvg, clauseAvg, tryAvg))
             self.profiler.summarize()
-
-    # Given list of possible antecedent IDs, see if can justify target clause
-    # If so, return modified version of clause Ids containing those involved in propagation
-    def RupCheck(self, targetClause, clauseIdList):
-        clauseDict = self.prover.clauseDict
-        units = [-lit for lit in targetClause]
-        relevantIdList = []
-        for id in clauseIdList:
-            clause = clauseDict[id]
-            idx = 0
-            while idx < len(clause):
-                lit = clause[idx]
-                if -lit in units:
-                    if len(clause) == 1:
-                        # Conflict detected
-                        relevantIdList.append(id)
-                        return relevantIdList
-                    # Remove lit from clause by swapping in last one
-                    clause[idx] = clause[-1]
-                    clause = clause[:-1]
-                elif lit in units:
-                    # Clause becomes a tautology.  Not useful anymore
-                    break
-                idx += 1
-            if (len(clause) == 1):
-                # Unit propagation
-                units.append(clause[0])
-                relevantIdList.append(id)
-        # Reverse unit propagation failed
-        return None
-
-            
 
 class AndResolver(VResolver):
 
