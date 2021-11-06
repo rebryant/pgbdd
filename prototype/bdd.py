@@ -32,35 +32,6 @@ class BddException(Exception):
     def __str__(self):
         return "BDD Exception: " + str(self.value)
 
-# Place holder to allow program to run without proving anything
-class DummyProver:
-
-    doLrat = False
-    clauseCount = 0
-    writer = None
-
-    def __init__(self, fname = None):
-        self.clauseCount = 0
-        self.writer = sys.stderr
-
-    def comment(self, comment):
-        pass
-
-    def createClause(self, result, antecedent, comment = None):
-        result = resolver.cleanClause(result)
-        if result == resolver.tautologyId:
-            return result
-        self.clauseCount += 1
-        return self.clauseCount
-
-    def emitProof(self, proof, ruleIndex, comment = None):
-        self.clauseCount += 1
-        return self.clauseCount
-
-    def fileOutput(self):
-        return False
-
-
 @total_ordering
 class Variable:
     name = None
@@ -182,36 +153,67 @@ class VariableNode(Node):
             mld = None
             
         antecedents = []
-        huid = prover.createClause([id, -vid, -hid], [], mhu)
+        huid = prover.createClause(self.clauseHU(), [], mhu)
         if huid != resolver.tautologyId:
             self.tautologies[self.HU] = False
             antecedents.append(-huid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = huid - self.HU
         
-        luid = prover.createClause([id, vid, -lid], [], mlu)
+        luid = prover.createClause(self.clauseLU(), [], mlu)
         if luid != resolver.tautologyId:
             self.tautologies[self.LU] = False
             antecedents.append(-luid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = luid - self.LU
 
-        hdid = prover.createClause([-id, -vid, hid], antecedents, mhd)
+        hdid = prover.createClause(self.clauseHD(), antecedents, mhd)
         if hdid != resolver.tautologyId:
             self.tautologies[self.HD] = False
             if self.definingClauseBase == 0:
                 self.definingClauseBase = hdid - self.HD
 
-        ldid = prover.createClause([-id, vid, lid], antecedents, mld)
+        ldid = prover.createClause(self.clauseLD(), antecedents, mld)
         if ldid != resolver.tautologyId:
             self.tautologies[self.LD] = False
             if self.definingClauseBase == 0:
                 self.definingClauseBase = ldid - self.LD
-
-
     
     def isLeaf(self):
         return False
+
+    def clauseHU(self):
+        id = self.id
+        vid = self.variable.id
+        hid = self.high.id
+        lid = self.low.id
+        cl = resolver.cleanClause([id, -vid, -hid])
+        return [] if cl == -resolver.tautologyId else cl
+
+    def clauseLU(self):
+        id = self.id
+        vid = self.variable.id
+        hid = self.high.id
+        lid = self.low.id
+        cl = resolver.cleanClause([id, vid, -lid])
+        return [] if cl == -resolver.tautologyId else cl
+
+    def clauseHD(self):
+        id = self.id
+        vid = self.variable.id
+        hid = self.high.id
+        lid = self.low.id
+        cl = resolver.cleanClause([-id, -vid, hid])
+        return [] if cl == -resolver.tautologyId else cl
+
+    def clauseLD(self):
+        id = self.id
+        vid = self.variable.id
+        hid = self.high.id
+        lid = self.low.id
+        cl = resolver.cleanClause([-id, vid, lid])
+        return [] if cl == -resolver.tautologyId else cl
+
 
     def idHU(self):
         return resolver.tautologyId if self.tautologies[self.HU] else self.definingClauseBase + self.HU

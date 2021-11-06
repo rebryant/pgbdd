@@ -31,6 +31,8 @@ tautologyId = 1000 * 1000 * 1000
 # Make sure that literal with highest-numbered variable stays at front
 # (by sorting in reverse order of literal number)
 def cleanClause(literalList):
+    if literalList == tautologyId:
+        return literalList
     slist = sorted(literalList, key = lambda v: -abs(v))
     while len(slist) > 0:
         # Tautology and Null will be in front
