@@ -292,6 +292,7 @@ class Prover:
 
     inputClauseCount = 0
     clauseCount = 0
+    lastClauseId = 0
     proofCount = 0
     file = None
     writer = None
@@ -316,6 +317,7 @@ class Prover:
         self.doLrat = doLrat
         self.doBinary = doBinary
         self.clauseCount = 0
+        self.lastClauseId = 0
         self.proofCount = 0
         self.clauseDict = {}
 
@@ -331,18 +333,20 @@ class Prover:
 
     def createClause(self, result, antecedent, comment = None, isInput = False):
         result = resolver.cleanClause(result)
+        self.lastClauseId += 1
+        cid = self.lastClauseId
         if result == resolver.tautologyId:
             return result
+        self.clauseCount += 1
         self.comment(comment)
         if result == -resolver.tautologyId:
             result = []
-        self.clauseCount += 1
         antecedent = list(antecedent)
         if not self.doLrat:
             antecedent.sort()
         middle = [ord('a')] if self.doBinary else []
         rest = result + [0] + antecedent + [0]
-        ilist = [self.clauseCount] + middle + rest
+        ilist = [cid] + middle + rest
         if self.doBinary:
             if isInput and self.doLrat:
                 pass
@@ -356,8 +360,8 @@ class Prover:
                 self.comment(istring)
             else:
                 self.file.write(istring + '\n')
-        self.clauseDict[self.clauseCount] = result
-        return self.clauseCount
+        self.clauseDict[cid] = result
+        return cid
 
     def deleteClauses(self, clauseList):
         for id in clauseList:
