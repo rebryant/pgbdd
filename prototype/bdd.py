@@ -152,13 +152,13 @@ class LeafNode(Node):
 
 
 class VariableNode(Node):
+    # Defining clause types
+    (HU, LU, HD, LD) = range(4)
     high = None
     low = None
     # Identity of clauses generated from node
-    inferTrueUp = None
-    inferFalseUp = None
-    inferTrueDown = None
-    inferTrueDown = None
+    definingClauseBase = 0
+    tautologies = [True, True, True, True]
     
     def __init__(self, id, variable, high, low, prover):
         Node.__init__(self, id, variable)
@@ -167,6 +167,7 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
+        self.tautologies = [True, True, True, True]
         # id should be first literal in clause for some proof checkers
         label = "node %s = ITE(%s,%s,%s)"  % (self.label(), str(self.variable), self.high.label(), self.low.label())
         if prover.verbLevel >= 3:
@@ -180,19 +181,50 @@ class VariableNode(Node):
             mhd = None
             mld = None
             
-        self.inferTrueUp = prover.createClause([id, -vid, -hid], [], mhu)
-        self.inferFalseUp = prover.createClause([id, vid, -lid], [], mlu)
         antecedents = []
-        if prover.doLrat:
-            if self.inferTrueUp != resolver.tautologyId:
-                antecedents.append(-self.inferTrueUp)
-            if self.inferFalseUp != resolver.tautologyId:
-                antecedents.append(-self.inferFalseUp)
-        self.inferTrueDown = prover.createClause([-id, -vid, hid], antecedents, mhd)
-        self.inferFalseDown = prover.createClause([-id, vid, lid], antecedents, mld)
+        huid = prover.createClause([id, -vid, -hid], [], mhu)
+        if huid != resolver.tautologyId:
+            self.tautologies[self.HU] = False
+            antecedents.append(-huid)
+            if self.definingClauseBase == 0:
+                self.definingClauseBase = huid - self.HU
+        
+        luid = prover.createClause([id, vid, -lid], [], mlu)
+        if luid != resolver.tautologyId:
+            self.tautologies[self.LU] = False
+            antecedents.append(-luid)
+            if self.definingClauseBase == 0:
+                self.definingClauseBase = luid - self.LU
 
+        hdid = prover.createClause([-id, -vid, hid], antecedents, mhd)
+        if hdid != resolver.tautologyId:
+            self.tautologies[self.HD] = False
+            if self.definingClauseBase == 0:
+                self.definingClauseBase = hdid - self.HD
+
+        ldid = prover.createClause([-id, vid, lid], antecedents, mld)
+        if ldid != resolver.tautologyId:
+            self.tautologies[self.LD] = False
+            if self.definingClauseBase == 0:
+                self.definingClauseBase = ldid - self.LD
+
+
+    
     def isLeaf(self):
         return False
+
+    def idHU(self):
+        return resolver.tautologyId if self.tautologies[self.HU] else self.definingClauseBase + self.HU
+
+    def idLU(self):
+        return resolver.tautologyId if self.tautologies[self.LU] else self.definingClauseBase + self.LU
+
+    def idHD(self):
+        return resolver.tautologyId if self.tautologies[self.HD] else self.definingClauseBase + self.HD
+
+    def idLD(self):
+        return resolver.tautologyId if self.tautologies[self.LD] else self.definingClauseBase + self.LD
+
 
     def branchHigh(self, variable):
         if self.variable < variable:
@@ -322,13 +354,13 @@ class Manager:
         for node in lits:
             positive = node.high == self.leaf1
             if positive:
-                antecedents.append(node.inferTrueUp)
+                antecedents.append(node.idHU())
                 if node.low != self.leaf0:
-                    antecedents.append(node.inferFalseUp)
+                    antecedents.append(node.idLU())
             else:
-                antecedents.append(node.inferFalseUp)
+                antecedents.append(node.idLU())
                 if node.high != self.leaf0:
-                    antecedents.append(node.inferTrueUp)
+                    antecedents.append(node.idHU())
         antecedents.append(clauseId)
         validation = self.prover.createClause([root.id], antecedents, "Validate BDD representation of clause %d" % clauseId)
         return root, validation
@@ -491,11 +523,11 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UHD"] = nodeA.idHD()
+            ruleIndex["ULD"] = nodeA.idLD()
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.inferTrueDown
-            ruleIndex["VLD"] = nodeB.inferFalseDown
+            ruleIndex["VHD"] = nodeB.idHD()
+            ruleIndex["VLD"] = nodeB.idLD()
 
         (newHigh, andHigh) = self.applyAndJustify(highA, highB)
         ruleIndex["ANDH"] = andHigh
@@ -507,8 +539,8 @@ class Manager:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
-            ruleIndex["WHU"] = newNode.inferTrueUp
-            ruleIndex["WLU"] = newNode.inferFalseUp
+            ruleIndex["WHU"] = newNode.idHU()
+            ruleIndex["WLU"] = newNode.idLU()
 
         targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, newNode.id])
         if targetClause == resolver.tautologyId:
@@ -567,11 +599,11 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UHD"] = nodeA.idHD()
+            ruleIndex["ULD"] = nodeA.idLD()
         if highB != lowB:
-            ruleIndex["VHU"] = nodeB.inferTrueUp
-            ruleIndex["VLU"] = nodeB.inferFalseUp
+            ruleIndex["VHU"] = nodeB.idHU()
+            ruleIndex["VLU"] = nodeB.idLU()
 
         (checkHigh, implyHigh) = self.justifyImply(highA, highB)
         if implyHigh != resolver.tautologyId:
@@ -640,14 +672,14 @@ class Manager:
         lowC =  nodeC if nodeC == self.leaf0 else nodeC.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.inferTrueDown
-            ruleIndex["ULD"] = nodeA.inferFalseDown
+            ruleIndex["UHD"] = nodeA.idHD()
+            ruleIndex["ULD"] = nodeA.idLD()
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.inferTrueDown
-            ruleIndex["VLD"] = nodeB.inferFalseDown
+            ruleIndex["VHD"] = nodeB.idHD()
+            ruleIndex["VLD"] = nodeB.idLD()
         if highC != lowC:
-            ruleIndex["WHU"] = nodeC.inferTrueUp
-            ruleIndex["WLU"] = nodeC.inferFalseUp
+            ruleIndex["WHU"] = nodeC.idHU()
+            ruleIndex["WLU"] = nodeC.idLU()
 
         (check, implyHigh) = self.applyAndJustifyImply(highA, highB, highC)
         ruleIndex["ANDH"] = implyHigh
@@ -832,8 +864,8 @@ class Manager:
             node = self.uniqueTable[k]
             # If node is marked, then its children will be, too
             if node not in markedSet:
-                clist = [node.inferTrueUp, node.inferFalseUp, node.inferTrueDown, node.inferFalseDown]
-                clist = [c for c in clist if abs(c) != resolver.tautologyId]
+                clist = [node.idHU(), node.idLU(), node.idHD(), node.idLD()]
+                clist = [c for c in clist if c != resolver.tautologyId]
                 clauseList += clist
                 self.nodesRemoved += 1
                 del self.uniqueTable[k]

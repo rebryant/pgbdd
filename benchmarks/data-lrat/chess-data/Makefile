@@ -97,7 +97,7 @@ chess-$(N)-equation-auto-randomorder.data:
 	$(SOLVER) -v $(VLEVEL) -i chess-$(N)-equation-auto-randomorder.cnf -s chess-$(N)-equation-auto-randomorder.schedule -m a \
 		-p chess-$(N)-equation-auto-randomorder.order -o chess-$(N)-equation-auto-randomorder.$(EXTENSION) 2>&1 | tee -a chess-$(N)-equation-auto-randomorder.data
 	$(CHECKER) chess-$(N)-equation-auto-randomorder.cnf chess-$(N)-equation-auto-randomorder.$(EXTENSION) | tee -a chess-$(N)-equation-auto-randomorder.data
-	rm -f chess-$(N)-equation-auto-randomorder.$(EXTENSION)
+#	rm -f chess-$(N)-equation-auto-randomorder.$(EXTENSION)
 
 chess-$(N)-equation-integer-randomorder.data:
 	$(GENERATOR) -C -n $(N) -r chess-$(N)-equation-integer-randomorder -p e | tee chess-$(N)-equation-integer-randomorder.data
