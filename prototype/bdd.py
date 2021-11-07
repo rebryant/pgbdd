@@ -129,7 +129,6 @@ class VariableNode(Node):
     low = None
     # Identity of clauses generated from node
     definingClauseBase = 0
-    tautologies = [True, True, True, True]
     
     def __init__(self, id, variable, high, low, prover):
         Node.__init__(self, id, variable)
@@ -138,7 +137,6 @@ class VariableNode(Node):
         vid = self.variable.id
         hid = self.high.id
         lid = self.low.id
-        self.tautologies = [True, True, True, True]
         # id should be first literal in clause for some proof checkers
         label = "node %s = ITE(%s,%s,%s)"  % (self.label(), str(self.variable), self.high.label(), self.low.label())
         if prover.verbLevel >= 3:
@@ -155,27 +153,23 @@ class VariableNode(Node):
         antecedents = []
         huid = prover.createClause(self.clauseHU(), [], mhu, alreadyClean = True)
         if huid != resolver.tautologyId:
-            self.tautologies[self.HU] = False
             antecedents.append(-huid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = huid - self.HU
         
         luid = prover.createClause(self.clauseLU(), [], mlu, alreadyClean = True)
         if luid != resolver.tautologyId:
-            self.tautologies[self.LU] = False
             antecedents.append(-luid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = luid - self.LU
 
         hdid = prover.createClause(self.clauseHD(), antecedents, mhd, alreadyClean = True)
         if hdid != resolver.tautologyId:
-            self.tautologies[self.HD] = False
             if self.definingClauseBase == 0:
                 self.definingClauseBase = hdid - self.HD
 
         ldid = prover.createClause(self.clauseLD(), antecedents, mld, alreadyClean = True)
         if ldid != resolver.tautologyId:
-            self.tautologies[self.LD] = False
             if self.definingClauseBase == 0:
                 self.definingClauseBase = ldid - self.LD
     
@@ -211,17 +205,16 @@ class VariableNode(Node):
         return resolver.cleanClause([-id, vid, lid])
 
     def idHU(self):
-        return resolver.tautologyId if self.tautologies[self.HU] else self.definingClauseBase + self.HU
+        return resolver.tautologyId if self.high.isZero() else self.definingClauseBase + self.HU
 
     def idLU(self):
-        return resolver.tautologyId if self.tautologies[self.LU] else self.definingClauseBase + self.LU
+        return resolver.tautologyId if self.low.isZero() else self.definingClauseBase + self.LU
 
     def idHD(self):
-        return resolver.tautologyId if self.tautologies[self.HD] else self.definingClauseBase + self.HD
+        return resolver.tautologyId if self.high.isOne() else self.definingClauseBase + self.HD
 
     def idLD(self):
-        return resolver.tautologyId if self.tautologies[self.LD] else self.definingClauseBase + self.LD
-
+        return resolver.tautologyId if self.low.isOne() else self.definingClauseBase + self.LD
 
     def branchHigh(self, variable):
         if self.variable < variable:
