@@ -117,9 +117,46 @@ class VResolver:
             if ruleIndex[k] == tautologyId:
                 del ruleIndex[k]
 
-    def run(self, targetClause, splitVariable, ruleIndex, comment):
-        self.runCount += 1
+    def cleanHints(self, hints):
+        for k in list(hints.keys()):
+            (id, clause) = hints[k]
+            if id == tautologyId:
+                del hints[k]
+
+    def ccheck(self, hints, ruleIndex):
+        clauseDict = self.prover.clauseDict
+        ok = True
+        for k in hints.keys():
+            (id, clause) = hints[k]
+            if id not in clauseDict:
+                print("Oops. hints contains %s (id %d) that is not in clauseDict" % (k, id))
+                ok = False
+                continue
+            rclause = clauseDict[id]
+            if k not in ruleIndex:
+                print("Mismatch.  hints contains %s (id %d), but not ruleIndex" % (k, id))
+                ok = False
+                continue
+            if id != ruleIndex[k]:
+                print("Mismatch.  Key %s.  hints has index %d.  ruleIndex has index %d" % (k, id, ruleIndex[k]))
+                ok = False
+                continue
+            if not testClauseEquality(clause, rclause):
+                print("Mismatch.  Key %s.  ID %d.  hints has clause %s.  ruleIndex has clause %s" % (k, id, str(clause), str(rclause)))
+                ok = False
+        for k in ruleIndex.keys():
+            if k not in hints:
+                print("Mismatch.  ruleIndex contains %s, but not hints" % k)
+                ok = False
+        return ok
+        
+
+    def run(self, targetClause, splitVariable, ruleIndex, hints, comment):
         self.cleanIndex(ruleIndex)
+        self.cleanHints(hints)
+        if not self.ccheck(hints, ruleIndex):
+            raise Exception("Oops.")
+        self.runCount += 1
         if self.rule1Key not in ruleIndex:
             # Try for single line proof
             targ =  targetClause

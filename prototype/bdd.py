@@ -292,7 +292,7 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.resolver = resolver.VResolver(prover)
+        self.vresolver = resolver.VResolver(prover)
         self.quantifiedVariableSet = set([])
         self.deadNodeCount = 0
         self.cacheJustifyAdded = 0
@@ -545,7 +545,7 @@ class Manager:
             justification = resolver.tautologyId
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification = self.resolver.run(targetClause, splitVar.id, ruleIndex, comment)
+            justification = self.vresolver.run(targetClause, splitVar.id, ruleIndex, hints, comment)
         self.operationCache[key] = (newNode, justification)
         self.cacheJustifyAdded += 1
         return (newNode, abs(justification))
@@ -590,6 +590,7 @@ class Manager:
             return lookup
 
         ruleIndex = { }
+        hints = {}
         splitVar = min(nodeA.variable, nodeB.variable)  
         highA = nodeA.branchHigh(splitVar)
         lowA =  nodeA.branchLow(splitVar)
@@ -599,22 +600,29 @@ class Manager:
         if highA != lowA:
             ruleIndex["UHD"] = nodeA.idHD()
             ruleIndex["ULD"] = nodeA.idLD()
+            hints["UHD"] = (nodeA.idHD(), resolver.cleanClause([-splitVar.id, -nodeA.id, highA.id]))
+            hints["ULD"] = (nodeA.idLD(), resolver.cleanClause([ splitVar.id, -nodeA.id, lowA.id]))
         if highB != lowB:
             ruleIndex["WHU"] = nodeB.idHU()
             ruleIndex["WLU"] = nodeB.idLU()
+            hints["WHU"] = (nodeB.idHU(), resolver.cleanClause([-splitVar.id, nodeB.id, -highB.id]))
+            hints["WLU"] = (nodeB.idLU(), resolver.cleanClause([ splitVar.id, nodeB.id, -lowB.id]))
 
-        (checkHigh, implyHigh) = self.justifyImply(highA, highB)
+        (check, implyHigh) = self.justifyImply(highA, highB)
         if implyHigh != resolver.tautologyId:
             ruleIndex["OPH"] = implyHigh
-        (checkLow, implyLow) = self.justifyImply(lowA, lowB)
-        if implyLow != resolver.tautologyId:
-            ruleIndex["OPL"] = implyLow
+            hints["OPH"] = (implyHigh, resolver.cleanClause([-highA.id, highB.id]))
 
-        check = checkHigh and checkLow
+        if check:
+            (check, implyLow) = self.justifyImply(lowA, lowB)
+            if implyLow != resolver.tautologyId:
+                ruleIndex["OPL"] = implyLow
+                hints["OPL"] = (implyLow, resolver.cleanClause([-lowA.id, lowB.id]))
+
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
             comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-            justification = self.resolver.run(targetClause, splitVar.id, ruleIndex, comment)
+            justification = self.vresolver.run(targetClause, splitVar.id, ruleIndex, hints, comment)
         else:
             justification = resolver.tautologyId
 
@@ -658,6 +666,7 @@ class Manager:
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
+        hints = {}
         # Mapping from variable names to variable numbers
         splitVar = min(nodeA.variable, nodeB.variable)
         if nodeC != self.leaf0:
@@ -672,19 +681,29 @@ class Manager:
         if highA != lowA:
             ruleIndex["UHD"] = nodeA.idHD()
             ruleIndex["ULD"] = nodeA.idLD()
+            hints["UHD"] = (nodeA.idHD(), resolver.cleanClause([-splitVar.id, -nodeA.id, highA.id]))
+            hints["ULD"] = (nodeA.idLD(), resolver.cleanClause([ splitVar.id, -nodeA.id, lowA.id]))
         if highB != lowB:
             ruleIndex["VHD"] = nodeB.idHD()
             ruleIndex["VLD"] = nodeB.idLD()
+            hints["VHD"] = (nodeB.idHD(), resolver.cleanClause([-splitVar.id, -nodeB.id, highB.id]))
+            hints["VLD"] = (nodeB.idLD(), resolver.cleanClause([ splitVar.id, -nodeB.id, lowB.id]))
         if highC != lowC:
             ruleIndex["WHU"] = nodeC.idHU()
             ruleIndex["WLU"] = nodeC.idLU()
+            hints["WHU"] = (nodeC.idHU(), resolver.cleanClause([-splitVar.id, nodeC.id, -highC.id]))
+            hints["WLU"] = (nodeC.idLU(), resolver.cleanClause([ splitVar.id, nodeC.id, -lowC.id]))
 
         (check, implyHigh) = self.applyAndJustifyImply(highA, highB, highC)
-        ruleIndex["OPH"] = implyHigh
+        if implyHigh != resolver.tautologyId:
+            ruleIndex["OPH"] = implyHigh
+            hints["OPH"] = (implyHigh, resolver.cleanClause([-highA.id, -highB.id, highC.id]))
 
         if check:
             (check, implyLow) = self.applyAndJustifyImply(lowA, lowB, lowC)
-            ruleIndex["OPL"] = implyLow
+            if implyLow != resolver.tautologyId:
+                ruleIndex["OPL"] = implyLow
+                hints["OPL"] = (implyLow, resolver.cleanClause([-lowA.id, -lowB.id, lowC.id]))
 
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, nodeC.id])
@@ -692,7 +711,7 @@ class Manager:
                 justification = resolver.tautologyId
             else:
                 comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
-                justification = self.resolver.run(targetClause, splitVar.id, ruleIndex, comment)
+                justification = self.vresolver.run(targetClause, splitVar.id, ruleIndex, hints, comment)
         else:
             justification = resolver.tautologyId, []
 
@@ -906,7 +925,7 @@ class Manager:
             self.writer.write("Total GCs performed: %d\n" % self.gcCount)
         if self.verbLevel >= 2:
             self.writer.write("Results from resolver:\n")
-            self.resolver.summarize()
+            self.vresolver.summarize()
         if self.verbLevel >= 1:
             self.writer.write("Results from proof generation\n")
             self.prover.summarize()
