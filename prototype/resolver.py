@@ -55,13 +55,31 @@ def cleanClause(literalList):
             nlist.append(slist[i])
         return nlist
 
+def testClauseEquality(clause1, clause2):
+    if clause1 is None or clause2 is None:
+        return False
+    if clause1 == tautologyId:
+        return clause1 == clause2
+    if clause2 == tautologyId:
+        return False
+    while True:
+        if len(clause1) == 0:
+            return len(clause2) == 0
+        elif len(clause2) == 0:
+            return False
+        else:
+            l1 = clause1[0]
+            l2 = clause2[0]
+            clause1 = clause1[1:]
+            clause2 = clause2[1:]
+            if l1 != l2:
+                return False
+
 def showClause(clause):
     if clause is None:
         return "NONE"
     if clause == tautologyId:
         return "TAUT"
-    elif clause == -tautologyId:
-        return "NIL"
     return str(clause)
 
 class ResolveException(Exception):
@@ -75,21 +93,17 @@ class ResolveException(Exception):
 class VResolver:
     prover = None
     clauseDict = None
-    rule1Names = []
-    rule2Names = []
-    rule1Key = ""
-    rule2Key = ""
+    rule1Names = ["WHU", "UHD", "VHD", "OPH"]
+    rule2Names = ["WLU", "ULD", "VLD", "OPL"]
+    rule1Key = "OPH"
+    rule2Key = "OPL"
     antecedentCount = 0
     clauseCount = 0
     runCount = 0
 
-    def __init__(self, prover, rule1Names, rule2Names, rule1Key, rule2Key):
+    def __init__(self, prover):
         self.prover = prover
         self.clauseDict = prover.clauseDict
-        self.rule1Names = rule1Names
-        self.rule2Names = rule2Names
-        self.rule1Key = rule1Key
-        self.rule2Key = rule2Key
         self.antecedentCount = 0
         self.clauseCount = 0
         self.runCount = 0
@@ -209,24 +223,4 @@ class VResolver:
         # Reverse unit propagation failed
         return None
             
-
-class AndResolver(VResolver):
-
-    def __init__(self, prover):
-        rule1Names = ["WHU", "UHD", "VHD", "ANDH"]
-        rule2Names = ["WLU", "ULD", "VLD", "ANDL"]
-        rule1Key = "ANDH"
-        rule2Key = "ANDL"
-        VResolver.__init__(self, prover, rule1Names, rule2Names, rule1Key, rule2Key)
-
-class ImplyResolver(VResolver):
-
-    def __init__(self, prover):
-        rule1Names = ["UHD", "VHU", "IMH"]
-        rule2Names = ["ULD", "VLU", "IML"]
-        rule1Key = "IMH"
-        rule2Key = "IML"
-        VResolver.__init__(self, prover, rule1Names, rule2Names, rule1Key, rule2Key)
-
-
         

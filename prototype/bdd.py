@@ -257,8 +257,7 @@ class Manager:
     # Hack: justification is negative when preceding clause was generated as intermediate step
     operationCache = {}
     verbLevel = 1
-    andResolver = None
-    implyResolver = None
+    resolver = None
     # GC support
     # Callback function from driver that will collect accessible roots for GC
     rootGenerator = None
@@ -293,8 +292,7 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.andResolver = resolver.AndResolver(prover)
-        self.implyResolver = resolver.ImplyResolver(prover)
+        self.resolver = resolver.VResolver(prover)
         self.quantifiedVariableSet = set([])
         self.deadNodeCount = 0
         self.cacheJustifyAdded = 0
@@ -505,6 +503,8 @@ class Manager:
 
         # Mapping from rule names to clause numbers
         ruleIndex = {}
+        # Mapping from rule names to pair (clause id, clause)
+        hints = {}
         # Mapping from variable names to variable numbers
         splitVar = min(nodeA.variable, nodeB.variable)
         highA = nodeA.branchHigh(splitVar)
@@ -515,15 +515,21 @@ class Manager:
         if highA != lowA:
             ruleIndex["UHD"] = nodeA.idHD()
             ruleIndex["ULD"] = nodeA.idLD()
+            hints["UHD"] = (nodeA.idHD(), resolver.cleanClause([-splitVar.id, -nodeA.id, highA.id]))
+            hints["ULD"] = (nodeA.idLD(), resolver.cleanClause([ splitVar.id, -nodeA.id, lowA.id]))
         if highB != lowB:
             ruleIndex["VHD"] = nodeB.idHD()
             ruleIndex["VLD"] = nodeB.idLD()
+            hints["VHD"] = (nodeB.idHD(), resolver.cleanClause([-splitVar.id, -nodeB.id, highB.id]))
+            hints["VLD"] = (nodeB.idLD(), resolver.cleanClause([ splitVar.id, -nodeB.id, lowB.id]))
 
         (newHigh, andHigh) = self.applyAndJustify(highA, highB)
-        ruleIndex["ANDH"] = andHigh
+        ruleIndex["OPH"] = andHigh
+        hints["OPH"] = (andHigh, resolver.cleanClause([-highA.id, -highB.id, newHigh.id]))
             
         (newLow, andLow) = self.applyAndJustify(lowA, lowB)
-        ruleIndex["ANDL"] = andLow
+        ruleIndex["OPL"] = andLow
+        hints["OPL"] = (andLow, resolver.cleanClause([-lowA.id, -lowB.id, newLow.id]))
 
         if newHigh == newLow:
             newNode = newHigh
@@ -531,13 +537,15 @@ class Manager:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
             ruleIndex["WHU"] = newNode.idHU()
             ruleIndex["WLU"] = newNode.idLU()
+            hints["WHU"] = (newNode.idHU(), resolver.cleanClause([-splitVar.id, newNode.id, -newHigh.id]))
+            hints["WLU"] = (newNode.idLU(), resolver.cleanClause([ splitVar.id, newNode.id, -newLow.id]))
 
         targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, newNode.id])
         if targetClause == resolver.tautologyId:
             justification = resolver.tautologyId
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
+            justification = self.resolver.run(targetClause, splitVar.id, ruleIndex, comment)
         self.operationCache[key] = (newNode, justification)
         self.cacheJustifyAdded += 1
         return (newNode, abs(justification))
@@ -592,21 +600,21 @@ class Manager:
             ruleIndex["UHD"] = nodeA.idHD()
             ruleIndex["ULD"] = nodeA.idLD()
         if highB != lowB:
-            ruleIndex["VHU"] = nodeB.idHU()
-            ruleIndex["VLU"] = nodeB.idLU()
+            ruleIndex["WHU"] = nodeB.idHU()
+            ruleIndex["WLU"] = nodeB.idLU()
 
         (checkHigh, implyHigh) = self.justifyImply(highA, highB)
         if implyHigh != resolver.tautologyId:
-            ruleIndex["IMH"] = implyHigh
+            ruleIndex["OPH"] = implyHigh
         (checkLow, implyLow) = self.justifyImply(lowA, lowB)
         if implyLow != resolver.tautologyId:
-            ruleIndex["IML"] = implyLow
+            ruleIndex["OPL"] = implyLow
 
         check = checkHigh and checkLow
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
             comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-            justification = self.implyResolver.run(targetClause, splitVar.id, ruleIndex, comment)
+            justification = self.resolver.run(targetClause, splitVar.id, ruleIndex, comment)
         else:
             justification = resolver.tautologyId
 
@@ -672,11 +680,11 @@ class Manager:
             ruleIndex["WLU"] = nodeC.idLU()
 
         (check, implyHigh) = self.applyAndJustifyImply(highA, highB, highC)
-        ruleIndex["ANDH"] = implyHigh
+        ruleIndex["OPH"] = implyHigh
 
         if check:
             (check, implyLow) = self.applyAndJustifyImply(lowA, lowB, lowC)
-            ruleIndex["ANDL"] = implyLow
+            ruleIndex["OPL"] = implyLow
 
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, -nodeB.id, nodeC.id])
@@ -684,7 +692,7 @@ class Manager:
                 justification = resolver.tautologyId
             else:
                 comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
-                justification = self.andResolver.run(targetClause, splitVar.id, ruleIndex, comment)
+                justification = self.resolver.run(targetClause, splitVar.id, ruleIndex, comment)
         else:
             justification = resolver.tautologyId, []
 
@@ -897,10 +905,8 @@ class Manager:
                 self.writer.write("Total cache entries removed: %d\n" % self.cacheRemoved)
             self.writer.write("Total GCs performed: %d\n" % self.gcCount)
         if self.verbLevel >= 2:
-            self.writer.write("Results from And Operations:\n")
-            self.andResolver.summarize()
-            self.writer.write("Results from Implication Testing Operations:\n")
-            self.implyResolver.summarize()
+            self.writer.write("Results from resolver:\n")
+            self.resolver.summarize()
         if self.verbLevel >= 1:
             self.writer.write("Results from proof generation\n")
             self.prover.summarize()
