@@ -41,7 +41,7 @@ def usage(name):
     sys.stderr.write("  -v LEVEL    Set verbosity level\n")
     sys.stderr.write("  -r SEED     Set random seed (for breaking ties during pivot selection)\n")
     sys.stderr.write("  -i CNF      Name of CNF input file\n")
-    sys.stderr.write("  -o pfile    Name of proof output file (.proof = tracecheck, .lrat = LRAT text, .lratb = LRAT binary)\n")
+    sys.stderr.write("  -o pfile    Name of proof output file (.drat = DRAT text, .lrat = LRAT text, .lratb = LRAT binary)\n")
     sys.stderr.write("  -M (t|b|p)  Pipe proof to stdout (p = tracecheck, t = LRAT text, b = LRAT binary)\n")
     sys.stderr.write("  -p PERMUTE  Name of file specifying mapping from CNF variable to BDD level\n")
     sys.stderr.write("  -s SCHEDULE Name of action schedule file\n")
@@ -341,11 +341,15 @@ class Prover:
         if result == -resolver.tautologyId:
             result = []
         antecedent = list(antecedent)
-        if not self.doLrat:
-            antecedent.sort()
-        middle = [ord('a')] if self.doBinary else []
-        rest = result + [0] + antecedent + [0]
-        ilist = [cid] + middle + rest
+        if self.doLrat:
+            first = [cid]
+            middle = [ord('a')] if self.doBinary else []
+            rest = result + [0] + antecedent + [0]
+        else:
+            first = []
+            middle = []
+            rest = result + [0]
+        ilist = first + middle + rest
         if self.doBinary:
             if isInput and self.doLrat:
                 pass
@@ -355,7 +359,7 @@ class Prover:
         else:
             slist = [str(i) for i in ilist]
             istring = " ".join(slist)
-            if isInput and self.doLrat:
+            if isInput:
                 self.comment(istring)
             else:
                 self.file.write(istring + '\n')
@@ -458,7 +462,7 @@ class Solver:
         self.litMap = {}
         for level in range(1, reader.nvar+1):
             inputId = self.permuter.forward(level)
-            var = self.manager.newVariable(name = "input-%d" % inputId, id = inputId)
+            var = self.manager.newVariable(name = "V%d" % inputId, id = inputId)
             t = self.manager.literal(var, 1)
             self.litMap[ inputId] = t
             e = self.manager.literal(var, 0)
