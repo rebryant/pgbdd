@@ -92,30 +92,19 @@ class ResolveException(Exception):
 
 class VResolver:
     prover = None
-    clauseDict = None
-    rule1Names = ["WHU", "UHD", "VHD", "OPH"]
-    rule2Names = ["WLU", "ULD", "VLD", "OPL"]
-    rule1Key = "OPH"
-    rule2Key = "OPL"
+    clauseHighNames = ["WHU", "UHD", "VHD", "OPH"]
+    clauseLowNames = ["WLU", "ULD", "VLD", "OPL"]
+    clauseHighKey = "OPH"
+    clauseLowKey = "OPL"
     antecedentCount = 0
     clauseCount = 0
     runCount = 0
 
     def __init__(self, prover):
         self.prover = prover
-        self.clauseDict = prover.clauseDict
         self.antecedentCount = 0
         self.clauseCount = 0
         self.runCount = 0
-
-    def showRules(self, ruleIndex):
-        rlist = ["%s:%d" % (k, ruleIndex[k]) for k in ruleIndex.keys() if ruleIndex[k] != tautologyId]
-        return "[" + ", ".join(rlist) + "]"
-
-    def cleanIndex(self, ruleIndex):
-        for k in list(ruleIndex.keys()):
-            if ruleIndex[k] == tautologyId:
-                del ruleIndex[k]
 
     def cleanHints(self, hints):
         for k in list(hints.keys()):
@@ -123,66 +112,45 @@ class VResolver:
             if id == tautologyId:
                 del hints[k]
 
-    def ccheck(self, hints, ruleIndex):
-        clauseDict = self.prover.clauseDict
-        ok = True
-        for k in hints.keys():
-            (id, clause) = hints[k]
-            if id not in clauseDict:
-                print("Oops. hints contains %s (id %d) that is not in clauseDict" % (k, id))
-                ok = False
-                continue
-            rclause = clauseDict[id]
-            if k not in ruleIndex:
-                print("Mismatch.  hints contains %s (id %d), but not ruleIndex" % (k, id))
-                ok = False
-                continue
-            if id != ruleIndex[k]:
-                print("Mismatch.  Key %s.  hints has index %d.  ruleIndex has index %d" % (k, id, ruleIndex[k]))
-                ok = False
-                continue
-            if not testClauseEquality(clause, rclause):
-                print("Mismatch.  Key %s.  ID %d.  hints has clause %s.  ruleIndex has clause %s" % (k, id, str(clause), str(rclause)))
-                ok = False
-        for k in ruleIndex.keys():
-            if k not in hints:
-                print("Mismatch.  ruleIndex contains %s, but not hints" % k)
-                ok = False
-        return ok
-        
-
-    def run(self, targetClause, splitVariable, ruleIndex, hints, comment):
-        self.cleanIndex(ruleIndex)
+    def run(self, targetClause, splitVariable, hints, comment):
         self.cleanHints(hints)
-        if not self.ccheck(hints, ruleIndex):
-            raise Exception("Oops.")
         self.runCount += 1
-        if self.rule1Key not in ruleIndex:
+        if self.clauseHighKey not in hints:
             # Try for single line proof
             targ =  targetClause
             idList = []
-            for id in self.rule1Names:
-                if id in ruleIndex:
-                    idList.append(ruleIndex[id])
-            for id in self.rule2Names:
-                if id in ruleIndex:
-                    idList.append(ruleIndex[id])
-            alist = self.RupCheck(targ, idList)
+            clauseList = []
+            for id in self.clauseHighNames:
+                if id in hints:
+                    (cid, clause) = hints[id]
+                    idList.append(cid)
+                    clauseList.append(clause)
+            for id in self.clauseLowNames:
+                if id in hints:
+                    (cid, clause) = hints[id]
+                    idList.append(cid)
+                    clauseList.append(clause)
+            alist = self.RupCheck(targ, idList, clauseList)
             if alist is not None:
                 id = self.generateProofStep(targ, alist, comment)
                 return id
 
-        if self.rule2Key not in ruleIndex:
+        if self.clauseLowKey not in hints:
             # Try for single line proof
             targ =  targetClause
             idList = []
-            for id in self.rule2Names:
-                if id in ruleIndex:
-                    idList.append(ruleIndex[id])
-            for id in self.rule1Names:
-                if id in ruleIndex:
-                    idList.append(ruleIndex[id])
-            alist = self.RupCheck(targ, idList)
+            clauseList = []
+            for id in self.clauseLowNames:
+                if id in hints:
+                    (cid, clause) = hints[id]
+                    idList.append(cid)
+                    clauseList.append(clause)
+            for id in self.clauseHighNames:
+                if id in hints:
+                    (cid, clause) = hints[id]
+                    idList.append(cid)
+                    clauseList.append(clause)
+            alist = self.RupCheck(targ, idList, clauseList)
             if alist is not None:
                 id = self.generateProofStep(targ, alist, comment)
                 return id
@@ -191,23 +159,30 @@ class VResolver:
             # Must split into two-line proof
             targ =  [-splitVariable] + targetClause
             idList = []
-            for id in self.rule1Names:
-                if id in ruleIndex:
-                    idList.append(ruleIndex[id])
-            alist = self.RupCheck(targ, idList)
+            clauseList = []
+            for id in self.clauseHighNames:
+                if id in hints:
+                    (cid, clause) = hints[id]
+                    idList.append(cid)
+                    clauseList.append(clause)
+            alist = self.RupCheck(targ, idList, clauseList)
             if alist is None:
                 clist = [str(key) for key in idList]
                 raise ResolveException("Couldn't prove positive target: %s using candidates %s" % (str(targ), str(clist)))
             else:
                 id1 = self.generateProofStep(targ, alist, comment)
-            targ = targetClause
             idList = [id1]
-            for id in self.rule2Names:
-                if id in ruleIndex:
-                    idList.append(ruleIndex[id])
-            alist = self.RupCheck(targ, idList)
+            clauseList = [targ]
+            targ = targetClause
+
+            for id in self.clauseLowNames:
+                if id in hints:
+                    (cid, clause) = hints[id]
+                    idList.append(cid)
+                    clauseList.append(clause)
+            alist = self.RupCheck(targ, idList, clauseList)
             if alist is None:
-                clist = [key + ":" + str(ruleIndex[key]) for key in idList]
+                clist = [key + ":" + str(hints[key][0]) for key in idList]
                 raise ResolveException("Couldn't prove final target: %s using candidates %s" % (str(targ), str(clist)))
             else:
                 id = self.generateProofStep(targ, alist, None)
@@ -228,15 +203,12 @@ class VResolver:
 
     # Given list of possible antecedent IDs, see if can justify target clause
     # If so, return modified version of clause Ids containing those involved in propagation
-    def RupCheck(self, targetClause, clauseIdList):
-        clauseDict = self.clauseDict
+    def RupCheck(self, targetClause, clauseIdList, clauseList):
         units = [-lit for lit in targetClause]
         relevantIdList = []
-        for id in clauseIdList:
-            if id not in clauseDict:
-                continue
-            # Make copy so that can modify
-            clause = list(clauseDict[id])
+        for (id, clause) in zip(clauseIdList, clauseList):
+            # Note that will modify clauses
+            # This is OK here, since clauses are constructed just for this one execution
             idx = 0
             while idx < len(clause):
                 lit = clause[idx]

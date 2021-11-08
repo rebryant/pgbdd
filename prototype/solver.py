@@ -300,7 +300,6 @@ class Prover:
     verbLevel = 1
     doLrat = False
     doBinary = False
-    clauseDict = {}  # Mapping from clause ID to list of literals in clause
 
     def __init__(self, fname = None, writer = None, verbLevel = 1, doLrat = False, doBinary = False):
         self.verbLevel = verbLevel
@@ -319,7 +318,6 @@ class Prover:
         self.clauseCount = 0
         self.lastClauseId = 0
         self.proofCount = 0
-        self.clauseDict = {}
 
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
@@ -361,12 +359,9 @@ class Prover:
                 self.comment(istring)
             else:
                 self.file.write(istring + '\n')
-        self.clauseDict[cid] = result
         return cid
 
     def deleteClauses(self, clauseList):
-        for id in clauseList:
-            del self.clauseDict[id]
         if not self.doLrat:
             return
         middle = [ord('d')] if self.doBinary else ['d']

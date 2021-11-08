@@ -501,8 +501,6 @@ class Manager:
         if lookup is not None:
             return lookup
 
-        # Mapping from rule names to clause numbers
-        ruleIndex = {}
         # Mapping from rule names to pair (clause id, clause)
         hints = {}
         # Mapping from variable names to variable numbers
@@ -513,30 +511,22 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.idHD()
-            ruleIndex["ULD"] = nodeA.idLD()
             hints["UHD"] = (nodeA.idHD(), resolver.cleanClause([-splitVar.id, -nodeA.id, highA.id]))
             hints["ULD"] = (nodeA.idLD(), resolver.cleanClause([ splitVar.id, -nodeA.id, lowA.id]))
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.idHD()
-            ruleIndex["VLD"] = nodeB.idLD()
             hints["VHD"] = (nodeB.idHD(), resolver.cleanClause([-splitVar.id, -nodeB.id, highB.id]))
             hints["VLD"] = (nodeB.idLD(), resolver.cleanClause([ splitVar.id, -nodeB.id, lowB.id]))
 
         (newHigh, andHigh) = self.applyAndJustify(highA, highB)
-        ruleIndex["OPH"] = andHigh
         hints["OPH"] = (andHigh, resolver.cleanClause([-highA.id, -highB.id, newHigh.id]))
             
         (newLow, andLow) = self.applyAndJustify(lowA, lowB)
-        ruleIndex["OPL"] = andLow
         hints["OPL"] = (andLow, resolver.cleanClause([-lowA.id, -lowB.id, newLow.id]))
 
         if newHigh == newLow:
             newNode = newHigh
         else:
             newNode = self.findOrMake(splitVar, newHigh, newLow)
-            ruleIndex["WHU"] = newNode.idHU()
-            ruleIndex["WLU"] = newNode.idLU()
             hints["WHU"] = (newNode.idHU(), resolver.cleanClause([-splitVar.id, newNode.id, -newHigh.id]))
             hints["WLU"] = (newNode.idLU(), resolver.cleanClause([ splitVar.id, newNode.id, -newLow.id]))
 
@@ -545,7 +535,7 @@ class Manager:
             justification = resolver.tautologyId
         else:
             comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), newNode.label())
-            justification = self.vresolver.run(targetClause, splitVar.id, ruleIndex, hints, comment)
+            justification = self.vresolver.run(targetClause, splitVar.id, hints, comment)
         self.operationCache[key] = (newNode, justification)
         self.cacheJustifyAdded += 1
         return (newNode, abs(justification))
@@ -589,7 +579,7 @@ class Manager:
         if lookup is not None:
             return lookup
 
-        ruleIndex = { }
+        # Mapping from rule names to pair (clause id, clause)
         hints = {}
         splitVar = min(nodeA.variable, nodeB.variable)  
         highA = nodeA.branchHigh(splitVar)
@@ -598,31 +588,25 @@ class Manager:
         lowB =  nodeB.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.idHD()
-            ruleIndex["ULD"] = nodeA.idLD()
             hints["UHD"] = (nodeA.idHD(), resolver.cleanClause([-splitVar.id, -nodeA.id, highA.id]))
             hints["ULD"] = (nodeA.idLD(), resolver.cleanClause([ splitVar.id, -nodeA.id, lowA.id]))
         if highB != lowB:
-            ruleIndex["WHU"] = nodeB.idHU()
-            ruleIndex["WLU"] = nodeB.idLU()
             hints["WHU"] = (nodeB.idHU(), resolver.cleanClause([-splitVar.id, nodeB.id, -highB.id]))
             hints["WLU"] = (nodeB.idLU(), resolver.cleanClause([ splitVar.id, nodeB.id, -lowB.id]))
 
         (check, implyHigh) = self.justifyImply(highA, highB)
         if implyHigh != resolver.tautologyId:
-            ruleIndex["OPH"] = implyHigh
             hints["OPH"] = (implyHigh, resolver.cleanClause([-highA.id, highB.id]))
 
         if check:
             (check, implyLow) = self.justifyImply(lowA, lowB)
             if implyLow != resolver.tautologyId:
-                ruleIndex["OPL"] = implyLow
                 hints["OPL"] = (implyLow, resolver.cleanClause([-lowA.id, lowB.id]))
 
         if check:
             targetClause = resolver.cleanClause([-nodeA.id, nodeB.id])
             comment = "Justification that %s ==> %s" % (nodeA.label(), nodeB.label())
-            justification = self.vresolver.run(targetClause, splitVar.id, ruleIndex, hints, comment)
+            justification = self.vresolver.run(targetClause, splitVar.id, hints, comment)
         else:
             justification = resolver.tautologyId
 
@@ -664,8 +648,7 @@ class Manager:
         if lookup is not None:
             return lookup
 
-        # Mapping from rule names to clause numbers
-        ruleIndex = {}
+        # Mapping from rule names to pair (clause id, clause)
         hints = {}
         # Mapping from variable names to variable numbers
         splitVar = min(nodeA.variable, nodeB.variable)
@@ -679,30 +662,22 @@ class Manager:
         lowC =  nodeC if nodeC == self.leaf0 else nodeC.branchLow(splitVar)
 
         if highA != lowA:
-            ruleIndex["UHD"] = nodeA.idHD()
-            ruleIndex["ULD"] = nodeA.idLD()
             hints["UHD"] = (nodeA.idHD(), resolver.cleanClause([-splitVar.id, -nodeA.id, highA.id]))
             hints["ULD"] = (nodeA.idLD(), resolver.cleanClause([ splitVar.id, -nodeA.id, lowA.id]))
         if highB != lowB:
-            ruleIndex["VHD"] = nodeB.idHD()
-            ruleIndex["VLD"] = nodeB.idLD()
             hints["VHD"] = (nodeB.idHD(), resolver.cleanClause([-splitVar.id, -nodeB.id, highB.id]))
             hints["VLD"] = (nodeB.idLD(), resolver.cleanClause([ splitVar.id, -nodeB.id, lowB.id]))
         if highC != lowC:
-            ruleIndex["WHU"] = nodeC.idHU()
-            ruleIndex["WLU"] = nodeC.idLU()
             hints["WHU"] = (nodeC.idHU(), resolver.cleanClause([-splitVar.id, nodeC.id, -highC.id]))
             hints["WLU"] = (nodeC.idLU(), resolver.cleanClause([ splitVar.id, nodeC.id, -lowC.id]))
 
         (check, implyHigh) = self.applyAndJustifyImply(highA, highB, highC)
         if implyHigh != resolver.tautologyId:
-            ruleIndex["OPH"] = implyHigh
             hints["OPH"] = (implyHigh, resolver.cleanClause([-highA.id, -highB.id, highC.id]))
 
         if check:
             (check, implyLow) = self.applyAndJustifyImply(lowA, lowB, lowC)
             if implyLow != resolver.tautologyId:
-                ruleIndex["OPL"] = implyLow
                 hints["OPL"] = (implyLow, resolver.cleanClause([-lowA.id, -lowB.id, lowC.id]))
 
         if check:
@@ -711,7 +686,7 @@ class Manager:
                 justification = resolver.tautologyId
             else:
                 comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
-                justification = self.vresolver.run(targetClause, splitVar.id, ruleIndex, hints, comment)
+                justification = self.vresolver.run(targetClause, splitVar.id, hints, comment)
         else:
             justification = resolver.tautologyId, []
 
