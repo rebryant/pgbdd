@@ -139,37 +139,40 @@ class VariableNode(Node):
         lid = self.low.id
         # id should be first literal in clause for some proof checkers
         label = "node %s = ITE(%s,%s,%s)"  % (self.label(), str(self.variable), self.high.label(), self.low.label())
-        if prover.verbLevel >= 3:
-            mhu = "ITE assertion for %s: HU" % label
-            mlu = "ITE assertion for %s: LU" % label
-            mhd = "ITE assertion for %s: HD" % label
-            mld = "ITE assertion for %s: LD" % label
-        else:
-            mhu = "ITE assertions for %s"  % label
-            mlu = None
-            mhd = None
-            mld = None
             
         antecedents = []
-        huid = prover.createClause(self.clauseHU(), [], mhu, alreadyClean = True)
+        comment = "ITE assertions for %s" % label
+        if prover.verbLevel >= 3:
+            comment = "ITE assertion for %s: HU" % label
+        huid = prover.createClause(self.clauseHU(), [], comment, alreadyClean = True)
         if huid != resolver.tautologyId:
+            comment = None
             antecedents.append(-huid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = huid - self.HU
         
-        luid = prover.createClause(self.clauseLU(), [], mlu, alreadyClean = True)
+        if prover.verbLevel >= 3:
+            comment = "ITE assertion for %s: LU" % label
+        luid = prover.createClause(self.clauseLU(), [], comment, alreadyClean = True)
         if luid != resolver.tautologyId:
+            comment = None
             antecedents.append(-luid)
             if self.definingClauseBase == 0:
                 self.definingClauseBase = luid - self.LU
 
-        hdid = prover.createClause(self.clauseHD(), antecedents, mhd, alreadyClean = True)
+        if prover.verbLevel >= 3:
+            comment = "ITE assertion for %s: HD" % label
+        hdid = prover.createClause(self.clauseHD(), antecedents, comment, alreadyClean = True)
         if hdid != resolver.tautologyId:
+            comment = None
             if self.definingClauseBase == 0:
                 self.definingClauseBase = hdid - self.HD
 
-        ldid = prover.createClause(self.clauseLD(), antecedents, mld, alreadyClean = True)
+        if prover.verbLevel >= 3:
+            comment = "ITE assertion for %s: LD" % label
+        ldid = prover.createClause(self.clauseLD(), antecedents, comment, alreadyClean = True)
         if ldid != resolver.tautologyId:
+            comment = None
             if self.definingClauseBase == 0:
                 self.definingClauseBase = ldid - self.LD
     

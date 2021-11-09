@@ -300,6 +300,7 @@ class Prover:
     verbLevel = 1
     doLrat = False
     doBinary = False
+    clauseDict = None
 
     def __init__(self, fname = None, writer = None, verbLevel = 1, doLrat = False, doBinary = False):
         self.verbLevel = verbLevel
@@ -318,6 +319,8 @@ class Prover:
         self.clauseCount = 0
         self.lastClauseId = 0
         self.proofCount = 0
+        if not doLrat:
+            self.clauseDict = {}
 
     def inputDone(self):
         self.inputClauseCount = self.clauseCount
@@ -333,14 +336,12 @@ class Prover:
         if not alreadyClean:
             result = resolver.cleanClause(result)
         self.lastClauseId += 1
-        cid = self.lastClauseId
         if result == resolver.tautologyId:
+            # Want to skip ID if tautology
             return result
+        cid = self.lastClauseId
         self.clauseCount += 1
         self.comment(comment)
-        if result == -resolver.tautologyId:
-            result = []
-        antecedent = list(antecedent)
         if self.doLrat:
             first = [cid]
             middle = [ord('a')] if self.doBinary else []
@@ -351,9 +352,7 @@ class Prover:
             rest = result + [0]
         ilist = first + middle + rest
         if self.doBinary:
-            if isInput and self.doLrat:
-                pass
-            else:
+            if not isInput:
                 bytes = stream.CompressArray(ilist).bytes
                 self.file.write(bytes)
         else:
@@ -363,21 +362,39 @@ class Prover:
                 self.comment(istring)
             else:
                 self.file.write(istring + '\n')
+        if not self.doLrat:
+            self.clauseDict[cid] = result
         return cid
 
     def deleteClauses(self, clauseList):
-        if not self.doLrat:
-            return
-        middle = [ord('d')] if self.doBinary else ['d']
-        rest = clauseList + [0]
-        ilist = [self.clauseCount] + middle + rest
-        if self.doBinary:
-            bytes = stream.CompressArray(ilist).bytes
-            self.file.write(bytes)
+        if self.doLrat:
+            middle = [ord('d')] if self.doBinary else ['d']
+            rest = clauseList + [0]
+            ilist = [self.clauseCount] + middle + rest
+            if self.doBinary:
+                bytes = stream.CompressArray(ilist).bytes
+                self.file.write(bytes)
+            else:
+                slist = [str(i) for i in ilist]
+                istring = " ".join(slist)
+                self.file.write(istring + '\n')
         else:
-            slist = [str(i) for i in ilist]
-            istring = " ".join(slist)
-            self.file.write(istring + '\n')
+            for cid in clauseList:
+                clause = self.clauseDict[cid]
+                middle = [ord('d')] if self.doBinary else ['d']
+                rest = clause + [0]
+                ilist = middle + rest
+                if self.doBinary:
+                    bytes = stream.CompressArray(ilist).bytes
+                    self.file.write(bytes)
+                else:
+                    slist = [str(i) for i in ilist]
+                    istring = " ".join(slist)
+                    self.file.write(istring + '\n')
+                
+                
+
+
 
     def summarize(self):
         if self.verbLevel >= 1:
