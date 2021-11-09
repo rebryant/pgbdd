@@ -49,7 +49,7 @@ class PHP:
 
     def generateCnf(self, froot):
         hcount = self.hcount
-        ecount = (hcount+1) + (hcount+1)*(hcount)//2
+        ecount = (hcount+1)*hcount
         cnfWriter = writer.CnfWriter(ecount, froot, self.verbose)
         for p in unitRange(hcount+1):
             for h in unitRange(hcount):
