@@ -20,6 +20,99 @@ def usage(name):
     xutil.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
     xutil.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
 
+class Clique:
+    # Set of vertex indices
+    vertexList = []
+    # The labels for the clique edges
+    labelList = []
+    def __init__(self, vertexList, edgeMap):
+        self.vertexList = sorted(vertexList)
+        self.labelList = []
+        for idx1 in range(len(self.vertexList)):
+            v1 = self.vertexList[idx1]
+            for idx2 in range(idx1+1, len(self.vertexList)):
+                v2 = self.vertexList[idx2]
+                self.labelList.append(edgeMap[(v1,v2)])
+        self.labelList.sort()
+
+    def __str__(self):
+        return "Vars: %s Edges: %s" % (str(self.vertexList), str(self.labelList))
+
+# Clique enumeration
+class CliqueFinder:
+    # Set of vertex indices.  Given as map from vertex id to True/False
+    vertexMap = {}
+    # Map for each vertex to list of its neighbors
+    neighborMap = {}
+    # Labeled edges.  Maps from (v1,v2) to edge label
+    # Guaranteed that v1<v2
+    edgeMap = {}
+    # Generated cliques
+    cliqueList = []
+    
+    def __init__(self):
+        self.vertexMap = {}
+        self.edgeMap = {}
+        self.cliqueList = []
+     
+    # Add new edge.
+    # If new edge, return True
+    # If edge already exists, return False
+
+    def addEdge(self, v1, v2, label):
+        self.addVertex(v1)
+        self.addVertex(v2)
+        if v1 > v2:
+            v1,v2 = v2,v1
+        if (v1,v2) in self.edgeMap:
+            return False
+        else:
+            self.edgeMap[(v1,v2)] = label
+            return True
+    
+    def labelList(self):
+        return sorted(self.edgeMap.values())
+
+    def addVertex(self, v):
+        if v not in self.vertexMap:
+            self.vertexMap[v] = True
+
+    def getEdge(self, v1, v2):
+        if v1 > v2:
+            v1,v2 = v2,v1
+        if (v1,v2) in self.edgeMap:
+            return self.edgeMap[(v1,v2)]
+        else:
+            return None
+
+    def addClique(self, vertexList):
+        clique = Clique(vertexList, self.edgeMap)
+        self.cliqueList.append(clique)
+
+    # Recursive step of Bron-Kerbosch algorithm
+    def bkStep(self, R, P, X):
+        if len(P) == 0 and len(X) == 0:
+            self.addClique(R)
+        while len(P) > 0:
+            v = P[0]
+            P = P[1:]
+            recR = R + [v]
+            recP = []
+            for u in P:
+                if self.getEdge(v, u) is not None:
+                    recP.append(u)
+            recX = []
+            for u in X:
+                if self.getEdge(v, u) is not None:
+                    recX.append(u)
+            self.bkStep(recR, recP, recX)
+            X.append(v)
+                
+    def generateCliques(self):
+        R = []
+        P = sorted(self.vertexMap.keys())
+        X = []
+        self.bkStep(R, P, X)
 
 # Constraint or equation
 class Formula:
@@ -321,6 +414,33 @@ class ConstraintFinder:
 
     def findDirectAmos(self):
         startCount = len(self.constraintList)
+        finder = CliqueFinder()
+        idList = sorted(self.clauseDict.keys())
+        # Build graph
+        for cid in idList:
+            clause = self.clauseDict[cid]
+            if len(clause) != 2:
+                continue
+            if clause[0] > 0 or clause[1] > 0:
+                continue
+            v1, v2 = abs(clause[0]), abs(clause[1])
+            if not finder.addEdge(v1, v2, cid):
+                # This is a redundant clause
+                del self.clauseDict[cid]
+        finder.generateCliques()
+        for clique in finder.cliqueList:
+            varList = clique.vertexList
+            clauseList = clique.labelList
+            coeffList = [-1] * len(varList)
+            const = -1
+            con = Formula(varList, coeffList, const, [clauseList, []], False)
+            self.constraintList.append(con)
+        for cid in finder.labelList():
+            del self.clauseDict[cid]
+        self.amoCount += len(self.constraintList)-startCount
+
+    def oldFindDirectAmos(self):
+        startCount = len(self.constraintList)
         # Mapping from variable to map from adjacent variables to True/False
         # Map in both directions
         edgeMap = {}
@@ -335,6 +455,9 @@ class ConstraintFinder:
             if clause[0] > 0 or clause[1] > 0:
                 continue
             v1, v2 = abs(clause[0]), abs(clause[1])
+            if (v1,v2) in idSet:
+                # Redundant clause
+                del idSet[(v1,v2)]
             idSet[(v1,v2)] = cid
             if v1 not in edgeMap:
                 edgeMap[v1] = {}
