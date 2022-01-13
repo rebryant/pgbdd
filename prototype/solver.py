@@ -429,6 +429,10 @@ class Solver:
     # Mapping from input Ids to BDD representation of literal
     litMap = {}
 
+    # Dictionary of terms corresponding to input clauses.
+    # These will be removed from activeClauses when used
+    # but they can be reactivated
+    inputIds = {}
     # Dictionary of Ids of terms remaining to be combined
     activeIds = {}
     unsat = False
@@ -486,12 +490,14 @@ class Solver:
             self.litMap[-inputId] = e
         # Generate BDD representations of clauses
         self.termCount = 0
+        self.inputIds = {}
         self.activeIds = {}
         for clause in reader.clauses:
             self.termCount += 1
             litList = [self.litMap[v] for v in clause]
             root, validation = self.manager.constructClause(self.termCount, litList)
             term = Term(self.manager, root, validation)
+            self.inputIds[self.termCount] = term
             self.activeIds[self.termCount] = term
         self.unsat = False
 
@@ -500,19 +506,32 @@ class Solver:
         ids = sorted(self.activeIds.keys())
         return ids[0], ids[1]
 
+    # Attempt to retrieve term
+    def getTerm(self, id):
+        if id in self.activeIds:
+            return self.activeIds[id]
+        elif id in self.inputIds:
+            return self.inputIds[id]
+        else:
+            return None
+
     # Remove term.  Can trigger GC, so be sure that all
     # active BDDs have been captured as terms
     def removeTerm(self, id):
-        term = self.activeIds[id]
-        term.root = None
-        del self.activeIds[id]
-        clauseList = self.manager.checkGC(term.size)
-        if len(clauseList) > 0:
-            self.prover.deleteClauses(clauseList)
+        term = None
+        if id in self.activeIds:
+            term = self.activeIds[id]
+            del self.activeIds[id]
+        if id not in self.inputIds:
+            if term is not None:
+                term.root = None
+            clauseList = self.manager.checkGC(term.size)
+            if len(clauseList) > 0:
+                self.prover.deleteClauses(clauseList)
 
     def combineTerms(self, id1, id2):
-        termA = self.activeIds[id1]
-        termB = self.activeIds[id2]
+        termA = self.getTerm(id1)
+        termB = self.getTerm(id2)
         newTerm = termA.combine(termB)
         self.termCount += 1
         comment = "T%d (Node %s) & T%d (Node %s)--> T%s (Node %s)" % (id1, termA.root.label(), id2, termB.root.label(),
@@ -532,7 +551,7 @@ class Solver:
         return self.termCount
 
     def quantifyTerm(self, id, varList):
-        term = self.activeIds[id]
+        term = self.getTerm(id)
         litList = [self.litMap[v] for v in varList]
         clause = self.manager.buildClause(litList)
         newTerm = term.quantify(clause, self.prover)
