@@ -90,6 +90,7 @@ class CliqueFinder:
         self.cliqueList.append(clique)
 
     # Recursive step of Bron-Kerbosch algorithm
+    # https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
     def bkStep(self, R, P, X):
         if len(P) == 0 and len(X) == 0:
             self.addClique(R)
