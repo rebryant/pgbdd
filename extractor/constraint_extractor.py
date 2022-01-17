@@ -7,6 +7,8 @@ import getopt
 import sys
 import glob
 import queue
+from collections import defaultdict
+import datetime
 
 import xutil
 
@@ -40,10 +42,10 @@ class Clique:
 
 # Clique enumeration
 class CliqueFinder:
-    # Set of vertex indices.  Given as map from vertex id to True/False
-    vertexMap = {}
-    # Map for each vertex to list of its neighbors
-    neighborMap = {}
+    # Set of vertex indices.
+    vertexSet = set()
+    # Map for each vertex to set of neighbors
+    neighborSet = defaultdict(lambda : set())
     # Labeled edges.  Maps from (v1,v2) to edge label
     # Guaranteed that v1<v2
     edgeMap = {}
@@ -51,9 +53,10 @@ class CliqueFinder:
     cliqueList = []
     
     def __init__(self):
-        self.vertexMap = {}
+        self.vertexSet = set()
         self.edgeMap = {}
         self.cliqueList = []
+        # Determinize
      
     # Add new edge.
     # If new edge, return True
@@ -68,14 +71,16 @@ class CliqueFinder:
             return False
         else:
             self.edgeMap[(v1,v2)] = label
+            self.neighborSet[v1].add(v2)
+            self.neighborSet[v2].add(v1)
             return True
     
     def labelList(self):
         return sorted(self.edgeMap.values())
 
     def addVertex(self, v):
-        if v not in self.vertexMap:
-            self.vertexMap[v] = True
+        if v not in self.vertexSet:
+            self.vertexSet.add(v)
 
     def getEdge(self, v1, v2):
         if v1 > v2:
@@ -89,31 +94,108 @@ class CliqueFinder:
         clique = Clique(vertexList, self.edgeMap)
         self.cliqueList.append(clique)
 
-    # Recursive step of Bron-Kerbosch algorithm
+
+    # Ordering of vertices for  Bron-Kerbosch algorithm
+    # https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm     
+    # Code from https://gist.github.com/abhin4v/8304062
+    def orderedVertices(self):
+        ordering = []
+        orderingSet = set()
+        # Mapping from each vertex to the number of remaining neighbors
+        degree = defaultdict(int)
+        # Mapping from degree to set of vertices with that (remaining) degree
+        degenSets = defaultdict(lambda : set())
+        maxDegree = -1
+        for v in self.vertexSet:
+            deg = len(self.neighborSet[v])
+            degenSets[deg].add(v)
+            degree[v] = deg
+            maxDegree = max(maxDegree, deg)
+
+        while True:
+            # Find vertex with minimum degree
+            d = 0
+            while d <= maxDegree:
+                if len(degenSets[d]) != 0:
+                    break
+                d += 1
+            if d > maxDegree:
+                # No more vertices
+                break
+            v = degenSets[d].pop()
+            ordering.append(v)
+            orderingSet.add(v)
+            for w in self.neighborSet[v]:
+                if w in orderingSet:
+                    continue
+                deg = degree[w]
+                degenSets[deg].remove(w)
+                if deg > 0:
+                    degree[w] -= 1
+                    degenSets[deg-1].add(w)
+        return ordering
+
+    # Recursive step of Bron-Kerbosch algorithm without pivoting
     # https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
     def bkStep(self, R, P, X):
         if len(P) == 0 and len(X) == 0:
             self.addClique(R)
         while len(P) > 0:
-            v = P[0]
-            P = P[1:]
-            recR = R + [v]
-            recP = []
+            v = P.pop()
+            recR = R.union([v])
+            recP = set()
             for u in P:
                 if self.getEdge(v, u) is not None:
-                    recP.append(u)
-            recX = []
+                    recP.add(u)
+            recX = set()
             for u in X:
                 if self.getEdge(v, u) is not None:
-                    recX.append(u)
+                    recX.add(u)
             self.bkStep(recR, recP, recX)
-            X.append(v)
-                
-    def generateCliques(self):
-        R = []
-        P = sorted(self.vertexMap.keys())
-        X = []
+            X.add(v)
+
+            
+    # Recursive step of Bron-Kerbosch algorithm with pivoting
+    # https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
+    def bkPivotStep(self, R, P, X):
+        if len(P) == 0 and len(X) == 0:
+            self.addClique(R)
+        else:
+            # Select pivot arbitrarily
+            C = P.union(X)
+            u = C.pop()
+            for v in P.difference(self.neighborSet[u]):
+                neighbors = self.neighborSet[v]
+                P.remove(v)
+                self.bkPivotStep(R.union([v]), P.intersection(neighbors), X.intersection(neighbors))
+                X.add(v)
+            
+    def generateCliquesPivot(self):
+        R = set()
+        P = set(self.vertexSet)
+        plist = self.orderedVertices()
+        X = set()
+        while len(P) > 0:
+            # Get first element of plist that is still in P
+            while len(plist) > 0:
+                v = plist[0]
+                plist = plist[1:]
+                if v in P:
+                    break
+            P.remove(v)
+            neighbors = self.neighborSet[v]
+            self.bkPivotStep(R.union([v]), P.intersection(neighbors), X.intersection(neighbors))
+            X.add(v)
+
+    def generateCliquesSafe(self):
+        R = set()
+        P = set(self.vertexSet)
+        X = set()
         self.bkStep(R, P, X)
+
+    def generateCliques(self):
+        self.generateCliquesPivot()
+
 
 # Constraint or equation
 class Formula:
@@ -535,6 +617,7 @@ class ConstraintFinder:
 
 
     def generate(self, oname):
+        startTime = datetime.datetime.now()
         self.find()
         ccount = len(self.clauseDict)
         if ccount > 0:
@@ -556,7 +639,9 @@ class ConstraintFinder:
         for con in self.constraintList:
             con.generate(outfile)
         ccount = len(self.constraintList)
-        xutil.ewrite("%s%d constraints extracted (%d unit, %d ALO, %d AMO, %d equations)\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount), 1)
+        delta = datetime.datetime.now() - startTime
+        seconds = delta.seconds + 1e-6 * delta.microseconds
+        xutil.ewrite("%s%d constraints extracted (%d unit, %d ALO, %d AMO, %d equations) %.2f seconds\n" % (self.msgPrefix, ccount, self.ucount, self.aloCount, self.amoCount, self.eqCount, seconds), 1)
         if oname is not None:
             outfile.close()
         return True
