@@ -154,6 +154,12 @@ class CliqueFinder:
             self.bkStep(recR, recP, recX)
             X.add(v)
 
+    def generateCliquesSafe(self):
+        R = set()
+        P = set(self.vertexSet)
+        X = set()
+        self.bkStep(R, P, X)
+
             
     # Recursive step of Bron-Kerbosch algorithm with pivoting
     # https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
@@ -162,9 +168,10 @@ class CliqueFinder:
             self.addClique(R)
         else:
             # Select pivot arbitrarily
-            C = P.union(X)
-            u = C.pop()
-            for v in P.difference(self.neighborSet[u]):
+            C = P if len(P) > 0 else X
+            u = next(iter(C))
+            plist = [v for v in P if v not in self.neighborSet[u]]
+            for v in plist:
                 neighbors = self.neighborSet[v]
                 P.remove(v)
                 self.bkPivotStep(R.union([v]), P.intersection(neighbors), X.intersection(neighbors))
@@ -175,23 +182,14 @@ class CliqueFinder:
         P = set(self.vertexSet)
         plist = self.orderedVertices()
         X = set()
-        while len(P) > 0:
-            # Get first element of plist that is still in P
-            while len(plist) > 0:
-                v = plist[0]
-                plist = plist[1:]
-                if v in P:
-                    break
+        for v in plist:
+            # Skip if no longer in P
+            if v not in P:
+                continue
             P.remove(v)
             neighbors = self.neighborSet[v]
             self.bkPivotStep(R.union([v]), P.intersection(neighbors), X.intersection(neighbors))
             X.add(v)
-
-    def generateCliquesSafe(self):
-        R = set()
-        P = set(self.vertexSet)
-        X = set()
-        self.bkStep(R, P, X)
 
     def generateCliques(self):
         self.generateCliquesPivot()
