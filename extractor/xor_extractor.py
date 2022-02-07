@@ -100,7 +100,7 @@ class Xor:
                         clause = self.getClause(id)
                         xutil.ewrite("    Clause #%d:%s\n" % (id, str(clause)), 4)
         if unkCount > 0:
-            xutil.ewrite("%s%d total clauses.  Failed to classify %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 2)
+            xutil.ewrite("%s%d total clauses.  Failed to classify %d clauses\n" % (self.msgPrefix, len(self.clauses), unkCount), 1)
             return False
         if oname is None:
             outfile = sys.stdout
