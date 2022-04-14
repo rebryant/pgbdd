@@ -24,6 +24,7 @@ import sys
 import getopt
 import datetime
 import random
+import signal
 
 import bdd
 import resolver
@@ -34,7 +35,7 @@ import pseudoboolean
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-r SEED] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile]\n" % name)
+    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-r SEED] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile] [-t TLIM]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -b          Process terms via bucket elimination ordered by variable levels\n")
     sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
@@ -47,6 +48,7 @@ def usage(name):
     sys.stderr.write("  -s SCHEDULE Name of action schedule file\n")
     sys.stderr.write("  -m MODULUS  Specify modulus for equation solver (Either number or 'a' for auto-detect, 'i' for integer mode)\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
+    sys.stderr.write("  -t TLIM     Set time limit for execution\n")
 
 # Verbosity levels
 # 0: Totally silent
@@ -884,6 +886,20 @@ def readScheduler(fname, writer = None):
         actionList.append(line)
     return actionList
 
+# Time limit must be global variable.  0 = no limit
+timelimit = 0
+
+def ahandler(signum, frame):
+    print("Program timed out after %d seconds" % timelimit)
+    sys.exit(1)
+
+def setlimit(tlim):
+    global timelimit
+    timelimit = tlim
+    signal.signal(signal.SIGALRM, ahandler)
+    signal.alarm(tlim)
+
+
 def run(name, args):
     cnfName = None
     proofName = None
@@ -897,7 +913,7 @@ def run(name, args):
     logName = None
     modulus = pseudoboolean.modulusAuto
 
-    optlist, args = getopt.getopt(args, "hbB:v:r:i:o:M:p:s:m:L:")
+    optlist, args = getopt.getopt(args, "hbB:v:r:i:o:M:p:s:m:L:t:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -914,6 +930,8 @@ def run(name, args):
             random.seed(int(val))
         elif opt == '-i':
             cnfName = val
+        elif opt == '-t':
+            setlimit(int(val))
         elif opt == '-o':
             proofName = val
             extension = proofName.split('.')[-1]
