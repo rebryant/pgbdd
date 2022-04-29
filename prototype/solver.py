@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python3
 # Simple, proof-generating SAT solver based on BDDs
 
 #####################################################################################
