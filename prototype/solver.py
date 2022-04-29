@@ -35,7 +35,7 @@ import pseudoboolean
 sys.setrecursionlimit(10 * sys.getrecursionlimit())
 
 def usage(name):
-    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-r SEED] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile] [-t TLIM]\n" % name)
+    sys.stderr.write("Usage: %s [-h] [-b] [-B BPERM] [-v LEVEL] [-r SEED] [-i CNF] [-o file.{proof,lrat,lratb}] [-M t|b|p] [-p PERMUTE] [-s SCHEDULE] [-m MODULUS] [-L logfile] [-t TLIM] [-Z NZLIM]\n" % name)
     sys.stderr.write("  -h          Print this message\n")
     sys.stderr.write("  -b          Process terms via bucket elimination ordered by variable levels\n")
     sys.stderr.write("  -B BPERM    Process terms via bucket elimination ordered by permutation file BPERM\n")
@@ -49,6 +49,7 @@ def usage(name):
     sys.stderr.write("  -m MODULUS  Specify modulus for equation solver (Either number or 'a' for auto-detect, 'i' for integer mode)\n")
     sys.stderr.write("  -L logfile  Append standard error output to logfile\n")
     sys.stderr.write("  -t TLIM     Set time limit for execution\n")
+    sys.stderr.write("  -Z NZLIM    Set limit on number on nonzeros in when solving equations/constraints\n")
 
 # Verbosity levels
 # 0: Totally silent
@@ -578,7 +579,7 @@ class Solver:
             for s in self.manager.satisfyStrings(self.activeIds[nid].root, limit = 20):
                 self.writer.write("  " + s)
         
-    def runSchedule(self, scheduler, modulus):
+    def runSchedule(self, scheduler, modulus, nzLimit):
         self.modulus = modulus
         idStack = []
         lineCount = 0
@@ -627,7 +628,7 @@ class Solver:
                     nid = self.combineTerms(id1, id2)
                     if nid < 0:
                         # Hit unsat case
-                        return
+                        return "unsatisfiable"
                     else:
                         idStack.append(nid)
             elif cmd == 'q':
@@ -713,24 +714,30 @@ class Solver:
 
         # Reach end of scheduler
         if self.equationSystem is not None:
-            status = self.equationSystem.solve()
+            status = self.equationSystem.solve(nzLimit)
             if status == 'failed':
                 self.writer.write("FAILED.  Equation system could not be solved\n")
             elif status == 'unsolvable':
                 self.writer.write("Equation system proved formula UNSAT\n")
                 self.equationSystem.postStatistics(status)
+            elif status == 'toobig':
+                self.writer.write("Equation system UNSAT, but too big for proof\n")
             else:
                 self.writer.write("UNRESOLVED.  Equation solver indicates the formula may be SAT\n")
+            return status
         elif self.constraintSystem is not None:
-            status = self.constraintSystem.solve()
+            status = self.constraintSystem.solve(nzLimit)
             if status == 'failed':
                 self.writer.write("FAILED.  Constraint system could not be solved\n")
             elif status == 'unsolvable':
                 self.writer.write("Constraint system proved formula UNSAT\n")
                 self.constraintSystem.postStatistics(status)
+            elif status == 'toobig':
+                self.writer.write("Constraint system UNSAT, but too big for proof\n")
             else:
                 self.writer.write("UNRESOLVED.  Constraint solver indicates the formula may be SAT:\n")
                 self.constraintSystem.show()
+            return status
         
     def placeInBucket(self, buckets, id):
         term = self.activeIds[id]
@@ -759,7 +766,7 @@ class Solver:
                 newId = self.combineTerms(id1, id2)
                 if newId < 0:
                     # Hit unsat case
-                    return
+                    return "unsatisfiable"
                 self.placeInBucket(buckets, newId)
             # Quantify top variable for this bucket
             if blevel > 0 and len(buckets[blevel]) > 0:
@@ -778,6 +785,7 @@ class Solver:
             buckets[0].append(id)
         else:
             buckets[level].append(id)
+        return "satisfiable"
 
     def placeInBucketPerm(self, buckets, id, bperm):
         term = self.activeIds[id]
@@ -809,7 +817,7 @@ class Solver:
                 newId = self.combineTerms(id1, id2)
                 if newId < 0:
                     # Hit unsat case
-                    return
+                    return "unsatisfiable"
                 self.placeInBucketPerm(buckets, newId, bperm)
             # Quantify variable for this bucket
             if bid > 0 and len(buckets[bid]) > 0:
@@ -819,6 +827,7 @@ class Solver:
                 self.placeInBucketPerm(buckets, newId, bperm)
         if self.verbLevel >= 0:
             self.writer.write("SAT\n")
+        return "satisfiable"
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
@@ -912,8 +921,9 @@ def run(name, args):
     verbLevel = 1
     logName = None
     modulus = pseudoboolean.modulusAuto
+    nzLimit = None
 
-    optlist, args = getopt.getopt(args, "hbB:v:r:i:o:M:p:s:m:L:t:")
+    optlist, args = getopt.getopt(args, "hbB:v:r:i:o:M:p:s:m:L:t:Z:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -962,6 +972,8 @@ def run(name, args):
                 modulus = int(val)
         elif opt == '-L':
             logName = val
+        elif opt == '-Z':
+            nzLimit = int(val)
         else:
             sys.stderr.write("Unknown option '%s'\n" % opt)
             usage(name)
@@ -985,18 +997,18 @@ def run(name, args):
     start = datetime.datetime.now()
     solver = Solver(cnfName, prover = prover, permuter = permuter, verbLevel = verbLevel)
     if doBucket:
-        solver.runBucketSchedule()
+        status = solver.runBucketSchedule()
     elif bpermuter is not None:
-        solver.runBucketSchedulePerm(bpermuter)
+        status = solver.runBucketSchedulePerm(bpermuter)
     elif scheduler is not None:
-        solver.runSchedule(scheduler, modulus)
+        status = solver.runSchedule(scheduler, modulus, nzLimit)
     else:
-        solver.runNoSchedule()
+        status = solver.runNoSchedule()
 
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
     if verbLevel > 0:
-        writer.write("Elapsed time for SAT: %.2f seconds\n" % seconds)
+        writer.write("Elapsed time for SAT: %.2f seconds (status = %s)\n" % (seconds, str(status).upper()))
     if writer != sys.stderr:
         writer.close()
     

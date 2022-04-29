@@ -794,7 +794,7 @@ class EquationSystem:
 
     # Perform one step of LU decomposition
     # Return (status, finalequation), where status is
-    # "solved", "unsolvable", "normal"
+    # "solved", "unsolvable", "normal", "toobig"
     def solutionStep(self):
         if len(self.rset) == 0:
             return ("solved", None)
@@ -835,7 +835,7 @@ class EquationSystem:
         self.pivotHelper.deleteIndex(pidx)
         return ("normal", None)
             
-    def solve(self):
+    def solve(self, nzLimit):
         self.sset = EquationSet(writer = self.writer)
         if self.verbose:
             self.writer.write("  Initial state\n")
@@ -862,7 +862,11 @@ class EquationSystem:
             self.writer.write("  Solution status:%s\n" % status)
             self.postStatistics(status)
         if status == "unsolvable" and delayJustification:
-            self.performJustification(laste)
+            if nzLimit is not None and self.rset.termCount > nzLimit:
+                self.writer.write("ABORTING PROOF generations.  NZ count = %d\n" % self.rset.termCount)
+                status = "toobig"
+            else:
+                self.performJustification(laste)
         return status
 
     def checkGC(self, newDeadCount):
@@ -1372,7 +1376,7 @@ class ConstraintSystem:
 
         return "normal"
             
-    def solve(self):
+    def solve(self, nzLimit):
         self.sset = ConstraintSet(writer = self.writer)
         if self.verbose:
             self.writer.write("  Initial state\n")
