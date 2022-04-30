@@ -863,9 +863,10 @@ class EquationSystem:
             self.postStatistics(status)
         if status == "unsolvable" and delayJustification:
             if nzLimit is not None and self.rset.termCount > nzLimit:
-                self.writer.write("ABORTING PROOF generations.  NZ count = %d\n" % self.rset.termCount)
+                self.writer.write("Aborting proof generation.  NZ count = %d\n" % self.rset.termCount)
                 status = "toobig"
             else:
+                self.writer.write("Attempting proof generation.  NZ count = %d\n" % self.rset.termCount)
                 self.performJustification(laste)
         return status
 
