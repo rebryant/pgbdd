@@ -6,17 +6,19 @@
 import getopt
 import sys
 import glob
+import random
 
 import xutil
 
 
 def usage(name):
-    xutil.ewrite("Usage: %s [-v VLEVEL] [-h] [-c] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
+    xutil.ewrite("Usage: %s [-v VLEVEL] [-r SEED] [-h] [-c] [-i IN.cnf] [-o OUT.schedule] [-d DIR] [-m MAXCLAUSE]\n" % name, 0)
     xutil.ewrite("  -h       Print this message\n", 0)
     xutil.ewrite("  -v VERB  Set verbosity level (1-4)\n", 0)
+    xutil.ewrite("  -r SEED  Set seed from randomization\n", 0)
     xutil.ewrite("  -c       Careful checking of CNF\n", 0)
     xutil.ewrite("  -i IFILE Single input file\n", 0)
-    xutil.ewrite("  -i OFILE Single output file\n", 0)
+    xutil.ewrite("  -o OFILE Single output file\n", 0)
     xutil.ewrite("  -p PATH  Process all CNF files with matching path prefix\n", 0)
     xutil.ewrite("  -m MAXC  Skip files with larger number of clauses\n", 0)
 
@@ -80,7 +82,9 @@ class Xor:
         return result
         
     def generate(self, oname):
-        idlists = list(self.varMap.values())
+        vars = sorted(self.varMap.keys())
+        random.shuffle(vars)
+        idlists = [self.varMap[v] for v in vars]
         totalCount = 0
         unkCount = 0
         tlist = []
@@ -152,13 +156,17 @@ def run(name, args):
     path = None
     maxclause = None
     ok = True
+    # Determinize
+    random.seed(1)
 
-    optlist, args = getopt.getopt(args, "hcv:i:o:p:m:")
+    optlist, args = getopt.getopt(args, "hcv:r:i:o:p:m:")
     for (opt, val) in optlist:
         if opt == '-h':
             ok = False
         elif opt == '-v':
             xutil.verbLevel = int(val)
+        elif opt == '-r':
+            random.seed(int(val))
         elif opt == '-c':
             xutil.careful = True
         elif opt == '-i':
