@@ -831,7 +831,9 @@ class Solver:
 
     # Provide roots of active nodes to garbage collector
     def rootGenerator(self):
-        rootList = [t.root for t in self.activeIds.values()]
+        ilist = sorted(self.activeIds.keys())
+        tlist = [self.activeIds[id] for id in ilist]
+        rootList = [t.root for t in tlist]
         if self.equationSystem is not None:
             rootList += self.equationSystem.rset.rootList()
             rootList += self.equationSystem.eset.rootList()

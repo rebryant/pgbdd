@@ -336,7 +336,7 @@ class Equation:
         previ = ilist[0]
         needNodes[previ][0] = True
         for nexti in ilist[1:]:
-            for offset in needNodes[previ].keys():
+            for offset in sorted(needNodes[previ].keys()):
                 # Will need this offset when variable evaluates to 0
                 needNodes[nexti][offset] = True
                 # Will need this offset when variable evaluates to 1
@@ -352,19 +352,19 @@ class Equation:
             # Unbounded range.  Need to consider all possible offsets
             lasti = rilist[0]
             needLeaves = {}
-            for offset in needNodes[lasti].keys():
+            for offset in sorted(needNodes[lasti].keys()):
                 needLeaves[offset] = True
                 noffset = offset + nnz[lasti]
                 needLeaves[noffset] = True
-            valueList = needLeaves.keys()
+            valueList = sorted(needLeaves.keys())
         else:
-            valueList = esys.mbox.values()
+            valueList = sorted(esys.mbox.values())
 
         leafList = { offset : (esys.manager.leaf1 if offset == ncval else esys.manager.leaf0) for offset in valueList }
         nodes = { i : {} for i in rilist }
 
         lasti = rilist[0]
-        for offset in needNodes[lasti].keys():
+        for offset in sorted(needNodes[lasti].keys()):
             low = leafList[offset]
             noffset = esys.mbox.add(offset, nnz[lasti])
             high = leafList[noffset]
@@ -374,7 +374,7 @@ class Equation:
 
         nexti = lasti
         for previ in rilist[1:]:
-            for offset in needNodes[previ].keys():
+            for offset in sorted(needNodes[previ].keys()):
                 low = nodes[nexti][offset]
                 noffset = esys.mbox.add(offset, nnz[previ])
                 high = nodes[nexti][noffset]
@@ -466,7 +466,9 @@ class EquationSet:
             return []
 
     def rootList(self):
-        return [e.root for e in self.equDict.values()]
+        ilist = sorted(self.equDict.keys())
+        elist = [self.equDict[id] for id in ilist]
+        return [e.root for e in elist]
 
     def __getitem__(self, id):
         return self.equDict[id]
@@ -475,10 +477,10 @@ class EquationSet:
         return len(self.equDict)
 
     def currentEids(self):
-        return list(self.equDict.keys())
+        return sorted(list(self.equDict.keys()))
 
     def currentIndices(self):
-        return list(self.nzMap.keys())
+        return sorted(list(self.nzMap.keys()))
 
     def show(self):
         eidList = sorted(self.currentEids())
@@ -524,7 +526,9 @@ class PivotHelper:
             del self.touchedSet[id]
 
     def update(self):
-        for id in self.touchedSet.keys():
+        ilist = sorted(self.touchedSet.keys())
+        random.shuffle(ilist)
+        for id in ilist:
             tup = self.evalFunction(id)
             self.generationMap[id] += 1
             qtup = tup + (self.generationMap[id],)
@@ -1101,7 +1105,7 @@ class Constraint:
         previ = ilist[0]
         needNodes[previ][0] = True
         for nexti in ilist[1:]:
-            for offset in needNodes[previ].keys():
+            for offset in sorted(needNodes[previ].keys()):
                 # Will need this offset when variable evaluates to 0
                 needNodes[nexti][offset] = True
                 # Will need this offset when variable evaluates to 1
@@ -1116,7 +1120,7 @@ class Constraint:
         # Start at leaves.  Determine possible offsets
         lasti = rilist[0]
         needLeaves = {}
-        for offset in needNodes[lasti].keys():
+        for offset in sorted(needNodes[lasti].keys()):
             needLeaves[offset] = True
             noffset = offset + self[lasti]
             needLeaves[noffset] = True
@@ -1124,7 +1128,7 @@ class Constraint:
         leafList = { offset : (csys.manager.leaf1 if offset >= self.cval else csys.manager.leaf0) for offset in needLeaves.keys() }
         nodes = { i : {} for i in rilist }
 
-        for offset in needNodes[lasti].keys():
+        for offset in sorted(needNodes[lasti].keys()):
             low = leafList[offset]
             noffset = offset + self[lasti]
             high = leafList[noffset]
@@ -1134,7 +1138,7 @@ class Constraint:
 
         nexti = lasti
         for previ in rilist[1:]:
-            for offset in needNodes[previ].keys():
+            for offset in sorted(needNodes[previ].keys()):
                 low = nodes[nexti][offset]
                 noffset = offset + self[previ]
                 high = nodes[nexti][noffset]
@@ -1227,7 +1231,9 @@ class ConstraintSet:
             return []
 
     def rootList(self):
-        return [con.root for con in self.conDict.values()]
+        ilist = sorted(self.conDict.keys())
+        clist = [self.conDict[id] for id in ilist]
+        return [con.root for con in clist]
 
     def __getitem__(self, id):
         return self.conDict[id]
@@ -1236,10 +1242,10 @@ class ConstraintSet:
         return len(self.conDict)
 
     def currentCids(self):
-        return list(self.conDict.keys())
+        return sorted(list(self.conDict.keys()))
 
     def currentIndices(self):
-        return list(self.nzMap.keys())
+        return sorted(list(self.nzMap.keys()))
 
     def show(self):
         cidList = sorted(self.currentCids())
