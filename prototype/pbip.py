@@ -68,14 +68,14 @@ def parseObp(line):
     if rel == '>':
         rel = '>='
         cval += 1
-    if rel == '>=':
-        rel = '<='
+    if rel == '<=':
+        rel = '>='
         cval -= sum(coeffs)
         coeffs = [-c for c in coeffs]
     nz = { v : c for v,c in zip(vars,coeffs) }
     con1 = pseudoboolean.Constraint(len(nz), cval)
     con1.setNz(nz)
-    if rel == '<=':
+    if rel == '>=':
         return [con1]
     else:
         cval -= sum(coeffs)
