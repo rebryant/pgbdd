@@ -965,7 +965,7 @@ class Constraint:
 
     def __setitem__(self, i, v):
         if v == 0:
-            if self.nz:
+            if i in self.nz:
                 del self.nz[i]
         else:
             self.nz[i] = v
