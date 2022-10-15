@@ -61,6 +61,8 @@ class DummyProver:
     def fileOutput(self):
         return False
 
+    def summarize(self):
+        pass
 
 @total_ordering
 class Variable:
@@ -325,7 +327,7 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.vresolver = resolver.VResolver(prover)
+        self.vresolver = resolver.VResolver(self.prover)
         self.quantifiedVariableSet = set([])
         self.deadNodeCount = 0
         self.cacheJustifyAdded = 0
