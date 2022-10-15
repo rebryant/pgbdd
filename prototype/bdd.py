@@ -32,6 +32,36 @@ class BddException(Exception):
     def __str__(self):
         return "BDD Exception: " + str(self.value)
 
+# Place holder to allow program to run without proving anything
+class DummyProver:
+
+    clauseCount = 0
+    writer = None
+    verbLevel = 0
+
+    def __init__(self, fname = None, verbLevel = None):
+        self.clauseCount = 0
+        self.writer = sys.stderr
+
+    def comment(self, comment):
+        pass
+
+    def createClause(self, result, antecedent, comment = None, isInput = False, alreadyClean = False):
+        if not alreadyClean:
+            result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            return result
+        self.clauseCount += 1
+        return self.clauseCount
+
+    def emitProof(self, proof, ruleIndex, comment = None):
+        self.clauseCount += 1
+        return self.clauseCount
+
+    def fileOutput(self):
+        return False
+
+
 @total_ordering
 class Variable:
     name = None

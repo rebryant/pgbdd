@@ -1162,7 +1162,7 @@ class Constraint:
         return self.cval <= 0 and len(self) == 0
 
     def __str__(self):
-        if self.N <= 0:
+        if self.N < 0:
             return self.formatDense()
         else:
             return self.formatSparse()
