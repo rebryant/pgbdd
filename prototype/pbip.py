@@ -168,9 +168,11 @@ class Pbip:
     preader = None
     # Set of constraints
     cset = None
-    # Mapping from PBIP file constraints to cset constraints
+    # Array mapping from PBIP file constraints to cset constraints (offset by 1)
     # Each is a list containing Ids of 1 or 2 constraints
-    constraintMap = {}
+    constraintList = []
+    # BDD representations of constraints
+    bddList = []
     # Enable use as constraint system
     prover = None
     manager = None
@@ -182,7 +184,8 @@ class Pbip:
         self.creader = solver.CnfReader(cnfName, verbLevel)
         self.preader = PbipReader(pbipName, verbLevel)
         self.cset = pseudoboolean.ConstraintSet()
-        self.constraintMap = {}
+        self.constraintList = []
+        self.bddList = []
         self.prover = None
         if lratName != "":
             self.prover = solver.prover(fname=lratName, verbLevel = verbLevel, doLrat = True)
@@ -197,31 +200,35 @@ class Pbip:
         command, clist, hlist = self.preader.readLine()
         if command == '':
             return True
-        pid = len(self.constraintMap) + 1
         for con in clist:
             con.buildBdd(self)
-        self.constraintMap[pid] = clist
+        self.constraintList.append(clist)
+        if len(clist) == 2:
+            nroot = bdd.applyAnd(clist[0], clist[1])
+        else:
+            nroot = clist[0]
+        self.bddList.append(nroot)
+        pid = len(self.constraintList)
         if command == 'i':
-            self.doInput(clist, hlist)
+            self.doInput(pid, hlist)
         elif command == 'a':
-            self.doAssertion(clist, hlist)
+            self.doAssertion(pid, hlist)
         else:
             raise PbipException("", "Unexpected command '%s'" % command)
         return False
         
-    def doInput(self, clist, hlist):
-        print("Processed PBIP input")
+    def doInput(self, pid, hlist):
+        print("Processed PBIP input #%d.  Hints = %s" % (pid, str(hlist)))
 
-    def doAssertion(self, clist, hlist):
-        print("Processed PBIP assertion")
+    def doAssertion(self, pid, hlist):
+        print("Processed PBIP assertion #%d.  Hints = %s" % (pid, str(hlist)))
 
     def run(self):
         while not self.doStep():
             pass
-        lastPid = len(self.constraintMap)
         foundUnsat = False
-        if lastPid > 0:
-            lastCon = self.constraintMap[lastPid][-1]
+        if len(self.constraintList) > 0:
+            lastCon = self.constraintList[-1][-1]
             if lastCon.isInfeasible():
                 foundUnsat = True
                 print("UNSAT")
