@@ -1,20 +1,17 @@
-#!/usr/bin/python3
+# Tools for working with PBIP proofs.
+# PBIP that a set of Pseudo-Boolean (PB) constraints is unsatisfiable
+# via a sequence of implication steps
+# The tool pbip_check.py converts a PBIP proof into a clausal proof in LRAT format
+# The tool pbip_cnf.py generates a CNF file containing clausal representation of the input PB constraints
+# The tool pbip_order.py generates a permutation of the CNF file to ensure that all
+# problem variables occur first in the file.
 
-import sys
-import datetime
-import getopt
 
 import solver
 import bdd
 import pseudoboolean
+import resolver
 
-def usage(name):
-    print("Usage %s: [-h] [-v VERB] -i FILE.cnf -p FILE.pbip [-o FILE.lrat]")
-    print("  -h           Print this message")
-    print("  -v VERB      Set verbosity level")
-    print("  -i FILE.cnf  Input CNF file")
-    print("  -p FILE.pbip Input proof file")
-    print("  -o FILE.lrat Output proof file")
 
 def trim(s):
     while len(s) > 0 and s[0] in ' \t':
@@ -155,27 +152,30 @@ class PbipReader:
                 raise PbipException("", "File %s Line %d: Couldn't parse hint list '%s'" % (self.fname, self.lineCount, hstring))
             break
         if self.verbLevel >= 3:
-            print("Read PBIP line #%d" % self.lineCount)
-            print("  Constraints:")
+            print("c Read PBIP line #%d" % self.lineCount)
+            print("c   Constraints:")
             for con in clist:
-                print("   %s" % str(con))
-            print("  Hints: %s" % str(hlist))
+                print("c     %s" % str(con))
+            print("c   Hints: %s" % str(hlist))
         return (command, clist, hlist)
 
 class Pbip:
     verbLevel = 1
     creader = None
     preader = None
+    permuter = None
     # Set of constraints
     cset = None
     # Array mapping from PBIP file constraints to cset constraints (offset by 1)
     # Each is a list containing Ids of 1 or 2 constraints
     constraintList = []
-    # BDD representations of constraints
-    bddList = []
+    # Trusted BDD representations of constraints
+    # Each TBDD is pair (root, validation)
+    tbddList = []
     # Enable use as constraint system
     prover = None
     manager = None
+    litMap = {}
     varMap = {}
     levelMap = {}
     
@@ -185,14 +185,24 @@ class Pbip:
         self.preader = PbipReader(pbipName, verbLevel)
         self.cset = pseudoboolean.ConstraintSet()
         self.constraintList = []
-        self.bddList = []
-        self.prover = None
-        if lratName != "":
-            self.prover = solver.prover(fname=lratName, verbLevel = verbLevel, doLrat = True)
-        self.manager = bdd.Manager(prover = self.prover, verbLevel = verbLevel)
+        self.tbddList = []
+        lratName = None if lratName == "" else lratName
+        self.prover = solver.Prover(fname=lratName, verbLevel = verbLevel, doLrat = True)
+        # Print input clauses
+        clauseCount = 0
+        for clause in self.creader.clauses:
+            clauseCount += 1
+            self.prover.createClause(clause, [], "Input clause %d" % clauseCount, isInput = True)
+        self.prover.inputDone()
+        self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.creader.nvar+1, verbLevel = verbLevel)
+        self.litMap = {}
         for level in range(1, self.creader.nvar+1):
             inputId = level
             var = self.manager.newVariable(name = "V%d" % inputId, id = inputId)
+            t = self.manager.literal(var, 1)
+            self.litMap[ inputId] = t
+            e = self.manager.literal(var, 0)
+            self.litMap[-inputId] = e
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
 
@@ -206,8 +216,8 @@ class Pbip:
         if len(clist) == 2:
             nroot = bdd.applyAnd(clist[0], clist[1])
         else:
-            nroot = clist[0]
-        self.bddList.append(nroot)
+            nroot = clist[0].root
+        self.tbddList.append((nroot,None))
         pid = len(self.constraintList)
         if command == 'i':
             self.doInput(pid, hlist)
@@ -217,11 +227,129 @@ class Pbip:
             raise PbipException("", "Unexpected command '%s'" % command)
         return False
         
+    def placeInBucket(self, buckets, root, validation):
+        level = root.variable.level
+        if level not in buckets:
+            level = 0
+        buckets[level].append((root, validation))
+
+    def conjunctTerms(self, r1, v1, r2, v2):
+        nroot, implication = self.manager.applyAndJustify(r1, r2)
+        validation = None
+        antecedents = [v1, v2]
+        if nroot == self.manager.leaf0:
+            comment = "Validation of empty clause from %s & %s" % (r1.label(), r2.label())
+        else:
+            comment = "Validation of %s & %s --> %s" % (r1.label(), r2.label(), nroot.label())
+        if implication == resolver.tautologyId:
+            if nroot == r1:
+                validation = v1
+            elif nroot == r2:
+                validation = v2
+        else:
+            antecedents += [implication]
+        if validation is None:
+            validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
+        return nroot, validation
+
+    def quantifyRoot(self, r1, v1):
+        antecedents = [v1]
+        var = nroot.variable
+        nroot = self.manager.equant(r1, [var])
+        ok, implication = self.manager.justifyImply(r1, nroot)
+        if not ok:
+            raise PbipException("", "Implication failed during quantification of %s" % (r1.label()))
+        if implication != resolver.tautologyId:
+            antecedents += [implication]
+        comment = "Quantification of node %s by variable %s --> node %s" % (r1.label(), str(var), nroot.label())
+        validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
+        return nroot, validation
+
+    # Bucket reduction assumes all external variables come first in variable ordering
+    def bucketReduce(self, buckets):
+        levels = sorted(list(buckets.keys()))
+        levels.reverse()
+        for level in levels:
+            if self.verbLevel >= 4:
+                print("Processing bucket #%d.  Size = %d" % (level, len(buckets[level])))
+            while len(buckets[level]) > 1:
+                (r1,v1) = buckets[level][0]
+                (r2,v2) = buckets[level][1]
+                buckets[level] = buckets[level][2:]
+                nroot,validation = self.conjunctTerms(r1, v1, r2, v2)
+                self.placeInBucket(buckets, nroot, validation)
+            if len(buckets[level]) == 1:
+                root, validation = buckets[level][0]
+                if level == 0:
+                    return (root, validation)
+                nroot, nvalidation = self.quantifyRoot(root, validation)
+                self.placeInBucket(buckets, nroot, validation)
+        raise PbipException("", "Unexpected exit from bucketReduce.  buckets = %s" % str(buckets))
+
+
     def doInput(self, pid, hlist):
-        print("Processed PBIP input #%d.  Hints = %s" % (pid, str(hlist)))
+        clist= self.constraintList[pid-1]
+        externalLevelSet = set([])
+        internalLevelSet = set([])
+        for con in clist:
+            for ivar in con.nz.keys():
+                level = self.manager.variables[ivar-1].level
+                externalLevelSet.add(level)
+        # Set up buckets containing trusted BDD representations of clauses
+        # Each tbdd is pair (root, validation)
+        # Indexed by BDD level
+        # Special bucket 0 for terms that depend only on external variables
+        buckets = { 0 : []}
+        for hid in hlist:
+            iclause = self.creader.clauses[hid-1]
+            clause = [self.litMap[lit] for lit in iclause]
+            root, validation = self.manager.constructClause(hid, clause)
+            if self.verbLevel >= 4:
+                print("Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), hid))
+            for lit in iclause:
+                ivar = abs(lit)
+                level = self.manager.variables[ivar-1].level
+                if level not in externalLevelSet and level not in internalVariableSet:
+                    internalLevelSet.add(level)
+                    buckets[level] = []
+            self.placeInBucket(buckets, root, validation)
+        (broot, bvalidation) = self.bucketReduce(buckets)
+        root = self.tbddList[pid-1][0]
+        if root == broot:
+            cid = bvalidation
+        else:
+            print("Testing %s ==> %s" % (str(broot), str(root)))
+            (ok, implication) = self.manager.justifyImply(broot, root)
+            if not ok:
+                raise PbipException("", "Couldn't justify step #%d.  Input not implied" % (pid))
+            comment = "Justification of input constraint #%d" % pid
+            antecedents = [cid for cid in [implication, bvalidation] if cid != resolver.tautologyId]
+            cid = self.prover.createClause([root.id], antecedents, comment=comment)
+        self.tbddList[pid-1] = (root, cid)
+        if self.verbLevel >= 2:
+            print("c Processed PBIP input #%d.  Unit clause %d" % (pid, cid))
 
     def doAssertion(self, pid, hlist):
-        print("Processed PBIP assertion #%d.  Hints = %s" % (pid, str(hlist)))
+        root = self.tbddList[pid-1][0]
+        antecedents = []
+        if len(hlist) == 1:
+            (r1,v1) = self.tbddList[hlist[0]-1]
+            (ok, implication) = self.manager.justifyImply(r1, root)
+            if not ok:
+                raise PbipException("", "Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
+            antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
+        else:
+            (r1,v1) = self.tbddList[hlist[0]-1]
+            (r2,v2) = self.tbddList[hlist[1]-1]
+            (ok, implication) = self.manager.applyAndJustifyImply(r1, r2, root)
+            if not ok:
+                raise PbipException("", "Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+            antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
+        comment = "Justification of assertion #%d" % pid
+        cid = self.prover.createClause([root.id], antecedents, comment)
+        self.tbddList[pid-1] = (root, cid)
+        if self.verbLevel >= 2:
+            print("c Processed PBIP assertion #%d.  Unit clause %d" % (pid, cid))
 
     def run(self):
         while not self.doStep():
@@ -231,46 +359,9 @@ class Pbip:
             lastCon = self.constraintList[-1][-1]
             if lastCon.isInfeasible():
                 foundUnsat = True
-                print("UNSAT")
+                print("c UNSAT")
         if not foundUnsat:
             print("Final status unknown")
         self.manager.summarize()
 
 
-def run(name, argList):
-    verbLevel = 1
-    cnfName = ""
-    pbipName = ""
-    lratName = ""
-
-    optlist, args = getopt.getopt(argList, "hv:i:p:o:")
-    for (opt, val) in optlist:
-        if opt == '-h':
-            usage(name)
-            return
-        elif opt == '-v':
-            verbLevel = int(val)
-        elif opt == '-i':
-            cnfName = val
-        elif opt == '-p':
-            pbipName = val
-        elif opt == '-o':
-            lratName = val
-        else:
-            print("Unknown option '%s'" % opt)
-            usage(name)
-            return
-    if cnfName == "":
-        print("ERROR: Must give name of CNF file")
-        usage(name)
-        return
-    if pbipName == "":
-        print("ERROR: Must give name of PBIP file")
-        usage(name)
-        return
-
-    pbip = Pbip(cnfName, pbipName, lratName, verbLevel)
-    pbip.run()
-
-if __name__ == "__main__":
-    run(sys.argv[0], sys.argv[1:])
