@@ -1090,6 +1090,25 @@ class Constraint:
         cval = 0
         return self.spawn(nnz, cval, csys, [self, other])
 
+    def isAlo(self):
+        if self.cval != 1:
+            return False
+        for coeff in self.nnz.values():
+            if coeff != 1:
+                return False
+            break
+        return True
+
+    def isAmo(self):
+        if self.cval != -1:
+            return False
+        for coeff in self.nnz.values():
+            if coeff != -1:
+                return False
+            break
+        return True
+
+
     # Generate BDD representation
     def buildBdd(self, csys):
         ilist = self.indices()
