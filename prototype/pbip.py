@@ -120,6 +120,12 @@ class PbipReader:
         self.lineCount = 0
         self.verbLevel = verbLevel
 
+    def finish(self):
+        if self.infile is not None:
+            self.infile.close()
+            self.infile = None
+        
+
     # Return (command, list of PB constraints, plus list of hints)
     def readLine(self):
         command = ""
@@ -159,6 +165,9 @@ class PbipReader:
             print("c   Hints: %s" % str(hlist))
         return (command, clist, hlist)
 
+ 
+        
+
 class Pbip:
     verbLevel = 1
     creader = None
@@ -187,7 +196,7 @@ class Pbip:
         self.constraintList = []
         self.tbddList = []
         lratName = None if lratName == "" else lratName
-        self.prover = solver.Prover(fname=lratName, verbLevel = verbLevel, doLrat = True)
+        self.prover = solver.Prover(fname=lratName, writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = True)
         # Print input clauses
         clauseCount = 0
         for clause in self.creader.clauses:
@@ -228,10 +237,12 @@ class Pbip:
         return False
         
     def placeInBucket(self, buckets, root, validation):
-        level = root.variable.level
-        if level not in buckets:
-            level = 0
-        buckets[level].append((root, validation))
+        supportLevels = self.manager.getSupportLevels(root)
+        for level in supportLevels:
+            if level in buckets:
+                buckets[level].append((root, validation))
+                return
+        buckets[0].append((root, validation))
 
     def conjunctTerms(self, r1, v1, r2, v2):
         nroot, implication = self.manager.applyAndJustify(r1, r2)
@@ -252,23 +263,24 @@ class Pbip:
             validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
         return nroot, validation
 
-    def quantifyRoot(self, r1, v1):
-        antecedents = [v1]
-        var = nroot.variable
-        nroot = self.manager.equant(r1, [var])
-        ok, implication = self.manager.justifyImply(r1, nroot)
+    def quantifyRoot(self, root, validation):
+        antecedents = [validation]
+        vfun = self.litMap[root.variable.id]
+        nroot = self.manager.equant(root, vfun)
+        ok, implication = self.manager.justifyImply(root, nroot)
         if not ok:
-            raise PbipException("", "Implication failed during quantification of %s" % (r1.label()))
+            raise PbipException("", "Implication failed during quantification of %s" % (root.label()))
         if implication != resolver.tautologyId:
             antecedents += [implication]
-        comment = "Quantification of node %s by variable %s --> node %s" % (r1.label(), str(var), nroot.label())
+        comment = "Quantification of node %s by variable %s --> node %s" % (root.label(), str(root.variable), nroot.label())
         validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
         return nroot, validation
 
     # Bucket reduction assumes all external variables come first in variable ordering
     def bucketReduce(self, buckets):
         levels = sorted(list(buckets.keys()))
-        levels.reverse()
+        if levels[0] == 0:
+            levels = levels[1:] + [0]
         for level in levels:
             if self.verbLevel >= 4:
                 print("Processing bucket #%d.  Size = %d" % (level, len(buckets[level])))
@@ -309,7 +321,7 @@ class Pbip:
             for lit in iclause:
                 ivar = abs(lit)
                 level = self.manager.variables[ivar-1].level
-                if level not in externalLevelSet and level not in internalVariableSet:
+                if level not in externalLevelSet and level not in internalLevelSet:
                     internalLevelSet.add(level)
                     buckets[level] = []
             self.placeInBucket(buckets, root, validation)

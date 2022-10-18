@@ -121,6 +121,12 @@ class Node:
     def label(self):
         return "N%d" % self.id
 
+    def clauses(self, prover):
+        return []
+
+    def clauseIds(self):
+        return []
+
     def isZero(self):
         return False
 
@@ -273,6 +279,17 @@ class VariableNode(Node):
         else:
             return self
         
+    # Return list of defining clause Ids
+    def clauseIds(self):
+        idlist = [self.idHU(), self.idLU(), self.idHD(), self.idLD()]
+        idlist = [id for id in idlist if (id is not None and id != resolver.tautologyId)]
+        return idlist
+
+    # Return list of defining clauses
+    def clauses(self, prover):
+        idlist = self.clauseIds()
+        return [prover.clauseDict[id] for id in idlist]
+
     def __str__(self):
         return "%d:%s->%s,%s" % (self.id, str(self.variable), self.high.label(), self.low.label())
 
@@ -427,6 +444,15 @@ class Manager:
             if (len(ilist) == 0 or ilist[-1] != id) and id > 0:
                 ilist.append(id)
         return ilist
+
+    def getSupportLevels(self, node):
+        varDict = self.buildInformation(node, lambda n: n.variable.level, {})
+        fullList = sorted(varDict.values())
+        llist = []
+        for level in fullList:
+            if (len(llist) == 0 or llist[-1] != level) and level > 0:
+                llist.append(level)
+        return llist
 
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
@@ -839,6 +865,42 @@ class Manager:
         self.cacheNoJustifyAdded += 1
         return newNode
             
+    # Generate list of all nodes from root.
+    # Order according to postorder traversal of graph
+    def getNodeList(self, node, includeLeaves = True):
+        nset = set([])
+        nlist = []
+        def traverse(n):
+            if n in nset:
+                return
+            if not n.isLeaf():
+                traverse(n.high)
+                traverse(n.low)
+                nlist.append(n)
+            elif includeLeaves:
+                nlist.append(n)
+            nset.add(n)
+        traverse(node)
+        return nlist
+
+    # Generate clausal representation of BDD
+    # Return as list of clauses
+    def generateClauses(self, node):
+        clauseList = []
+        if node.isLeaf():
+            nodeList = []
+            if node == self.leaf0:
+                clauseList.append([])
+            rootid = 0 if node == self.leaf0 else 1
+        else:
+            nodeList = self.getNodeList(node, includeLeaves=False)
+            for n in nodeList:
+                clauseList += n.clauses(self.prover)
+            # Assert output as unit clause
+            clauseList.append([node.id])
+        return clauseList
+
+
     # Should a GC be triggered?
     def checkGC(self, newDeadCount):
         self.deadNodeCount += newDeadCount

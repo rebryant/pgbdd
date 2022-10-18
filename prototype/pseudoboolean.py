@@ -1180,6 +1180,14 @@ class Constraint:
     def isTrivial(self):
         return self.cval <= 0 and len(self) == 0
 
+    def opbString(self, forceEquality = False):
+        result = ""
+        for (k,v) in self.nz.items():
+            result += "%d x%d " % (v, k)
+        rel = "=" if forceEquality else ">="
+        result += "%s %d" % (rel, self.cval)
+        return result
+
     def __str__(self):
         if self.N < 0:
             return self.formatDense()

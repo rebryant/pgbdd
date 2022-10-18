@@ -291,6 +291,16 @@ class StdOutWriter:
     def close(self):
         pass
 
+# Ignore any writes
+class NullWriter:
+
+    def write(self, data):
+        pass
+
+    def close(self):
+        pass
+
+
 class Prover:
 
     inputClauseCount = 0
@@ -310,6 +320,8 @@ class Prover:
         if fname is None:
             self.opened = False
             self.file = StdOutWriter()
+        elif fname == "":
+            self.file = NullWriter()
         else:
             self.opened = True
             try:
