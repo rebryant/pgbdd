@@ -164,8 +164,8 @@ class CnfGenerator:
         # Set up prover, but disable LRAT output
         self.prover = solver.Prover(fname="", writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = False)
         self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.inputVariableCount+1, verbLevel = verbLevel)
-        for level in range(1, self.inputVariableCount+1):
-            inputId = level
+        for id in range(1, self.inputVariableCount+1):
+            inputId = id
             var = self.manager.newVariable(name = "V%d" % inputId, id = inputId)
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }

@@ -239,10 +239,10 @@ class Pbip:
         return False
         
     def placeInBucket(self, buckets, root, validation):
-        supportLevels = self.manager.getSupportLevels(root)
-        for level in supportLevels:
-            if level in buckets:
-                buckets[level].append((root, validation))
+        supportIds = self.manager.getSupportIds(root)
+        for id in supportIds:
+            if id in buckets:
+                buckets[id].append((root, validation))
                 return
         buckets[0].append((root, validation))
 
@@ -265,57 +265,60 @@ class Pbip:
             validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
         return nroot, validation
 
-    def quantifyRoot(self, root, validation):
+    def quantifyRoot(self, root, validation, id):
         antecedents = [validation]
-        vfun = self.litMap[root.variable.id]
+        vfun = self.litMap[id]
         nroot = self.manager.equant(root, vfun)
         ok, implication = self.manager.justifyImply(root, nroot)
         if not ok:
             raise PbipException("", "Implication failed during quantification of %s" % (root.label()))
         if implication != resolver.tautologyId:
             antecedents += [implication]
-        comment = "Quantification of node %s by variable %s --> node %s" % (root.label(), str(root.variable), nroot.label())
+        comment = "Quantification of node %s by variable %s --> node %s" % (root.label(), str(vfun.variable), nroot.label())
         validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
         return nroot, validation
 
     # Bucket reduction assumes all external variables come first in variable ordering
     def bucketReduce(self, buckets):
-        levels = sorted(list(buckets.keys()))
-        if levels[0] == 0:
-            levels = levels[1:] + [0]
-        for level in levels:
+        ids = sorted(list(buckets.keys()))
+        if ids[0] == 0:
+            ids = ids[1:] + [0]
+        for id in ids:
             if self.verbLevel >= 4:
-                print("Processing bucket #%d.  Size = %d" % (level, len(buckets[level])))
-            while len(buckets[level]) > 1:
-                (r1,v1) = buckets[level][0]
-                (r2,v2) = buckets[level][1]
-                buckets[level] = buckets[level][2:]
+                print("Processing bucket #%d.  Size = %d" % (id, len(buckets[id])))
+            while len(buckets[id]) > 1:
+                (r1,v1) = buckets[id][0]
+                (r2,v2) = buckets[id][1]
+                buckets[id] = buckets[id][2:]
                 nroot,validation = self.conjunctTerms(r1, v1, r2, v2)
                 self.placeInBucket(buckets, nroot, validation)
-            if len(buckets[level]) == 1:
-                root, validation = buckets[level][0]
-                if level == 0:
+            if len(buckets[id]) == 1:
+                root, validation = buckets[id][0]
+                if id == 0:
                     return (root, validation)
-                nroot, nvalidation = self.quantifyRoot(root, validation)
+                nroot, nvalidation = self.quantifyRoot(root, validation, id)
                 if self.verbLevel >= 4:
-                    print("Processed bucket #%d.  Root = %s" % (level, root.label()))
-                self.placeInBucket(buckets, nroot, validation)
+                    print("Processed bucket #%d.  Root = %s" % (id, root.label()))
+                self.placeInBucket(buckets, nroot, nvalidation)
         raise PbipException("", "Unexpected exit from bucketReduce.  buckets = %s" % str(buckets))
 
 
     def doInput(self, pid, hlist):
         clist= self.constraintList[pid-1]
-        externalLevelSet = set([])
-        internalLevelSet = set([])
+        externalIdSet = set([])
+        internalIdSet = set([])
         for con in clist:
             for ivar in con.nz.keys():
-                level = self.manager.variables[ivar-1].level
-                externalLevelSet.add(level)
+                id = self.manager.variables[ivar-1].id
+                externalIdSet.add(id)
         # Set up buckets containing trusted BDD representations of clauses
         # Each tbdd is pair (root, validation)
-        # Indexed by BDD level
+        # Indexed by variable id
         # Special bucket 0 for terms that depend only on external variables
         buckets = { 0 : []}
+
+        if self.verbLevel >= 2:
+            self.prover.comment("Processing PBIP Input #%d.  Input clauses %s" % (pid, str(hlist)))
         for hid in hlist:
             iclause = self.creader.clauses[hid-1]
             clause = [self.litMap[lit] for lit in iclause]
@@ -324,10 +327,10 @@ class Pbip:
                 print("Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), hid))
             for lit in iclause:
                 ivar = abs(lit)
-                level = self.manager.variables[ivar-1].level
-                if level not in externalLevelSet and level not in internalLevelSet:
-                    internalLevelSet.add(level)
-                    buckets[level] = []
+                id = self.manager.variables[ivar-1].id
+                if id not in externalIdSet and id not in internalIdSet:
+                    internalIdSet.add(id)
+                    buckets[id] = []
             self.placeInBucket(buckets, root, validation)
         (broot, bvalidation) = self.bucketReduce(buckets)
         root = self.tbddList[pid-1][0]
@@ -347,10 +350,13 @@ class Pbip:
             cid = self.prover.createClause([root.id], antecedents, comment=comment)
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
-            print("c Processed PBIP input #%d.  Unit clause %d" % (pid, cid))
+            print("c Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
+            self.prover.comment("Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
 
     def doAssertion(self, pid, hlist):
         root = self.tbddList[pid-1][0]
+        if self.verbLevel >= 2:
+            self.prover.comment("Processing PBIP assertion #%d.  Hints = %s" % (pid, str(hlist)))
         antecedents = []
         if len(hlist) == 1:
             (r1,v1) = self.tbddList[hlist[0]-1]
@@ -373,7 +379,8 @@ class Pbip:
         cid = self.prover.createClause([root.id], antecedents, comment)
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
-            print("c Processed PBIP assertion #%d.  Unit clause %d" % (pid, cid))
+            print("c Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
+            self.prover.comment("Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d[" % (pid, root.label(), cid, root.id))
 
     def run(self):
         while not self.doStep():
