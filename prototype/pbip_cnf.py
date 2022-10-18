@@ -13,8 +13,8 @@ def usage(name):
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
     print("  -i INFILE.pbip  Input PBIP file (with unhinted inputs)")
-    print("  -p OUTFILE.pbip Output PBIP file")
-    print("  -o OUTFILE.cnf  Output CNF file")
+    print("  -o OUTFILE.pbip Output PBIP file")
+    print("  -c OUTFILE.cnf  Output CNF file")
 
 
 # Code for generating CNF, order, and schedule files
@@ -159,8 +159,8 @@ class CnfGenerator:
                 if len(con.nz) > 0:
                     mvar = max(con.nz.keys())
                     self.inputVariableCount = max(self.inputVariableCount, mvar)
-        if self.verbLevel >= 2:
-            print("Read %d constraints.  Found %d input variables" % (len(self.commandList), self.inputVariableCount))
+        if self.verbLevel >= 1:
+            print("CNFGEN: Read %d constraints.  Found %d input variables" % (len(self.commandList), self.inputVariableCount))
         # Set up prover, but disable LRAT output
         self.prover = solver.Prover(fname="", writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = False)
         self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.inputVariableCount+1, verbLevel = verbLevel)
@@ -173,9 +173,13 @@ class CnfGenerator:
     def run(self):
         for cid in range(1, len(self.commandList)+1):
             self.processCommand(cid)
+        if self.verbLevel >= 1:
+            print("CNFGEN: Problem variables = %d" % self.inputVariableCount)
+            print("CNFGEN: CNF variables = %d CNF Clauses = %d" %(self.cwriter.variableCount, self.cwriter.clauseCount))
         self.cwriter.finish()
         self.preader.finish()
         self.pwriter.finish()
+
 
     def processCommand(self, cid):
         cmd = self.commandList[cid-1]
@@ -192,7 +196,7 @@ class CnfGenerator:
                 root = clist[0].root
             else:
                 root = bdd.applyAnd(clist[0], clist[1])
-            clauses = self.manager.generateClauses(root)
+            clauses = self.manager.generateClauses(root, up=False)
             hlist = []
             for clause in clauses:
                 id = self.cwriter.doClause(clause)
@@ -243,7 +247,8 @@ def run(name, argList):
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
     if verbLevel > 0:
-        print("Generation of CNF constraints from PBIP elapsed seconds: %.2f" % (seconds))
+        print("CNFGEN: Generation of CNF constraints from PBIP elapsed seconds: %.2f" % (seconds))
+
 
 if __name__ == "__main__":
     run(sys.argv[0], sys.argv[1:])

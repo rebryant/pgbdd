@@ -280,14 +280,18 @@ class VariableNode(Node):
             return self
         
     # Return list of defining clause Ids
-    def clauseIds(self):
-        idlist = [self.idHU(), self.idLU(), self.idHD(), self.idLD()]
-        idlist = [id for id in idlist if (id is not None and id != resolver.tautologyId)]
-        return idlist
+    def clauseIds(self, up=True, down=True):
+        idList = []
+        if up:
+            idList += [self.idHU(), self.idLU()]
+        if down:
+            idList += [self.idHD(), self.idLD()]
+        idList = [id for id in idList if (id is not None and id != resolver.tautologyId)]
+        return idList
 
     # Return list of defining clauses
-    def clauses(self, prover):
-        idlist = self.clauseIds()
+    def clauses(self, prover, up=True, down=True):
+        idlist = self.clauseIds(up, down)
         return [prover.clauseDict[id] for id in idlist]
 
     def __str__(self):
@@ -876,7 +880,7 @@ class Manager:
 
     # Generate clausal representation of BDD
     # Return as list of clauses
-    def generateClauses(self, node):
+    def generateClauses(self, node, up=True, down=True):
         clauseList = []
         if node.isLeaf():
             nodeList = []
@@ -886,7 +890,7 @@ class Manager:
         else:
             nodeList = self.getNodeList(node, includeLeaves=False)
             for n in nodeList:
-                clauseList += n.clauses(self.prover)
+                clauseList += n.clauses(self.prover, up, down)
             # Assert output as unit clause
             clauseList.append([node.id])
         return clauseList

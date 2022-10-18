@@ -52,7 +52,7 @@ def run(name, argList):
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
     if verbLevel > 0:
-        print("PBIP to LRAT elapsed seconds: %.2f" % (seconds))
+        print("PBIP: LRAT generation elapsed seconds: %.2f" % (seconds))
 
 
 if __name__ == "__main__":

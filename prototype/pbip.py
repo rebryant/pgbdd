@@ -158,11 +158,11 @@ class PbipReader:
                 raise PbipException("", "File %s Line %d: Couldn't parse hint list '%s'" % (self.fname, self.lineCount, hstring))
             break
         if self.verbLevel >= 3:
-            print("c Read PBIP line #%d" % self.lineCount)
-            print("c   Constraints:")
+            print("PBIP: Read PBIP line #%d" % self.lineCount)
+            print("PBIP:  Constraints:")
             for con in clist:
-                print("c     %s" % str(con))
-            print("c   Hints: %s" % str(hlist))
+                print("PBIP:     %s" % str(con))
+            print("PBIP:   Hints: %s" % str(hlist))
         return (command, clist, hlist)
 
  
@@ -285,7 +285,7 @@ class Pbip:
             ids = ids[1:] + [0]
         for id in ids:
             if self.verbLevel >= 4:
-                print("Processing bucket #%d.  Size = %d" % (id, len(buckets[id])))
+                print("PBIP: Processing bucket #%d.  Size = %d" % (id, len(buckets[id])))
             while len(buckets[id]) > 1:
                 (r1,v1) = buckets[id][0]
                 (r2,v2) = buckets[id][1]
@@ -298,7 +298,7 @@ class Pbip:
                     return (root, validation)
                 nroot, nvalidation = self.quantifyRoot(root, validation, id)
                 if self.verbLevel >= 4:
-                    print("Processed bucket #%d.  Root = %s" % (id, root.label()))
+                    print("PBIP: Processed bucket #%d.  Root = %s" % (id, root.label()))
                 self.placeInBucket(buckets, nroot, nvalidation)
         raise PbipException("", "Unexpected exit from bucketReduce.  buckets = %s" % str(buckets))
 
@@ -324,7 +324,7 @@ class Pbip:
             clause = [self.litMap[lit] for lit in iclause]
             root, validation = self.manager.constructClause(hid, clause)
             if self.verbLevel >= 4:
-                print("Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), hid))
+                print("PBIP: Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), hid))
             for lit in iclause:
                 ivar = abs(lit)
                 id = self.manager.variables[ivar-1].id
@@ -338,10 +338,10 @@ class Pbip:
             cid = bvalidation
         else:
             if self.verbLevel >= 3:
-                print("Testing %s ==> %s" % (str(broot), str(root)))
+                print("PBIP: Testing %s ==> %s" % (str(broot), str(root)))
             (ok, implication) = self.manager.justifyImply(broot, root)
             if not ok:
-                print("ERROR: Couldn't justify step #%d.  Input not implied" % (pid))
+                print("PBIP ERROR: Couldn't justify step #%d.  Input not implied" % (pid))
                 self.valid = False
                 antecedents = []
             else:
@@ -350,7 +350,7 @@ class Pbip:
             cid = self.prover.createClause([root.id], antecedents, comment=comment)
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
-            print("c Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
+            print("PBIP: Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
             self.prover.comment("Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
 
     def doAssertion(self, pid, hlist):
@@ -362,7 +362,7 @@ class Pbip:
             (r1,v1) = self.tbddList[hlist[0]-1]
             (ok, implication) = self.manager.justifyImply(r1, root)
             if not ok:
-                print("ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
+                print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
                 self.valid = False
             else:
                 antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
@@ -371,7 +371,7 @@ class Pbip:
             (r2,v2) = self.tbddList[hlist[1]-1]
             (ok, implication) = self.manager.applyAndJustifyImply(r1, r2, root)
             if not ok:
-                print("ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+                print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
                 self.valid = False
             else:
                 antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
@@ -379,7 +379,7 @@ class Pbip:
         cid = self.prover.createClause([root.id], antecedents, comment)
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
-            print("c Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
+            print("PBIP: Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
             self.prover.comment("Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d[" % (pid, root.label(), cid, root.id))
 
     def run(self):
@@ -387,15 +387,15 @@ class Pbip:
             pass
         decided = False
         if not self.valid:
-            print("c INVALID")
+            print("PBIP INVALID")
             decided = True
         elif len(self.constraintList) > 0:
             lastCon = self.constraintList[-1][-1]
             if lastCon.isInfeasible():
                 decided = True
-                print("c UNSAT")
+                print("PBIP UNSAT")
         if not decided:
-            print("Final status unknown")
+            print("PBIP Final status unknown")
         self.manager.summarize()
 
 
