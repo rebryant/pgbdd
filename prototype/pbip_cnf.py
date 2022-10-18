@@ -181,15 +181,16 @@ class CnfGenerator:
         cmd = self.commandList[cid-1]
         clist = self.constraintList[cid-1]
         hlist = self.hintList[cid-1]
-        opbstring = ""
+        if len(clist) == 1:
+            opbstring = clist[0].opbString()
+        else:
+            opbstring = clist[0].opbString(forceEquality = True)
         if cmd == 'i':
             for con in clist:
                 con.buildBdd(self)
             if len(clist) == 1:
-                opbstring = clist[0].opbString()
                 root = clist[0].root
             else:
-                opbstring = clist[0].opbString(forceEquality = True)
                 root = bdd.applyAnd(clist[0], clist[1])
             clauses = self.manager.generateClauses(root)
             hlist = []

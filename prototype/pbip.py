@@ -170,6 +170,7 @@ class PbipReader:
 
 class Pbip:
     verbLevel = 1
+    valid = True
     creader = None
     preader = None
     permuter = None
@@ -190,6 +191,7 @@ class Pbip:
     
     def __init__(self, cnfName, pbipName, lratName, verbLevel):
         self.verbLevel = verbLevel
+        self.valid = True
         self.creader = solver.CnfReader(cnfName, verbLevel)
         self.preader = PbipReader(pbipName, verbLevel)
         self.cset = pseudoboolean.ConstraintSet()
@@ -295,6 +297,8 @@ class Pbip:
                 if level == 0:
                     return (root, validation)
                 nroot, nvalidation = self.quantifyRoot(root, validation)
+                if self.verbLevel >= 4:
+                    print("Processed bucket #%d.  Root = %s" % (level, root.label()))
                 self.placeInBucket(buckets, nroot, validation)
         raise PbipException("", "Unexpected exit from bucketReduce.  buckets = %s" % str(buckets))
 
@@ -330,12 +334,16 @@ class Pbip:
         if root == broot:
             cid = bvalidation
         else:
-            print("Testing %s ==> %s" % (str(broot), str(root)))
+            if self.verbLevel >= 3:
+                print("Testing %s ==> %s" % (str(broot), str(root)))
             (ok, implication) = self.manager.justifyImply(broot, root)
             if not ok:
-                raise PbipException("", "Couldn't justify step #%d.  Input not implied" % (pid))
+                print("ERROR: Couldn't justify step #%d.  Input not implied" % (pid))
+                self.valid = False
+                antecedents = []
+            else:
+                antecedents = [cid for cid in [implication, bvalidation] if cid != resolver.tautologyId]
             comment = "Justification of input constraint #%d" % pid
-            antecedents = [cid for cid in [implication, bvalidation] if cid != resolver.tautologyId]
             cid = self.prover.createClause([root.id], antecedents, comment=comment)
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
@@ -348,15 +356,19 @@ class Pbip:
             (r1,v1) = self.tbddList[hlist[0]-1]
             (ok, implication) = self.manager.justifyImply(r1, root)
             if not ok:
-                raise PbipException("", "Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
-            antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
+                print("ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
+                self.valid = False
+            else:
+                antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
         else:
             (r1,v1) = self.tbddList[hlist[0]-1]
             (r2,v2) = self.tbddList[hlist[1]-1]
             (ok, implication) = self.manager.applyAndJustifyImply(r1, r2, root)
             if not ok:
-                raise PbipException("", "Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
-            antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
+                print("ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+                self.valid = False
+            else:
+                antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
         comment = "Justification of assertion #%d" % pid
         cid = self.prover.createClause([root.id], antecedents, comment)
         self.tbddList[pid-1] = (root, cid)
@@ -366,13 +378,16 @@ class Pbip:
     def run(self):
         while not self.doStep():
             pass
-        foundUnsat = False
-        if len(self.constraintList) > 0:
+        decided = False
+        if not self.valid:
+            print("c INVALID")
+            decided = True
+        elif len(self.constraintList) > 0:
             lastCon = self.constraintList[-1][-1]
             if lastCon.isInfeasible():
-                foundUnsat = True
+                decided = True
                 print("c UNSAT")
-        if not foundUnsat:
+        if not decided:
             print("Final status unknown")
         self.manager.summarize()
 
