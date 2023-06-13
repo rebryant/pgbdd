@@ -399,6 +399,7 @@ static ssize_t rio_read_int_binary(rio_t *rp, int *value) {
 	if ((rc = rio_readnb(rp, (void *) &nbyte, 1)) !=1)
 	    break;
 	count++;
+	printf(" 0x%.2x", (unsigned) nbyte);
 	uint8_t bval = (nbyte) & 0x7F;
 	uint8_t hval = (nbyte>>7) & 0x1;
 	if (weight >= 8*sizeof(int) || ((bval << weight) >> weight) != bval)
@@ -450,6 +451,7 @@ ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist) {
     ssize_t nread = 0;
     int rc = 0;
     int value;
+    printf("Read bytes:");
     do {
 	rc = rio_read_int_binary(rp, &value);
 	if (rc <= 0)
@@ -457,6 +459,7 @@ ssize_t rio_read_int_list_binary(rio_t *rp, int_list_t *ilist) {
 	nread += rc;
 	int_list_append(ilist, value);
     } while (value != 0);
+    printf("\n");
     if (rc < 0)
 	return rc;
     return nread;

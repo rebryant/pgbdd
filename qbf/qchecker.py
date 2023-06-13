@@ -225,6 +225,8 @@ def testClauseSubset(clause1, clause2):
         elif head1 == head2:
             idx1 += 1
             idx2 += 1
+        elif abs(head1) == abs(head2):
+            return False
         elif abs(head1) < abs(head2):
             idx2 += 1
     return True
