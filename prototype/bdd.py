@@ -32,6 +32,38 @@ class BddException(Exception):
     def __str__(self):
         return "BDD Exception: " + str(self.value)
 
+# Place holder to allow program to run without proving anything
+class DummyProver:
+
+    clauseCount = 0
+    writer = None
+    verbLevel = 0
+
+    def __init__(self, fname = None, verbLevel = None):
+        self.clauseCount = 0
+        self.writer = sys.stderr
+
+    def comment(self, comment):
+        pass
+
+    def createClause(self, result, antecedent, comment = None, isInput = False, alreadyClean = False):
+        if not alreadyClean:
+            result = resolver.cleanClause(result)
+        if result == resolver.tautologyId:
+            return result
+        self.clauseCount += 1
+        return self.clauseCount
+
+    def emitProof(self, proof, ruleIndex, comment = None):
+        self.clauseCount += 1
+        return self.clauseCount
+
+    def fileOutput(self):
+        return False
+
+    def summarize(self):
+        pass
+
 @total_ordering
 class Variable:
     name = None
@@ -88,6 +120,12 @@ class Node:
 
     def label(self):
         return "N%d" % self.id
+
+    def clauses(self, prover):
+        return []
+
+    def clauseIds(self):
+        return []
 
     def isZero(self):
         return False
@@ -241,6 +279,21 @@ class VariableNode(Node):
         else:
             return self
         
+    # Return list of defining clause Ids
+    def clauseIds(self, up=True, down=True):
+        idList = []
+        if up:
+            idList += [self.idHU(), self.idLU()]
+        if down:
+            idList += [self.idHD(), self.idLD()]
+        idList = [id for id in idList if (id is not None and id != resolver.tautologyId)]
+        return idList
+
+    # Return list of defining clauses
+    def clauses(self, prover, up=True, down=True):
+        idlist = self.clauseIds(up, down)
+        return [prover.clauseDict[id] for id in idlist]
+
     def __str__(self):
         return "%d:%s->%s,%s" % (self.id, str(self.variable), self.high.label(), self.low.label())
 
@@ -295,7 +348,7 @@ class Manager:
         self.nextNodeId = nextNodeId
         self.uniqueTable = {}
         self.operationCache = {}
-        self.vresolver = resolver.VResolver(prover)
+        self.vresolver = resolver.VResolver(self.prover)
         self.quantifiedVariableSet = set([])
         self.deadNodeCount = 0
         self.cacheJustifyAdded = 0
@@ -807,6 +860,42 @@ class Manager:
         self.cacheNoJustifyAdded += 1
         return newNode
             
+    # Generate list of all nodes from root.
+    # Order according to postorder traversal of graph
+    def getNodeList(self, node, includeLeaves = True):
+        nset = set([])
+        nlist = []
+        def traverse(n):
+            if n in nset:
+                return
+            if not n.isLeaf():
+                traverse(n.high)
+                traverse(n.low)
+                nlist.append(n)
+            elif includeLeaves:
+                nlist.append(n)
+            nset.add(n)
+        traverse(node)
+        return nlist
+
+    # Generate clausal representation of BDD
+    # Return as list of clauses
+    def generateClauses(self, node, up=True, down=True):
+        clauseList = []
+        if node.isLeaf():
+            nodeList = []
+            if node == self.leaf0:
+                clauseList.append([])
+            rootid = 0 if node == self.leaf0 else 1
+        else:
+            nodeList = self.getNodeList(node, includeLeaves=False)
+            for n in nodeList:
+                clauseList += n.clauses(self.prover, up, down)
+            # Assert output as unit clause
+            clauseList.append([node.id])
+        return clauseList
+
+
     # Should a GC be triggered?
     def checkGC(self, newDeadCount):
         self.deadNodeCount += newDeadCount

@@ -965,7 +965,7 @@ class Constraint:
 
     def __setitem__(self, i, v):
         if v == 0:
-            if self.nz:
+            if i in self.nz:
                 del self.nz[i]
         else:
             self.nz[i] = v
@@ -1090,6 +1090,25 @@ class Constraint:
         cval = 0
         return self.spawn(nnz, cval, csys, [self, other])
 
+    def isAlo(self):
+        if self.cval != 1:
+            return False
+        for coeff in self.nnz.values():
+            if coeff != 1:
+                return False
+            break
+        return True
+
+    def isAmo(self):
+        if self.cval != -1:
+            return False
+        for coeff in self.nnz.values():
+            if coeff != -1:
+                return False
+            break
+        return True
+
+
     # Generate BDD representation
     def buildBdd(self, csys):
         ilist = self.indices()
@@ -1161,8 +1180,16 @@ class Constraint:
     def isTrivial(self):
         return self.cval <= 0 and len(self) == 0
 
+    def opbString(self, forceEquality = False):
+        result = ""
+        for (k,v) in self.nz.items():
+            result += "%d x%d " % (v, k)
+        rel = "=" if forceEquality else ">="
+        result += "%s %d" % (rel, self.cval)
+        return result
+
     def __str__(self):
-        if self.N <= 0:
+        if self.N < 0:
             return self.formatDense()
         else:
             return self.formatSparse()
