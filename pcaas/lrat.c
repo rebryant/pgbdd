@@ -112,7 +112,7 @@ int checkRedundancy (int pivot, int start, int *hints, long long thisMask) {
       if (unit != 0) return FAILED;
       unit = clit; }
     if (unit == 0) return SUCCESS;
-    if (mask[unit^1] == thisMask) rio_nprintf(rp_out, BLEN, "c WARNING hint already satisfied in lemma with index %lli\n", lastIndex);
+    //    if (mask[unit^1] == thisMask) rio_nprintf(rp_out, BLEN, "c WARNING hint already satisfied in lemma with index %lli\n", lastIndex);
     mask[unit^1] = thisMask; }
 
   if (res == 0) return SUCCESS;
