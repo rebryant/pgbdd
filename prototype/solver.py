@@ -191,6 +191,7 @@ class Term:
 
     def quantify(self, literals, prover):
         antecedents = [self.validation]
+        print("Quantifying BDD with %d nodes" % self.manager.getSize(self.root))
         newRoot = self.manager.equant(self.root, literals)
         check, implication = self.manager.justifyImply(self.root, newRoot)
         if not check:
@@ -768,6 +769,7 @@ class Solver:
         for id in ids:
             self.placeInBucket(buckets, id)
         for blevel in range(0, maxLevel + 1):
+            print("Working on bucket for level %d.  %d items" % (blevel, len(buckets[blevel])))
             if self.verbLevel >= 3:
                 self.writer.write("Working on bucket for level %d.  %d items\n" % (blevel, len(buckets[blevel])))
             # Conjunct all terms in bucket
@@ -819,6 +821,7 @@ class Solver:
             self.placeInBucketPerm(buckets, id, bperm)
         for bid in range(0, maxBid + 1):
             vid = 0 if bid == 0 else bperm.forward(bid)
+            print("Working on bucket %d (variable Id %d).  %d items" % (bid, vid, len(buckets[bid])))
             if self.verbLevel >= 3:
                 self.writer.write("Working on bucket %d (variable Id %d).  %d items\n" % (bid, vid, len(buckets[bid])))
             # Conjunct all terms in bucket
